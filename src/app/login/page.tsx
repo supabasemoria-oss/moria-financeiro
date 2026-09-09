@@ -27,7 +27,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2">
           <Image src="/logo.png" alt="Mori?" width={80} height={80} className="rounded-xl" />
-          <h1 className="text-xl font-semibold">Mori? Financeiro</h1>
+          <h1 className="text-xl font-semibold">Moriá Financeiro</h1>
           <p className="text-sm text-muted-foreground text-center">
             Acesso restrito a administradores
           </p>
