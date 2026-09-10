@@ -33,7 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import {
-  getSettings,
+  getSettingsAsync,
   saveSettings,
   testGeminiConnection,
 } from "@/lib/settings"
@@ -58,12 +58,13 @@ export default function ConfiguracoesPage() {
   } | null>(null)
 
   useEffect(() => {
-    const s = getSettings()
-    setApiKey(s.gemini_api_key)
-    setModel(s.gemini_model)
-    if (s.gemini_api_key) {
-      fetchModels(s.gemini_api_key)
-    }
+    getSettingsAsync().then((s) => {
+      setApiKey(s.gemini_api_key)
+      setModel(s.gemini_model)
+      if (s.gemini_api_key) {
+        fetchModels(s.gemini_api_key)
+      }
+    })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchModels(key: string) {
@@ -99,10 +100,10 @@ export default function ConfiguracoesPage() {
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSaving(true)
     try {
-      saveSettings({ gemini_api_key: apiKey, gemini_model: model })
+      await saveSettings({ gemini_api_key: apiKey, gemini_model: model })
       toast.success("Configurações salvas.")
       setTestResult(null)
     } catch {

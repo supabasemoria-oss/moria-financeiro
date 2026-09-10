@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx"
-import { getSettings } from "@/lib/settings"
+import { getSettingsAsync } from "@/lib/settings"
 
 export interface MapeamentoColuna {
   coluna_original: string
@@ -39,7 +39,7 @@ export async function extrairLinhasXLS(file: File): Promise<string[][]> {
 export async function sugerirMapeamentoXLS(
   rows: string[][]
 ): Promise<ResultadoMapeamento> {
-  const { gemini_api_key, gemini_model } = getSettings()
+  const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
     throw new Error(
       "Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la."
@@ -128,7 +128,7 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
 export async function sugerirMapeamentoPDF(
   file: File
 ): Promise<ResultadoMapeamento> {
-  const { gemini_api_key, gemini_model } = getSettings()
+  const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
     throw new Error(
       "Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la."

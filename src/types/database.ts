@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          gemini_api_key: string
+          gemini_model: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          gemini_api_key?: string
+          gemini_model?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          gemini_api_key?: string
+          gemini_model?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       comprovantes: {
         Row: {
           content_type: string | null

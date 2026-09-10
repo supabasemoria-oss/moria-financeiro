@@ -1,4 +1,4 @@
-const SETTINGS_KEY = "moria_settings"
+import { supabase } from '@/lib/supabase'
 
 export interface MoriaSettings {
   gemini_api_key: string
@@ -10,22 +10,36 @@ const DEFAULTS: MoriaSettings = {
   gemini_model: "gemini-3.8-flash",
 }
 
-export function getSettings(): MoriaSettings {
-  if (typeof window === "undefined") return { ...DEFAULTS }
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) }
-  } catch {}
-  return { ...DEFAULTS }
+// Cache local para evitar query repetida no mesmo render
+let cache: MoriaSettings | null = null
+
+export async function getSettingsAsync(): Promise<MoriaSettings> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('gemini_api_key, gemini_model')
+    .eq('id', 'global')
+    .single()
+  if (error || !data) return { ...DEFAULTS }
+  const settings = {
+    gemini_api_key: data.gemini_api_key || DEFAULTS.gemini_api_key,
+    gemini_model: data.gemini_model || DEFAULTS.gemini_model,
+  }
+  cache = settings
+  return settings
 }
 
-export function saveSettings(settings: Partial<MoriaSettings>): void {
-  if (typeof window === "undefined") return
-  const current = getSettings()
-  localStorage.setItem(
-    SETTINGS_KEY,
-    JSON.stringify({ ...current, ...settings })
-  )
+/** Sync version - retorna cache ou defaults. Usar getSettingsAsync quando possivel. */
+export function getSettings(): MoriaSettings {
+  return cache ?? { ...DEFAULTS }
+}
+
+export async function saveSettings(settings: Partial<MoriaSettings>): Promise<void> {
+  const current = await getSettingsAsync()
+  const updated = { ...current, ...settings }
+  await supabase
+    .from('app_settings')
+    .upsert({ id: 'global', ...updated, updated_at: new Date().toISOString() })
+  cache = updated
 }
 
 export async function testGeminiConnection(
@@ -46,10 +60,7 @@ export async function testGeminiConnection(
     )
     if (!res.ok) {
       const err = await res.json()
-      return {
-        ok: false,
-        message: err?.error?.message ?? `Erro HTTP ${res.status}`,
-      }
+      return { ok: false, message: err?.error?.message ?? `Erro HTTP ${res.status}` }
     }
     return { ok: true, message: "Conexão bem-sucedida." }
   } catch (e: unknown) {
