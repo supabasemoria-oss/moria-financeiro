@@ -11,6 +11,7 @@ import { useMoriaQuery } from "@/hooks/use-moria-query"
 import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { UploadIcon } from "lucide-react"
+import { CalendarioLembretes } from "@/components/calendario-lembretes"
 import type { RubricaComDespesas, ProjetoComInstituicao } from "@/lib/types"
 
 function DashboardContent() {
@@ -71,6 +72,9 @@ function DashboardContent() {
       <SectionCards />
       <div className="px-4 lg:px-6">
         <ChartAreaInteractive />
+      </div>
+      <div className="px-4 lg:px-6">
+        <CalendarioLembretes />
       </div>
       <DataTable data={tableData} />
     </>
