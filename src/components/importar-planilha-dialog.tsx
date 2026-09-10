@@ -49,8 +49,10 @@ import {
 
 type Etapa = "upload" | "mapeando" | "validando" | "importando" | "concluido"
 
+import { useRouter } from "next/navigation"
+
 interface Props {
-  projetoId: string
+  projetoId?: string
   trigger: React.ReactNode
   onImportado?: () => void
 }
@@ -65,6 +67,7 @@ const CAMPO_LABELS: Record<string, string> = {
 }
 
 export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Props) {
+  const router = useRouter()
   const [open, setOpen] = React.useState(false)
   const [etapa, setEtapa] = React.useState<Etapa>("upload")
   const [arquivo, setArquivo] = React.useState<File | null>(null)
@@ -84,6 +87,13 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
   }
 
   function handleClose(v: boolean) {
+    if (v && !projetoId) {
+      toast.error("Nenhum projeto cadastrado. Crie um projeto primeiro.", {
+        action: { label: "Criar projeto", onClick: () => router.push("/projetos") },
+        duration: 6000,
+      })
+      return
+    }
     if (!v) reset()
     setOpen(v)
   }
@@ -184,7 +194,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
         )
 
         await moriaService.createRubrica({
-          projeto_id: projetoId,
+          projeto_id: projetoId!,
           descricao,
           codigo_natureza_despesa:
             obj.codigo_natureza_despesa?.trim() || "33903900",
@@ -200,10 +210,30 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
       toast.success(`${criadas} rubrica(s) importada(s) com sucesso.`)
       onImportado?.()
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erro desconhecido"
+      let msg = e instanceof Error ? e.message : "Erro desconhecido"
+
+      // Erros conhecidos com mensagens amigáveis
+      if (msg.includes("foreign key") || msg.includes("projeto_id")) {
+        msg = "Projeto não encontrado no banco. Crie o projeto antes de importar rubricas."
+        toast.error(msg, {
+          action: { label: "Criar projeto", onClick: () => router.push("/projetos") },
+          duration: 8000,
+        })
+      } else if (msg.includes("gemini_api_key") || msg.includes("Chave de API")) {
+        msg = "Chave do Gemini não configurada."
+        toast.error(msg, {
+          action: { label: "Configurações", onClick: () => router.push("/configuracoes") },
+          duration: 8000,
+        })
+      } else if (msg.includes("violates") || msg.includes("constraint")) {
+        msg = "Erro de integridade no banco. Verifique se os dados da planilha são válidos."
+        toast.error(msg)
+      } else {
+        toast.error("Erro ao importar: " + msg)
+      }
+
       setErro(msg)
       setEtapa("validando")
-      toast.error("Erro ao importar: " + msg)
     }
   }
 
