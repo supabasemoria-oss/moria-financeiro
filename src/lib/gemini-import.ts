@@ -152,10 +152,14 @@ Retorne APENAS JSON valido (sem markdown) com esta estrutura exata:
   return resultado
 }
 
+
+function norm(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
 function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | null {
   // Encontrar linha de cabecalho: primeira linha com >= 3 celulas nao vazias e texto relevante
   const keywords = {
-    descricao: ["especificacao", "descricao", "item", "servico", "cargo", "nome"],
+    descricao: ["especificacao", "descricao", "item", "servico", "cargo", "nome", "especif"],
     quantidade: ["quant", "qtd", "quantidade", "meses", "diaria"],
     valor_unitario: ["valor unit", "valor/mes", "valor mensal", "menor valor", "valor unitario", "unit"],
     unidade: ["unidade", "und", "un"],
@@ -169,7 +173,7 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
     const row = rows[i]
     const matches: Record<string, number> = {}
     for (let j = 0; j < row.length; j++) {
-      const cell = row[j].toLowerCase()
+      const cell = norm(row[j])
       if (!cell) continue
       for (const [campo, kws] of Object.entries(keywords)) {
         if (kws.some(kw => cell.includes(kw)) && !(campo in matches)) {
