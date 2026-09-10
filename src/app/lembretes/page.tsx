@@ -16,6 +16,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SelectComCriar } from "@/components/select-com-criar"
+import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
 import { moriaService } from "@/lib/api/moria-service"
@@ -80,6 +82,7 @@ export default function LembretesPage() {
   const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof moriaService.getFornecedores>>>([])
   const [form, setForm] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
   const [salvando, setSalvando] = useState(false)
+  const [openFornecedor, setOpenFornecedor] = useState(false)
 
   async function abrirModal(p: ParcelaComRelacoes) {
     const forns = await moriaService.getFornecedores()
@@ -218,14 +221,14 @@ export default function LembretesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Fornecedor / Prestador *</Label>
-                  <Select onValueChange={(v: string | null) => setForm((f) => ({ ...f, fornecedor_id: v ?? "" }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                    <SelectContent>
-                      {fornecedores.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.razao_social_nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectComCriar
+                    value={form.fornecedor_id}
+                    onValueChange={v => setForm(f => ({ ...f, fornecedor_id: v }))}
+                    opcoes={fornecedores.map(f => ({ id: f.id, label: f.razao_social_nome }))}
+                    placeholder="Selecionar..."
+                    labelCriar="Criar novo fornecedor"
+                    onClickCriar={() => setOpenFornecedor(true)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Data de Pagamento *</Label>
@@ -246,6 +249,11 @@ export default function LembretesPage() {
           </DialogContent>
         </Dialog>
       </SidebarInset>
+      <CriarFornecedorDialog
+        open={openFornecedor}
+        onOpenChange={setOpenFornecedor}
+        onCriado={novo => setFornecedores(prev => [...prev, novo])}
+      />
     </SidebarProvider>
   )
 }

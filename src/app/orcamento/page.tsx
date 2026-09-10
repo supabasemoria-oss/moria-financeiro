@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SelectComCriar } from "@/components/select-com-criar"
+import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -36,6 +38,7 @@ function OrcamentoContent() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [openProjeto, setOpenProjeto] = useState(false)
 
   // Formulário de Nova Rubrica
   const [formData, setFormData] = useState({
@@ -178,6 +181,7 @@ function OrcamentoContent() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -190,23 +194,14 @@ function OrcamentoContent() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Seletor de Projeto Ativo */}
           <div className="w-72">
-            <Select
+            <SelectComCriar
               value={selectedProjetoId}
-              onValueChange={(val) => {
-                if (val) handleProjectChange(val)
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o Projeto..." />
-              </SelectTrigger>
-              <SelectContent>
-                {projetos.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={val => { if (val) handleProjectChange(val) }}
+              opcoes={projetos.map(p => ({ id: p.id, label: p.nome }))}
+              placeholder="Selecione o Projeto..."
+              labelCriar="Criar novo projeto"
+              onClickCriar={() => setOpenProjeto(true)}
+            />
           </div>
 
           <Dialog open={open} onOpenChange={setOpen}>
@@ -560,6 +555,15 @@ function OrcamentoContent() {
         </CardContent>
       </Card>
     </div>
+    <CriarProjetoDialog
+      open={openProjeto}
+      onOpenChange={setOpenProjeto}
+      onCriado={novo => {
+        setProjetos(prev => [...prev, novo as any])
+        handleProjectChange(novo.id)
+      }}
+    />
+    </>
   )
 }
 
