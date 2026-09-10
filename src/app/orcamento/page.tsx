@@ -30,7 +30,7 @@ import { toast } from "sonner"
 
 function OrcamentoContent() {
   const searchParams = useSearchParams()
-  const initialProjetoId = searchParams.get("projetoId") || "proj-001"
+  const initialProjetoId = searchParams.get("projetoId") || ""
 
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [selectedProjetoId, setSelectedProjetoId] = useState<string>(initialProjetoId)
