@@ -223,14 +223,24 @@ export default function ProjetosPage() {
 
                   {/* Botão de criar nova proponente */}
                   {!openNovaInst ? (
-                    <button
-                      type="button"
-                      onClick={() => setOpenNovaInst(true)}
-                      className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit"
-                    >
-                      <PlusCircleIcon className="size-3.5" />
-                      {instituicoes.length === 0 ? "Nenhuma proponente cadastrada — criar agora" : "Cadastrar nova proponente"}
-                    </button>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setOpenNovaInst(true)}
+                        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit"
+                      >
+                        <PlusCircleIcon className="size-3.5" />
+                        {instituicoes.length === 0 ? "Criar aqui (rápido)" : "Cadastrar nova proponente"}
+                      </button>
+                      {instituicoes.length === 0 && (
+                        <Link
+                          href="/instituicoes"
+                          className="text-xs text-muted-foreground underline hover:text-foreground"
+                        >
+                          ou ir para o cadastro completo
+                        </Link>
+                      )}
+                    </div>
                   ) : (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 grid gap-3">
                       <p className="text-xs font-medium text-emerald-700">Nova Instituição Proponente</p>
