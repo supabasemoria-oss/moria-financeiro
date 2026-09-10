@@ -15,19 +15,37 @@ export interface ResultadoMapeamento {
   preview: Record<string, string>[]
 }
 
-const CAMPOS_SISTEMA = [
-  { campo: "descricao", descricao: "Descrição do item / rubrica" },
-  { campo: "codigo_natureza_despesa", descricao: "Código de natureza de despesa (ex: 33903501)" },
+export const CAMPOS_SISTEMA = [
+  { campo: "descricao", descricao: "Nome / especificacao do item ou rubrica" },
+  { campo: "codigo_natureza_despesa", descricao: "Codigo de natureza de despesa (ex: 33903501)" },
   { campo: "tipo", descricao: "Tipo: RH, SERVICO, MATERIAL, LOCACAO, OUTROS" },
-  { campo: "quantidade", descricao: "Quantidade numérica" },
-  { campo: "unidade", descricao: "Unidade de medida (UN, MÊS, HR, etc)" },
-  { campo: "valor_unitario", descricao: "Valor unitário em reais" },
+  { campo: "quantidade", descricao: "Quantidade numerica" },
+  { campo: "unidade", descricao: "Unidade de medida (UN, MES, HR, etc)" },
+  { campo: "valor_unitario", descricao: "Valor unitario em reais" },
 ]
+
+function escolherMelhorAba(wb: XLSX.WorkBook): string {
+  // Prefere a aba com mais linhas nao-vazias e colunas relevantes
+  let best = wb.SheetNames[0]
+  let bestScore = -1
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name]
+    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false })
+    const nonEmpty = rows.filter(r => r.some(c => String(c).trim())).length
+    // Bonus se tiver palavras-chave de rubrica
+    const text = rows.flat().join(" ").toLowerCase()
+    const bonus = ["especificacao", "descricao", "item", "valor", "quantidade", "unidade"].filter(k => text.includes(k)).length * 3
+    const score = nonEmpty + bonus
+    if (score > bestScore) { bestScore = score; best = name }
+  }
+  return best
+}
 
 export async function extrairLinhasXLS(file: File): Promise<string[][]> {
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: "array" })
-  const sheet = wb.Sheets[wb.SheetNames[0]]
+  const abaName = escolherMelhorAba(wb)
+  const sheet = wb.Sheets[abaName]
   const rows: any[][] = XLSX.utils.sheet_to_json(sheet, {
     header: 1,
     defval: "",
@@ -42,36 +60,54 @@ export async function sugerirMapeamentoXLS(
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
     throw new Error(
-      "Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la."
+      "Chave de API do Gemini nao configurada. Acesse Configuracoes para cadastra-la."
     )
   }
 
-  const linhasParaEnviar = rows.slice(0, 50)
+  // Tentar primeiro mapeamento automatico sem IA
+  const autoResult = tentarMapeamentoAutomatico(rows)
+  if (autoResult && autoResult.mapeamento.length > 0 && autoResult.preview.length > 0) {
+    return autoResult
+  }
+
+  // Fallback: usar Gemini
+  const linhasParaEnviar = rows.slice(0, 60)
   const tabela = linhasParaEnviar
-    .map((row, i) => `Linha ${i}: [${row.map((c) => `"${c}"`).join(", ")}]`)
+    .map((row, i) => {
+      const cellsNaoVazias = row.map((c, j) => c ? `[${j}]=${c}` : "").filter(Boolean)
+      return `L${i}: ${cellsNaoVazias.join(" | ")}`
+    })
+    .filter(l => l.length > 4)
     .join("\n")
 
-  const prompt = `Você é um assistente especializado em planilhas orçamentárias do terceiro setor brasileiro (MROSC / Transferegov).
+  const prompt = `Voce e um especialista em planilhas orcamentarias do terceiro setor brasileiro (MROSC / Transferegov / Ministerio das Mulheres).
 
-Analise as linhas brutas abaixo extraídas de uma planilha orçamentária e retorne um JSON com o mapeamento de colunas.
+Analise as linhas abaixo de uma planilha orcamentaria. Cada linha esta no formato Lnum: [col_index]=valor.
+A planilha pode ter cabecalhos mesclados em 2 linhas, linhas de secao, e linhas em branco.
 
-CAMPOS DO SISTEMA:
-${CAMPOS_SISTEMA.map((c) => `- "${c.campo}": ${c.descricao}`).join("\n")}
+CAMPOS DO SISTEMA QUE QUEREMOS MAPEAR:
+${CAMPOS_SISTEMA.map(c => `"${c.campo}": ${c.descricao}`).join("\n")}
+
+REGRAS IMPORTANTES:
+- "descricao" e o campo mais importante. Sera a coluna com nomes de cargos, servicos ou materiais.
+- "valor_unitario" pode ser "Valor Unitario", "Valor/mes", "Valor mensal", ou a coluna de MENOR VALOR COTADO.
+- "quantidade" pode ser "Qtd", "Quant", "Meses", "Diarias/Meses".
+- Ignore colunas de fornecedores, CNPJ, telefone, cotacoes multiplas.
+- "linhas_secao" sao linhas com texto de cabecalho de grupo (ex: "RECURSOS HUMANOS", "MATERIAL").
+- "linhas_ignorar" sao totalizadores, rodapes, linhas com "TOTAL", "VALOR TOTAL", colunas de assinatura.
+- "linha_cabecalho" e o indice da linha que tem os nomes das colunas reais dos dados.
+- Identifique APENAS as colunas mais relevantes para importar rubricas orcamentarias.
 
 LINHAS DA PLANILHA:
 ${tabela}
 
-Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutura:
+Retorne APENAS JSON valido (sem markdown) com esta estrutura exata:
 {
-  "linha_cabecalho": <índice da linha que contém os cabeçalhos reais das colunas>,
-  "linhas_secao": [<índices de linhas que são cabeçalhos de seção/grupo, não dados>],
-  "linhas_ignorar": [<índices de linhas totalizadoras, rodapés, vazias, etc>],
+  "linha_cabecalho": <numero>,
+  "linhas_secao": [<numeros>],
+  "linhas_ignorar": [<numeros>],
   "mapeamento": [
-    {
-      "coluna_original": "<nome exato da coluna>",
-      "campo_sistema": "<campo do sistema ou null se não mapear>",
-      "indice": <índice da coluna 0-based>
-    }
+    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>}
   ]
 }`
 
@@ -82,7 +118,7 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0, maxOutputTokens: 4096 },
       }),
     }
   )
@@ -93,15 +129,99 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
   }
 
   const data = await res.json()
-  const text: string =
-    data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+  const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
 
   const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
+  if (!jsonMatch) throw new Error("Gemini nao retornou JSON valido. Tente outro modelo ou verifique a chave.")
 
-  const resultado: ResultadoMapeamento = JSON.parse(jsonMatch[0])
+  let resultado: ResultadoMapeamento
+  try {
+    resultado = JSON.parse(jsonMatch[0])
+  } catch {
+    throw new Error("JSON invalido retornado pelo Gemini.")
+  }
 
-  // Gerar preview com as primeiras 3 linhas de dado
+  if (!resultado.mapeamento || resultado.mapeamento.length === 0) {
+    // Fallback manual se Gemini falhou
+    const auto = tentarMapeamentoAutomatico(rows)
+    if (auto) return auto
+    throw new Error("Nao foi possivel identificar as colunas. Verifique se a planilha tem uma coluna de descricao/especificacao.")
+  }
+
+  resultado.preview = gerarPreview(rows, resultado)
+  return resultado
+}
+
+function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | null {
+  // Encontrar linha de cabecalho: primeira linha com >= 3 celulas nao vazias e texto relevante
+  const keywords = {
+    descricao: ["especificacao", "descricao", "item", "servico", "cargo", "nome"],
+    quantidade: ["quant", "qtd", "quantidade", "meses", "diaria"],
+    valor_unitario: ["valor unit", "valor/mes", "valor mensal", "menor valor", "valor unitario", "unit"],
+    unidade: ["unidade", "und", "un"],
+    tipo: ["tipo", "natureza"],
+  }
+
+  let linhaCabecalho = -1
+  let melhoresColIndex: Record<string, number> = {}
+
+  for (let i = 0; i < Math.min(15, rows.length); i++) {
+    const row = rows[i]
+    const matches: Record<string, number> = {}
+    for (let j = 0; j < row.length; j++) {
+      const cell = row[j].toLowerCase()
+      if (!cell) continue
+      for (const [campo, kws] of Object.entries(keywords)) {
+        if (kws.some(kw => cell.includes(kw)) && !(campo in matches)) {
+          matches[campo] = j
+        }
+      }
+    }
+    if ("descricao" in matches && Object.keys(matches).length >= 2) {
+      linhaCabecalho = i
+      melhoresColIndex = matches
+      break
+    }
+  }
+
+  if (linhaCabecalho === -1 || !("descricao" in melhoresColIndex)) return null
+
+  const mapeamento: MapeamentoColuna[] = Object.entries(melhoresColIndex).map(([campo, indice]) => ({
+    coluna_original: rows[linhaCabecalho][indice] || `Coluna ${indice}`,
+    campo_sistema: campo,
+    indice,
+  }))
+
+  // Linhas de secao e ignorar
+  const linhasSecao: number[] = []
+  const linhasIgnorar: number[] = []
+  const descIdx = melhoresColIndex["descricao"]
+
+  for (let i = linhaCabecalho + 1; i < rows.length; i++) {
+    const row = rows[i]
+    const desc = row[descIdx]?.trim() ?? ""
+    if (!desc) { linhasIgnorar.push(i); continue }
+    const lower = desc.toLowerCase()
+    if (lower.includes("total") || lower.includes("valor total") || lower.includes("repasse") || lower.includes("contrapartida") || lower.includes("assinatura")) {
+      linhasIgnorar.push(i)
+    } else if (row.filter(Boolean).length <= 2) {
+      linhasSecao.push(i)
+    }
+  }
+
+  const resultado: ResultadoMapeamento = {
+    linha_cabecalho: linhaCabecalho,
+    linhas_secao: linhasSecao,
+    linhas_ignorar: linhasIgnorar,
+    mapeamento,
+    preview: [],
+  }
+
+  resultado.preview = gerarPreview(rows, resultado)
+  return resultado
+}
+
+function gerarPreview(rows: string[][], resultado: ResultadoMapeamento): Record<string, string>[] {
   const linhasIgnorar = new Set([
     resultado.linha_cabecalho,
     ...resultado.linhas_secao,
@@ -110,9 +230,10 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
   const linhasDado = rows
     .map((row, i) => ({ row, i }))
     .filter(({ i }) => !linhasIgnorar.has(i) && i > resultado.linha_cabecalho)
-    .slice(0, 3)
+    .filter(({ row }) => row.some(c => c.trim()))
+    .slice(0, 5)
 
-  resultado.preview = linhasDado.map(({ row }) => {
+  return linhasDado.map(({ row }) => {
     const obj: Record<string, string> = {}
     for (const m of resultado.mapeamento) {
       if (m.campo_sistema) {
@@ -121,8 +242,6 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
     }
     return obj
   })
-
-  return resultado
 }
 
 export async function sugerirMapeamentoPDF(
@@ -131,33 +250,29 @@ export async function sugerirMapeamentoPDF(
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
     throw new Error(
-      "Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la."
+      "Chave de API do Gemini nao configurada. Acesse Configuracoes para cadastra-la."
     )
   }
 
   const base64 = await fileToBase64(file)
 
-  const prompt = `Você é um assistente especializado em planilhas orçamentárias do terceiro setor brasileiro (MROSC / Transferegov).
+  const prompt = `Voce e um especialista em planilhas orcamentarias do terceiro setor brasileiro (MROSC / Transferegov).
 
-Analise a tabela orçamentária neste documento e retorne um JSON com o mapeamento de colunas para os campos do sistema.
+Analise a tabela orcamentaria neste documento e extraia as rubricas.
 
 CAMPOS DO SISTEMA:
-${CAMPOS_SISTEMA.map((c) => `- "${c.campo}": ${c.descricao}`).join("\n")}
+${CAMPOS_SISTEMA.map(c => `"${c.campo}": ${c.descricao}`).join("\n")}
 
-Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutura:
+Retorne APENAS JSON valido (sem markdown) com esta estrutura:
 {
   "linha_cabecalho": 0,
   "linhas_secao": [],
   "linhas_ignorar": [],
   "mapeamento": [
-    {
-      "coluna_original": "<nome exato da coluna>",
-      "campo_sistema": "<campo do sistema ou null se não mapear>",
-      "indice": <índice da coluna 0-based>
-    }
+    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>}
   ],
   "preview": [
-    { "descricao": "...", "codigo_natureza_despesa": "...", "quantidade": "...", "valor_unitario": "..." }
+    {"descricao": "...", "quantidade": "...", "valor_unitario": "...", "tipo": "..."}
   ]
 }`
 
@@ -171,16 +286,11 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
           {
             parts: [
               { text: prompt },
-              {
-                inline_data: {
-                  mime_type: file.type,
-                  data: base64,
-                },
-              },
+              { inline_data: { mime_type: file.type, data: base64 } },
             ],
           },
         ],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
       }),
     }
   )
@@ -191,12 +301,9 @@ Retorne APENAS um JSON válido (sem markdown, sem explicação) com esta estrutu
   }
 
   const data = await res.json()
-  const text: string =
-    data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-
+  const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
-
+  if (!jsonMatch) throw new Error("Gemini nao retornou JSON valido.")
   return JSON.parse(jsonMatch[0])
 }
 
@@ -211,5 +318,3 @@ async function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file)
   })
 }
-
-export { CAMPOS_SISTEMA }
