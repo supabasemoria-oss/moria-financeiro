@@ -41,6 +41,10 @@ export default function ProjetosPage() {
     status: "EM_ANDAMENTO" as const,
   })
 
+  const [openNovaInst, setOpenNovaInst] = useState(false)
+  const [savingInst, setSavingInst] = useState(false)
+  const [formInst, setFormInst] = useState({ razao_social: "", cnpj: "", email: "", telefone: "", endereco: "" })
+
   async function loadData() {
     try {
       setLoading(true)
@@ -91,6 +95,33 @@ export default function ProjetosPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  async function handleSalvarInstituicao() {
+    if (!formInst.razao_social || !formInst.cnpj) {
+      toast.error("Razão social e CNPJ são obrigatórios.")
+      return
+    }
+    setSavingInst(true)
+    try {
+      const nova = await moriaService.createInstituicao({
+        razao_social: formInst.razao_social,
+        cnpj: formInst.cnpj,
+        email: formInst.email || null,
+        telefone: formInst.telefone || null,
+        endereco: formInst.endereco || null,
+      })
+      toast.success("Proponente criada com sucesso!")
+      setOpenNovaInst(false)
+      setFormInst({ razao_social: "", cnpj: "", email: "", telefone: "", endereco: "" })
+      const instData = await moriaService.getInstituicoes()
+      setInstituicoes(instData)
+      if (nova?.id) setFormData((prev) => ({ ...prev, instituicao_id: nova.id }))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar proponente")
+    } finally {
+      setSavingInst(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -182,17 +213,75 @@ export default function ProjetosPage() {
                       <SelectValue placeholder="Selecione a OSC vinculada..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {instituicoes.length === 0 ? (
-                        <SelectItem value="none" disabled>Nenhuma instituição cadastrada</SelectItem>
-                      ) : (
-                        instituicoes.map((i) => (
-                          <SelectItem key={i.id} value={i.id}>
-                            {i.razao_social} ({i.cnpj})
-                          </SelectItem>
-                        ))
-                      )}
+                      {instituicoes.map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.razao_social} ({i.cnpj})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+
+                  {/* Botão de criar nova proponente */}
+                  {!openNovaInst ? (
+                    <button
+                      type="button"
+                      onClick={() => setOpenNovaInst(true)}
+                      className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit"
+                    >
+                      <PlusCircleIcon className="size-3.5" />
+                      {instituicoes.length === 0 ? "Nenhuma proponente cadastrada — criar agora" : "Cadastrar nova proponente"}
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 grid gap-3">
+                      <p className="text-xs font-medium text-emerald-700">Nova Instituição Proponente</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2 grid gap-1">
+                          <Label className="text-xs">Razão Social *</Label>
+                          <Input
+                            className="h-8 text-sm"
+                            placeholder="Ex: Instituto Esperança Viva"
+                            value={formInst.razao_social}
+                            onChange={(e) => setFormInst((p) => ({ ...p, razao_social: e.target.value }))}
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-xs">CNPJ *</Label>
+                          <Input
+                            className="h-8 text-sm"
+                            placeholder="00.000.000/0001-00"
+                            value={formInst.cnpj}
+                            onChange={(e) => setFormInst((p) => ({ ...p, cnpj: e.target.value }))}
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-xs">Telefone</Label>
+                          <Input
+                            className="h-8 text-sm"
+                            placeholder="(00) 0000-0000"
+                            value={formInst.telefone}
+                            onChange={(e) => setFormInst((p) => ({ ...p, telefone: e.target.value }))}
+                          />
+                        </div>
+                        <div className="col-span-2 grid gap-1">
+                          <Label className="text-xs">E-mail</Label>
+                          <Input
+                            className="h-8 text-sm"
+                            placeholder="contato@instituicao.org.br"
+                            value={formInst.email}
+                            onChange={(e) => setFormInst((p) => ({ ...p, email: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpenNovaInst(false)}>
+                          Cancelar
+                        </Button>
+                        <Button type="button" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500" onClick={handleSalvarInstituicao} disabled={savingInst}>
+                          {savingInst ? "Salvando..." : "Salvar proponente"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-2">
