@@ -21,6 +21,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { SelectComCriar } from "@/components/select-com-criar"
+import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
+import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
+import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { moriaService } from "@/lib/api/moria-service"
 import type { Projeto, Rubrica, Fornecedor, Despesa } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj } from "@/lib/utils"
@@ -42,6 +46,9 @@ function FinanceiroContent() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [openFornecedor, setOpenFornecedor] = useState(false)
+  const [openProjeto, setOpenProjeto] = useState(false)
+  const [openRubrica, setOpenRubrica] = useState(false)
 
   // Formulário de Nova Despesa
   const [formData, setFormData] = useState({
@@ -204,6 +211,7 @@ function FinanceiroContent() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -235,63 +243,44 @@ function FinanceiroContent() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-2">
                     <Label htmlFor="projeto_id">Projeto / Termo *</Label>
-                    <Select
+                    <SelectComCriar
+                      id="projeto_id"
                       value={formData.projeto_id}
-                      onValueChange={(val) => {
-                        if (val) setFormData((prev) => ({ ...prev, projeto_id: val, rubrica_id: "" }))
-                      }}
-                    >
-                      <SelectTrigger id="projeto_id">
-                        <SelectValue placeholder="Selecione o projeto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projetos.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={val => setFormData(prev => ({ ...prev, projeto_id: val, rubrica_id: "" }))}
+                      opcoes={projetos.map(p => ({ id: p.id, label: p.nome }))}
+                      placeholder="Selecione o projeto"
+                      labelCriar="Criar novo projeto"
+                      onClickCriar={() => setOpenProjeto(true)}
+                    />
                   </div>
 
                   <div className="grid gap-2">
                     <Label htmlFor="fornecedor_id">Fornecedor / Credor *</Label>
-                    <Select
+                    <SelectComCriar
+                      id="fornecedor_id"
                       value={formData.fornecedor_id}
-                      onValueChange={(val) => {
-                        if (val) setFormData((prev) => ({ ...prev, fornecedor_id: val }))
-                      }}
-                    >
-                      <SelectTrigger id="fornecedor_id">
-                        <SelectValue placeholder="Selecione o fornecedor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fornecedores.map((f) => (
-                          <SelectItem key={f.id} value={f.id}>{f.razao_social_nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={val => setFormData(prev => ({ ...prev, fornecedor_id: val }))}
+                      opcoes={fornecedores.map(f => ({ id: f.id, label: f.razao_social_nome }))}
+                      placeholder="Selecione o fornecedor"
+                      labelCriar="Criar novo fornecedor"
+                      onClickCriar={() => setOpenFornecedor(true)}
+                    />
                   </div>
                 </div>
 
                 {/* Rubrica Orçamentária Obrigatória */}
                 <div className="grid gap-2">
                   <Label htmlFor="rubrica_id">Rubrica Orçamentária Vinculada *</Label>
-                  <Select
+                  <SelectComCriar
+                    id="rubrica_id"
                     value={formData.rubrica_id}
-                    onValueChange={(val) => {
-                      if (val) setFormData((prev) => ({ ...prev, rubrica_id: val }))
-                    }}
-                  >
-                    <SelectTrigger id="rubrica_id">
-                      <SelectValue placeholder="Selecione a rubrica de despesa..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rubricas.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.codigo_natureza_despesa} - {r.descricao} ({formatCurrency(r.valor_total)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={val => setFormData(prev => ({ ...prev, rubrica_id: val }))}
+                    opcoes={rubricas.map(r => ({ id: r.id, label: `${r.codigo_natureza_despesa} - ${r.descricao} (${formatCurrency(r.valor_total)})` }))}
+                    placeholder="Selecione a rubrica de despesa..."
+                    labelCriar="Criar nova rubrica"
+                    onClickCriar={() => setOpenRubrica(true)}
+                    disabled={!formData.projeto_id}
+                  />
                 </div>
 
                 {/* Indicador de Saldo em Tempo Real */}
@@ -575,6 +564,25 @@ function FinanceiroContent() {
         </CardContent>
       </Card>
     </div>
+
+    {/* Dialogs de criação rápida */}
+    <CriarFornecedorDialog
+      open={openFornecedor}
+      onOpenChange={setOpenFornecedor}
+      onCriado={novo => setFornecedores(prev => [...prev, novo])}
+    />
+    <CriarProjetoDialog
+      open={openProjeto}
+      onOpenChange={setOpenProjeto}
+      onCriado={novo => setProjetos(prev => [...prev, novo as any])}
+    />
+    <CriarRubricaDialog
+      open={openRubrica}
+      onOpenChange={setOpenRubrica}
+      projetoId={formData.projeto_id}
+      onCriado={nova => setRubricas(prev => [...prev, nova as any])}
+    />
+    </>
   )
 }
 
