@@ -44,7 +44,7 @@ function DashboardContent() {
       header: `${r.codigo_natureza_despesa} - ${r.descricao}`,
       type: r.tipo,
       status:
-        totalGasto >= Number(r.valor_total) ? "Done" : "In Process",
+        totalGasto >= Number(r.valor_total) ? "Concluído" : "Em Andamento",
       target: formatCurrency(totalGasto),
       limit: formatCurrency(r.valor_total),
       reviewer: proj?.nome ?? "Moriá Consultoria",
