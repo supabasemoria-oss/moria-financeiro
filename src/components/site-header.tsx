@@ -6,6 +6,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { ShieldCheckIcon } from "lucide-react"
 
+import { RelogioHeader } from "@/components/relogio-header"
+import { LembretesPopover } from "@/components/lembretes-popover"
+
 const titleMap: Record<string, string> = {
   "/": "Painel de Controle e Auditoria",
   "/instituicoes": "Instituições (OSCs / ONGs)",
@@ -15,6 +18,8 @@ const titleMap: Record<string, string> = {
   "/financeiro": "Execução Financeira e Controle de Saldo",
   "/comprovantes": "Upload e Tipificação de Comprovantes",
   "/prestacao-contas": "Prestação de Contas e Transferegov",
+  "/lembretes": "Lembretes & Agenda de Pagamentos",
+  "/configuracoes": "Configurações do Sistema",
 }
 
 export function SiteHeader() {
@@ -31,8 +36,14 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 text-xs font-normal border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Relógio digital no fuso de São Paulo */}
+        <RelogioHeader />
+
+        {/* Sininho com popover de lembretes ativos */}
+        <LembretesPopover />
+
+        <Badge variant="outline" className="hidden md:flex items-center gap-1.5 text-xs font-normal border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
           <ShieldCheckIcon className="size-3.5 text-emerald-600" />
           MROSC Ativo
         </Badge>

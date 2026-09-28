@@ -32,6 +32,8 @@ import {
 import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
+import { RelogioHeader } from "@/components/relogio-header"
+import { LembretesPopover } from "@/components/lembretes-popover"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -266,7 +268,9 @@ export default function LembretesPage() {
           <Separator orientation="vertical" className="mr-2 h-4" />
           <BellIcon className="size-4 text-muted-foreground" />
           <h1 className="font-semibold text-sm">Lembretes & Agenda de Pagamentos</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <RelogioHeader />
+            <LembretesPopover />
             {pushSupported && (
               <Button
                 size="sm"
