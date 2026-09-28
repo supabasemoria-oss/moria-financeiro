@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
+import { getTodaySaoPaulo, TIMEZONE_SP } from "@/lib/utils"
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -20,9 +21,10 @@ export function CalendarioLembretes() {
   const { data: parcelas } = useParcelas({ proximosDias: 90 })
   const { alertas } = useAlertas()
 
-  const hoje = new Date()
-  const [mes, setMes] = React.useState(hoje.getMonth())
-  const [ano, setAno] = React.useState(hoje.getFullYear())
+  const diaHojeStr = getTodaySaoPaulo()
+  const [anoHoje, mesHoje] = diaHojeStr.split("-").map(Number)
+  const [mes, setMes] = React.useState(mesHoje - 1)
+  const [ano, setAno] = React.useState(anoHoje)
   const [diaSelecionado, setDiaSelecionado] = React.useState<string | null>(null)
 
   // Indexar parcelas por data yyyy-mm-dd
@@ -64,8 +66,6 @@ export function CalendarioLembretes() {
   function isoData(dia: number) {
     return `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`
   }
-
-  const diaHojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`
 
   const itemsSelecionados = diaSelecionado ? (parcelasPorDia[diaSelecionado] ?? []) : []
 
@@ -151,7 +151,7 @@ export function CalendarioLembretes() {
           {diaSelecionado ? (
             <div className="flex flex-col gap-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                {new Date(diaSelecionado + "T00:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+                {new Intl.DateTimeFormat("pt-BR", { timeZone: TIMEZONE_SP, weekday: "long", day: "numeric", month: "long" }).format(new Date(diaSelecionado + "T12:00:00"))}
               </p>
               {itemsSelecionados.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nenhuma parcela neste dia.</p>

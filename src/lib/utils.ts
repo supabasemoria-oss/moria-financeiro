@@ -13,11 +13,61 @@ export function formatCurrency(value: number | null | undefined): string {
   }).format(value)
 }
 
+export const TIMEZONE_SP = "America/Sao_Paulo"
+
+export function getTodaySaoPaulo(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE_SP,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return "-"
-  const [year, month, day] = dateString.split("T")[0].split("-")
-  if (!year || !month || !day) return dateString
-  return `${day}/${month}/${year}`
+  const str = dateString.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [year, month, day] = str.split("-")
+    return `${day}/${month}/${year}`
+  }
+  try {
+    const date = new Date(str)
+    if (isNaN(date.getTime())) return str
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: TIMEZONE_SP,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date)
+  } catch {
+    return str
+  }
+}
+
+export function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return "-"
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return dateString
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: TIMEZONE_SP,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date)
+  } catch {
+    return dateString
+  }
+}
+
+export function diasRestantesSaoPaulo(dataVencimento: string): number {
+  const hojeStr = getTodaySaoPaulo()
+  const hoje = new Date(hojeStr + "T00:00:00")
+  const dataAlvo = new Date(dataVencimento.split("T")[0] + "T00:00:00")
+  return Math.round((dataAlvo.getTime() - hoje.getTime()) / 86400000)
 }
 
 export function formatCpfCnpj(value: string | null | undefined): string {

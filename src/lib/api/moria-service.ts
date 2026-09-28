@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { gerarParcelas, recalcularStatus, diffDias } from '@/lib/parcelas'
+import { getTodaySaoPaulo } from '@/lib/utils'
 import type {
   Instituicao, Projeto, Fornecedor, Rubrica, Despesa, Comprovante,
   ParcelaPagamento, ParcelaPagamentoUpdate, TermoAditivo,
@@ -195,9 +196,14 @@ export const moriaService = {
     if (filters?.rubricaId) q = q.eq('rubrica_id', filters.rubricaId) as typeof q
     if (filters?.status) q = q.eq('status', filters.status) as typeof q
     if (filters?.proximosDias !== undefined) {
-      const hoje = new Date(); hoje.setHours(0,0,0,0)
-      const limite = new Date(hoje); limite.setDate(hoje.getDate() + filters.proximosDias)
-      q = q.lte('data_vencimento', limite.toISOString().split('T')[0]) as typeof q
+      const hojeStr = getTodaySaoPaulo()
+      const hoje = new Date(hojeStr + 'T12:00:00')
+      const limite = new Date(hoje)
+      limite.setDate(hoje.getDate() + filters.proximosDias)
+      const ano = limite.getFullYear()
+      const m = String(limite.getMonth() + 1).padStart(2, '0')
+      const d = String(limite.getDate()).padStart(2, '0')
+      q = q.lte('data_vencimento', `${ano}-${m}-${d}`) as typeof q
     }
     const { data, error } = await q.order('data_vencimento')
     if (error) err(error.message)

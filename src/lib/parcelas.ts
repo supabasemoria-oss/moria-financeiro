@@ -1,23 +1,26 @@
 import type { Rubrica, ParcelaPagamento } from '@/lib/types'
+import { getTodaySaoPaulo } from '@/lib/utils'
 
 function hoje(): Date {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
+  const hojeStr = getTodaySaoPaulo()
+  return new Date(hojeStr + 'T00:00:00')
 }
 
 export function diffDias(dataStr: string): number {
-  const alvo = new Date(dataStr + 'T00:00:00')
-  alvo.setHours(0, 0, 0, 0)
+  const alvo = new Date(dataStr.split('T')[0] + 'T00:00:00')
   return Math.round((alvo.getTime() - hoje().getTime()) / 86400000)
 }
 
 function calcularDataVencimento(dataInicioStr: string, idx: number, freqMeses: number, diaVenc: number | null): string {
-  const base = new Date(dataInicioStr + 'T00:00:00')
-  const mes = base.getMonth() + idx * freqMeses
-  const data = new Date(base.getFullYear(), mes, diaVenc ?? base.getDate())
-  if (data.getMonth() !== ((mes % 12) + 12) % 12) data.setDate(0)
-  return data.toISOString().split('T')[0]
+  const [bAno, bMes, bDia] = dataInicioStr.split('T')[0].split('-').map(Number)
+  const base = new Date(bAno, bMes - 1, bDia)
+  const mesAlvo = base.getMonth() + idx * freqMeses
+  const data = new Date(base.getFullYear(), mesAlvo, diaVenc ?? base.getDate())
+  if (data.getMonth() !== ((mesAlvo % 12) + 12) % 12) data.setDate(0)
+  const ano = data.getFullYear()
+  const m = String(data.getMonth() + 1).padStart(2, '0')
+  const d = String(data.getDate()).padStart(2, '0')
+  return `${ano}-${m}-${d}`
 }
 
 export function gerarParcelas(rubrica: Rubrica, dataInicioProjeto: string): Omit<ParcelaPagamento, 'id' | 'created_at' | 'updated_at'>[] {

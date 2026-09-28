@@ -31,21 +31,15 @@ import {
 } from "lucide-react"
 import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
+import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formatDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("pt-BR")
-}
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
-function diasRestantes(data: string) {
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
-  const d = new Date(data + "T00:00:00")
-  return Math.round((d.getTime() - hoje.getTime()) / 86400000)
-}
+const diasRestantes = diasRestantesSaoPaulo
 
 // ---------------------------------------------------------------------------
 // GrupoSection — lista parcelas por grupo
@@ -150,7 +144,7 @@ export default function LembretesPage() {
   async function abrirModal(p: ParcelaComRelacoes) {
     const forns = await moriaService.getFornecedores()
     setFornecedores(forns)
-    setFormExec({ fornecedor_id: "", data_pagamento_real: new Date().toISOString().split("T")[0], numero_documento_fiscal: "" })
+    setFormExec({ fornecedor_id: "", data_pagamento_real: getTodaySaoPaulo(), numero_documento_fiscal: "" })
     setParcelaSelecionada(p)
   }
 
@@ -245,25 +239,22 @@ export default function LembretesPage() {
   }
 
   // Agrupamentos de parcelas
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const hoje = getTodaySaoPaulo()
   const atrasadas = parcelas.filter(p => p.status === "ATRASADO")
-  const deHoje = parcelas.filter(p => {
-    const d = new Date(p.data_vencimento + "T00:00:00"); d.setHours(0, 0, 0, 0)
-    return d.getTime() === hoje.getTime() && p.status !== "PAGO"
-  })
+  const deHoje = parcelas.filter(p => p.data_vencimento === hoje && p.status !== "PAGO")
   const proximos7 = parcelas.filter(p => {
-    const dias = diasRestantes(p.data_vencimento)
+    const dias = diasRestantesSaoPaulo(p.data_vencimento)
     return dias > 0 && dias <= 7 && p.status !== "PAGO"
   })
   const proximos30 = parcelas.filter(p => {
-    const dias = diasRestantes(p.data_vencimento)
+    const dias = diasRestantesSaoPaulo(p.data_vencimento)
     return dias > 7 && dias <= 30 && p.status !== "PAGO"
   })
   const vigencia = alertas.filter(a => a.tipo === "TERMO_ADITIVO")
 
   // Lembretes avulsos pendentes/atrasados
-  const lembretesPendentes = lembretes.filter(l => l.status === "PENDENTE" && diasRestantes(l.data_vencimento) >= 0)
-  const lembretesAtrasados = lembretes.filter(l => l.status === "PENDENTE" && diasRestantes(l.data_vencimento) < 0)
+  const lembretesPendentes = lembretes.filter(l => l.status === "PENDENTE" && diasRestantesSaoPaulo(l.data_vencimento) >= 0)
+  const lembretesAtrasados = lembretes.filter(l => l.status === "PENDENTE" && diasRestantesSaoPaulo(l.data_vencimento) < 0)
   const lembretesConcluidos = lembretes.filter(l => l.status === "CONCLUIDO")
 
   return (

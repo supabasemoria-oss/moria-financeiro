@@ -27,7 +27,7 @@ import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { moriaService } from "@/lib/api/moria-service"
 import type { Projeto, Rubrica, Fornecedor, Despesa } from "@/lib/types"
-import { formatCurrency, formatDate, formatCpfCnpj } from "@/lib/utils"
+import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo } from "@/lib/utils"
 import { toast } from "sonner"
 
 function FinanceiroContent() {
@@ -57,7 +57,7 @@ function FinanceiroContent() {
     fornecedor_id: "",
     descricao: "",
     valor: "",
-    data_despesa: new Date().toISOString().split("T")[0],
+    data_despesa: getTodaySaoPaulo(),
     numero_documento_fiscal: "",
     status: "PENDENTE" as "PENDENTE" | "PAGO",
   })

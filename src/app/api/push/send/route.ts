@@ -19,11 +19,22 @@ export async function POST() {
 }
 
 async function sendPushNotifications() {
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const limite7 = new Date(hoje); limite7.setDate(hoje.getDate() + 7)
-  const hojeSt = hoje.toISOString().split('T')[0]
-  const limite7St = limite7.toISOString().split('T')[0]
+  const hojeSt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+  const hoje = new Date(hojeSt + 'T12:00:00')
+  const limite7 = new Date(hoje)
+  limite7.setDate(hoje.getDate() + 7)
+  const limite7St = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(limite7)
 
   // Buscar parcelas vencendo em 7 dias ou atrasadas
   const { data: parcelas } = await supabase
