@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Moriá - Gestão de Parcerias MROSC",
   description: "Assessoria técnica e auditoria financeira para o Terceiro Setor (Lei 13.019/2014)",
+  manifest: "/manifest.json",
+  themeColor: "#1a1a2e",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Moriá",
+  },
 };
 
 export default function RootLayout({

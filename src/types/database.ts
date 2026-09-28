@@ -232,6 +232,69 @@ export type Database = {
         }
         Relationships: []
       }
+      lembretes_avulsos: {
+        Row: {
+          created_at: string | null
+          data_vencimento: string
+          descricao: string | null
+          email_destino: string | null
+          frequencia_dias: number | null
+          id: string
+          notificar_email: boolean | null
+          projeto_id: string | null
+          recorrente: boolean | null
+          status: string | null
+          titulo: string
+          updated_at: string | null
+          valor: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_vencimento: string
+          descricao?: string | null
+          email_destino?: string | null
+          frequencia_dias?: number | null
+          id?: string
+          notificar_email?: boolean | null
+          projeto_id?: string | null
+          recorrente?: boolean | null
+          status?: string | null
+          titulo: string
+          updated_at?: string | null
+          valor?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          data_vencimento?: string
+          descricao?: string | null
+          email_destino?: string | null
+          frequencia_dias?: number | null
+          id?: string
+          notificar_email?: boolean | null
+          projeto_id?: string | null
+          recorrente?: boolean | null
+          status?: string | null
+          titulo?: string
+          updated_at?: string | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lembretes_avulsos_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lembretes_avulsos_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "vw_resumo_projetos"
+            referencedColumns: ["projeto_id"]
+          },
+        ]
+      }
       parcelas_pagamento: {
         Row: {
           created_at: string
@@ -362,6 +425,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string | null
+          endpoint: string
+          id: string
+          p256dh: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string | null
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string | null
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       rubricas_orcamentarias: {
         Row: {
@@ -709,3 +799,4 @@ export const Constants = {
     },
   },
 } as const
+

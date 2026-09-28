@@ -27,9 +27,10 @@ import { moriaService } from "@/lib/api/moria-service"
 import { toast } from "sonner"
 import {
   BellIcon, AlertTriangleIcon, CalendarClockIcon,
-  CheckCircleIcon, ClockIcon, PlusIcon, TrashIcon, CheckIcon,
+  CheckCircleIcon, ClockIcon, PlusIcon, TrashIcon, CheckIcon, BellOffIcon,
 } from "lucide-react"
 import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
+import { usePushNotifications } from "@/hooks/use-push-notifications"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -131,6 +132,7 @@ export default function LembretesPage() {
     projetoId: filtroProjeto || undefined,
   })
   const { alertas, urgentes, atencao } = useAlertas()
+  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications()
 
   // Projetos para filtro
   const [projetos, setProjetos] = useState<Projeto[]>([])
@@ -273,9 +275,26 @@ export default function LembretesPage() {
           <Separator orientation="vertical" className="mr-2 h-4" />
           <BellIcon className="size-4 text-muted-foreground" />
           <h1 className="font-semibold text-sm">Lembretes & Agenda de Pagamentos</h1>
-          {(urgentes + atencao) > 0 && (
-            <Badge variant="destructive" className="ml-auto">{urgentes + atencao} pendentes</Badge>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {pushSupported && (
+              <Button
+                size="sm"
+                variant={pushStatus === "granted" ? "secondary" : "outline"}
+                onClick={pushStatus === "granted" ? pushUnsubscribe : pushSubscribe}
+                className="gap-1.5 text-xs"
+                title={pushStatus === "granted" ? "Desativar notificações push" : "Ativar notificações push"}
+              >
+                {pushStatus === "granted" ? (
+                  <><BellOffIcon className="size-3.5" /> Notificações ativas</>
+                ) : (
+                  <><BellIcon className="size-3.5" /> Ativar notificações</>
+                )}
+              </Button>
+            )}
+            {(urgentes + atencao) > 0 && (
+              <Badge variant="destructive">{urgentes + atencao} pendentes</Badge>
+            )}
+          </div>
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
@@ -284,7 +303,7 @@ export default function LembretesPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
             <div className="w-72">
-              <Select value={filtroProjeto} onValueChange={v => setFiltroProjeto(v === "todos" ? "" : v)}>
+              <Select value={filtroProjeto} onValueChange={(v: string | null) => setFiltroProjeto(v === "todos" || !v ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="Todos os projetos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os projetos</SelectItem>
@@ -499,7 +518,7 @@ export default function LembretesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Projeto (opcional)</Label>
-                <Select value={formLembrete.projeto_id} onValueChange={v => setFormLembrete(f => ({ ...f, projeto_id: v === "nenhum" ? "" : v }))}>
+                <Select value={formLembrete.projeto_id} onValueChange={(v: string | null) => setFormLembrete(f => ({ ...f, projeto_id: v === "nenhum" || !v ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nenhum">Nenhum</SelectItem>
