@@ -18,7 +18,6 @@ import {
   ClockIcon,
   SunIcon,
   MoonIcon,
-  BellRingIcon,
   CalendarDaysIcon,
 } from "lucide-react"
 import {
@@ -53,7 +52,6 @@ export function WhatsAppConnectCard() {
   const [summaryMode, setSummaryMode] = useState<"hoje" | "amanha" | "ambos">("ambos")
   const [morningTime, setMorningTime] = useState("08:00")
   const [eveningTime, setEveningTime] = useState("18:00")
-  const [immediateAlerts, setImmediateAlerts] = useState(true)
 
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -75,7 +73,6 @@ export function WhatsAppConnectCard() {
       setSummaryMode(s.whatsapp_summary_mode || "ambos")
       setMorningTime(s.whatsapp_morning_time || "08:00")
       setEveningTime(s.whatsapp_evening_time || "18:00")
-      setImmediateAlerts(s.whatsapp_immediate_alerts ?? true)
     })
   }, [])
 
@@ -131,7 +128,6 @@ export function WhatsAppConnectCard() {
         whatsapp_summary_mode: summaryMode,
         whatsapp_morning_time: morningTime,
         whatsapp_evening_time: eveningTime,
-        whatsapp_immediate_alerts: immediateAlerts,
       })
       toast.success("Configurações do WhatsApp salvas com sucesso.")
       setIsEditingUrl(false)
@@ -436,27 +432,6 @@ export function WhatsAppConnectCard() {
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Alertas Imediatos */}
-          <div className="flex items-center space-x-2 pt-2 border-t">
-            <Checkbox
-              id="immediate_alerts"
-              checked={immediateAlerts}
-              onCheckedChange={(checked) => setImmediateAlerts(Boolean(checked))}
-            />
-            <div className="grid gap-0.5 leading-none">
-              <label
-                htmlFor="immediate_alerts"
-                className="text-xs font-medium leading-none cursor-pointer flex items-center gap-1.5"
-              >
-                <BellRingIcon className="size-3.5 text-emerald-600" />
-                Alertas Imediatos em Tempo Real
-              </label>
-              <p className="text-[11px] text-muted-foreground">
-                Dispara mensagem individual com link direto para execução assim que uma nova pendência ou alerta urgente for gerado.
-              </p>
-            </div>
           </div>
         </div>
 

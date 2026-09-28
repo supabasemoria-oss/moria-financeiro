@@ -23,7 +23,7 @@ const DEFAULTS: MoriaSettings = {
   whatsapp_summary_mode: "ambos",
   whatsapp_morning_time: "08:00",
   whatsapp_evening_time: "18:00",
-  whatsapp_immediate_alerts: true,
+  whatsapp_immediate_alerts: false,
 }
 
 // Cache local para evitar query repetida no mesmo render
