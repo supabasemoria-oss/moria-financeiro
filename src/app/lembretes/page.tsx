@@ -1,20 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
@@ -22,23 +25,30 @@ import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
 import { moriaService } from "@/lib/api/moria-service"
 import { toast } from "sonner"
-import { BellIcon, AlertTriangleIcon, CalendarClockIcon, CheckCircleIcon, ClockIcon } from "lucide-react"
-import type { ParcelaComRelacoes } from "@/lib/types"
+import {
+  BellIcon, AlertTriangleIcon, CalendarClockIcon,
+  CheckCircleIcon, ClockIcon, PlusIcon, TrashIcon, CheckIcon,
+} from "lucide-react"
+import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
 
-const NIVEL_CONFIG = {
-  URGENTE: { color: "bg-red-50 border-red-200", badge: "destructive", icon: AlertTriangleIcon },
-  ATENCAO: { color: "bg-amber-50 border-amber-200", badge: "outline", icon: ClockIcon },
-  INFO: { color: "bg-blue-50 border-blue-200", badge: "secondary", icon: CalendarClockIcon },
-}
-
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function formatDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("pt-BR")
 }
-
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
+function diasRestantes(data: string) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const d = new Date(data + "T00:00:00")
+  return Math.round((d.getTime() - hoje.getTime()) / 86400000)
+}
 
+// ---------------------------------------------------------------------------
+// GrupoSection — lista parcelas por grupo
+// ---------------------------------------------------------------------------
 function GrupoSection({ titulo, parcelas, onExecutar }: {
   titulo: string
   parcelas: ParcelaComRelacoes[]
@@ -49,9 +59,7 @@ function GrupoSection({ titulo, parcelas, onExecutar }: {
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{titulo}</h3>
       {parcelas.map((p) => {
-        const diasAbs = Math.abs(
-          Math.round((new Date(p.data_vencimento + "T00:00:00").getTime() - new Date().setHours(0,0,0,0)) / 86400000)
-        )
+        const dias = diasRestantes(p.data_vencimento)
         const atrasado = p.status === "ATRASADO"
         return (
           <div key={p.id} className={`flex items-center justify-between rounded-lg border p-3 ${atrasado ? "border-red-200 bg-red-50" : "border-border bg-card"}`}>
@@ -60,7 +68,7 @@ function GrupoSection({ titulo, parcelas, onExecutar }: {
               <span className="text-xs text-muted-foreground">{p.projetos?.nome ?? "—"}</span>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
-                  {atrasado ? `Atrasado ${diasAbs}d` : formatDate(p.data_vencimento)}
+                  {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
                 </Badge>
                 <span className="text-xs font-semibold">{formatBRL(p.valor_previsto)}</span>
               </div>
@@ -75,30 +83,83 @@ function GrupoSection({ titulo, parcelas, onExecutar }: {
   )
 }
 
+// ---------------------------------------------------------------------------
+// LembreteCard
+// ---------------------------------------------------------------------------
+function LembreteCard({ lembrete, onConcluir, onExcluir }: {
+  lembrete: LembreteAvulso
+  onConcluir: (id: string) => void
+  onExcluir: (id: string) => void
+}) {
+  const dias = diasRestantes(lembrete.data_vencimento)
+  const atrasado = dias < 0 && lembrete.status === "PENDENTE"
+  const concluido = lembrete.status === "CONCLUIDO"
+  return (
+    <div className={`flex items-center justify-between rounded-lg border p-3 ${concluido ? "opacity-60 bg-muted/40" : atrasado ? "border-red-200 bg-red-50" : "border-border bg-card"}`}>
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className={`font-medium text-sm truncate ${concluido ? "line-through" : ""}`}>{lembrete.titulo}</span>
+        {lembrete.descricao && <span className="text-xs text-muted-foreground truncate">{lembrete.descricao}</span>}
+        {lembrete.projetos && <span className="text-xs text-muted-foreground">{lembrete.projetos.nome}</span>}
+        <div className="flex items-center gap-2 mt-1">
+          <Badge variant={concluido ? "secondary" : atrasado ? "destructive" : "outline"} className="text-xs">
+            {concluido ? "Concluído" : atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(lembrete.data_vencimento)}
+          </Badge>
+          {lembrete.valor && <span className="text-xs font-semibold">{formatBRL(lembrete.valor)}</span>}
+        </div>
+      </div>
+      <div className="flex items-center gap-1 ml-3 shrink-0">
+        {!concluido && (
+          <Button size="sm" variant="ghost" onClick={() => onConcluir(lembrete.id)} title="Marcar como concluído">
+            <CheckIcon className="size-4" />
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => onExcluir(lembrete.id)} className="text-destructive hover:text-destructive" title="Excluir">
+          <TrashIcon className="size-4" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Página principal
+// ---------------------------------------------------------------------------
 export default function LembretesPage() {
-  const { data: parcelas, loading, refetch } = useParcelas({ proximosDias: 60 })
+  const [filtroProjeto, setFiltroProjeto] = useState<string>("")
+  const { data: parcelas, loading, refetch } = useParcelas({
+    proximosDias: 60,
+    projetoId: filtroProjeto || undefined,
+  })
   const { alertas, urgentes, atencao } = useAlertas()
+
+  // Projetos para filtro
+  const [projetos, setProjetos] = useState<Projeto[]>([])
+  useEffect(() => {
+    moriaService.getProjetos().then(setProjetos).catch(() => {})
+  }, [])
+
+  // Executar parcela
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
   const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof moriaService.getFornecedores>>>([])
-  const [form, setForm] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
+  const [formExec, setFormExec] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
   const [salvando, setSalvando] = useState(false)
   const [openFornecedor, setOpenFornecedor] = useState(false)
 
   async function abrirModal(p: ParcelaComRelacoes) {
     const forns = await moriaService.getFornecedores()
     setFornecedores(forns)
-    setForm({ fornecedor_id: "", data_pagamento_real: new Date().toISOString().split("T")[0], numero_documento_fiscal: "" })
+    setFormExec({ fornecedor_id: "", data_pagamento_real: new Date().toISOString().split("T")[0], numero_documento_fiscal: "" })
     setParcelaSelecionada(p)
   }
 
   async function executar() {
-    if (!parcelaSelecionada || !form.fornecedor_id || !form.data_pagamento_real) return
+    if (!parcelaSelecionada || !formExec.fornecedor_id || !formExec.data_pagamento_real) return
     setSalvando(true)
     try {
       await moriaService.executarParcela(parcelaSelecionada.id, {
-        fornecedor_id: form.fornecedor_id,
-        data_pagamento_real: form.data_pagamento_real,
-        numero_documento_fiscal: form.numero_documento_fiscal || undefined,
+        fornecedor_id: formExec.fornecedor_id,
+        data_pagamento_real: formExec.data_pagamento_real,
+        numero_documento_fiscal: formExec.numero_documento_fiscal || undefined,
       })
       toast.success("Pagamento registrado com sucesso!")
       setParcelaSelecionada(null)
@@ -110,23 +171,98 @@ export default function LembretesPage() {
     }
   }
 
-  const atrasadas = parcelas.filter((p) => p.status === "ATRASADO")
-  const hoje = new Date(); hoje.setHours(0,0,0,0)
-  const deHoje = parcelas.filter((p) => {
-    const d = new Date(p.data_vencimento + "T00:00:00"); d.setHours(0,0,0,0)
+  // Lembretes avulsos
+  const [lembretes, setLembretes] = useState<LembreteAvulso[]>([])
+  const [loadingLembretes, setLoadingLembretes] = useState(true)
+  const [openNovoLembrete, setOpenNovoLembrete] = useState(false)
+  const [formLembrete, setFormLembrete] = useState({
+    titulo: "", descricao: "", data_vencimento: "", projeto_id: "",
+    valor: "", notificar_email: false, email_destino: "",
+  })
+  const [salvandoLembrete, setSavingLembrete] = useState(false)
+
+  const carregarLembretes = useCallback(async () => {
+    setLoadingLembretes(true)
+    try {
+      const data = await moriaService.getLembretesAvulsos(filtroProjeto || undefined)
+      setLembretes(data)
+    } catch {
+      // tabela pode não existir ainda — silencioso
+    } finally {
+      setLoadingLembretes(false)
+    }
+  }, [filtroProjeto])
+
+  useEffect(() => { carregarLembretes() }, [carregarLembretes])
+
+  async function salvarLembrete() {
+    if (!formLembrete.titulo || !formLembrete.data_vencimento) {
+      toast.error("Título e data são obrigatórios")
+      return
+    }
+    setSavingLembrete(true)
+    try {
+      await moriaService.createLembreteAvulso({
+        titulo: formLembrete.titulo,
+        descricao: formLembrete.descricao || null,
+        data_vencimento: formLembrete.data_vencimento,
+        projeto_id: formLembrete.projeto_id || null,
+        valor: formLembrete.valor ? Number(formLembrete.valor) : null,
+        notificar_email: formLembrete.notificar_email,
+        email_destino: formLembrete.email_destino || null,
+      })
+      toast.success("Lembrete criado!")
+      setOpenNovoLembrete(false)
+      setFormLembrete({ titulo: "", descricao: "", data_vencimento: "", projeto_id: "", valor: "", notificar_email: false, email_destino: "" })
+      carregarLembretes()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar lembrete")
+    } finally {
+      setSavingLembrete(false)
+    }
+  }
+
+  async function concluirLembrete(id: string) {
+    try {
+      await moriaService.updateLembreteAvulso(id, { status: "CONCLUIDO" })
+      setLembretes(prev => prev.map(l => l.id === id ? { ...l, status: "CONCLUIDO" } : l))
+      toast.success("Lembrete concluído!")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro")
+    }
+  }
+
+  async function excluirLembrete(id: string) {
+    try {
+      await moriaService.deleteLembreteAvulso(id)
+      setLembretes(prev => prev.filter(l => l.id !== id))
+      toast.success("Lembrete excluído.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro")
+    }
+  }
+
+  // Agrupamentos de parcelas
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const atrasadas = parcelas.filter(p => p.status === "ATRASADO")
+  const deHoje = parcelas.filter(p => {
+    const d = new Date(p.data_vencimento + "T00:00:00"); d.setHours(0, 0, 0, 0)
     return d.getTime() === hoje.getTime() && p.status !== "PAGO"
   })
-  const proximos7 = parcelas.filter((p) => {
-    const d = new Date(p.data_vencimento + "T00:00:00"); d.setHours(0,0,0,0)
-    const dias = Math.round((d.getTime() - hoje.getTime()) / 86400000)
+  const proximos7 = parcelas.filter(p => {
+    const dias = diasRestantes(p.data_vencimento)
     return dias > 0 && dias <= 7 && p.status !== "PAGO"
   })
-  const proximos30 = parcelas.filter((p) => {
-    const d = new Date(p.data_vencimento + "T00:00:00"); d.setHours(0,0,0,0)
-    const dias = Math.round((d.getTime() - hoje.getTime()) / 86400000)
+  const proximos30 = parcelas.filter(p => {
+    const dias = diasRestantes(p.data_vencimento)
     return dias > 7 && dias <= 30 && p.status !== "PAGO"
   })
-  const vigencia = alertas.filter((a) => a.tipo === "TERMO_ADITIVO")
+  const vigencia = alertas.filter(a => a.tipo === "TERMO_ADITIVO")
+
+  // Lembretes avulsos pendentes/atrasados
+  const lembretesPendentes = lembretes.filter(l => l.status === "PENDENTE" && diasRestantes(l.data_vencimento) >= 0)
+  const lembretesAtrasados = lembretes.filter(l => l.status === "PENDENTE" && diasRestantes(l.data_vencimento) < 0)
+  const lembretesConcluidos = lembretes.filter(l => l.status === "CONCLUIDO")
 
   return (
     <SidebarProvider>
@@ -143,11 +279,28 @@ export default function LembretesPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
+
+          {/* Filtro por projeto */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
+            <div className="w-72">
+              <Select value={filtroProjeto} onValueChange={v => setFiltroProjeto(v === "todos" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Todos os projetos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os projetos</SelectItem>
+                  {projetos.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Cards resumo */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="border-red-200 bg-red-50">
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Atrasados</p>
+                <p className="text-xs text-muted-foreground">Parcelas atrasadas</p>
                 <p className="text-2xl font-bold text-red-600">{atrasadas.length}</p>
               </CardContent>
             </Card>
@@ -159,8 +312,8 @@ export default function LembretesPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Próx. 7 dias</p>
-                <p className="text-2xl font-bold">{proximos7.length}</p>
+                <p className="text-xs text-muted-foreground">Lembretes avulsos</p>
+                <p className="text-2xl font-bold">{lembretesAtrasados.length + lembretesPendentes.length}</p>
               </CardContent>
             </Card>
             <Card>
@@ -171,44 +324,114 @@ export default function LembretesPage() {
             </Card>
           </div>
 
-          {loading && <p className="text-muted-foreground text-sm">Carregando...</p>}
-
-          {!loading && (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-6">
-                <GrupoSection titulo="⚠️ Atrasados" parcelas={atrasadas} onExecutar={abrirModal} />
-                <GrupoSection titulo="📅 Vencem hoje" parcelas={deHoje} onExecutar={abrirModal} />
-                <GrupoSection titulo="📆 Próximos 7 dias" parcelas={proximos7} onExecutar={abrirModal} />
-                <GrupoSection titulo="🗓️ Próximos 30 dias" parcelas={proximos30} onExecutar={abrirModal} />
-                {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
-                  <p className="text-muted-foreground text-sm">Nenhum pagamento pendente nos próximos 30 dias.</p>
-                )}
-              </div>
-
-              {/* Alertas de vigência */}
-              {vigencia.length > 0 && (
-                <Card className="border-orange-200 bg-orange-50 h-fit">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-orange-700">⏰ Alertas de Vigência — Termo Aditivo</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {vigencia.map((a) => (
-                      <div key={a.id} className="rounded-md border border-orange-200 bg-white p-3">
-                        <p className="font-medium text-sm">{a.projeto_nome}</p>
-                        <p className="text-xs text-orange-700 font-semibold mt-0.5">{a.titulo}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
-                        <p className="text-xs text-muted-foreground">Vigência até: {formatDate(a.data_referencia)}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+          {/* Tabs */}
+          <Tabs defaultValue="parcelas">
+            <div className="flex items-center justify-between">
+              <TabsList>
+                <TabsTrigger value="parcelas">
+                  Parcelas
+                  {(atrasadas.length + deHoje.length + proximos7.length) > 0 && (
+                    <Badge variant="destructive" className="ml-1.5 size-5 rounded-full p-0 flex items-center justify-center text-[10px]">
+                      {atrasadas.length + deHoje.length + proximos7.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="lembretes">
+                  Lembretes
+                  {(lembretesAtrasados.length + lembretesPendentes.length) > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 size-5 rounded-full p-0 flex items-center justify-center text-[10px]">
+                      {lembretesAtrasados.length + lembretesPendentes.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+              <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
+                <PlusIcon className="size-4 mr-1" /> Novo Lembrete
+              </Button>
             </div>
-          )}
+
+            {/* Tab Parcelas */}
+            <TabsContent value="parcelas" className="mt-4">
+              {loading && <p className="text-muted-foreground text-sm">Carregando...</p>}
+              {!loading && (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-6">
+                    <GrupoSection titulo="⚠️ Atrasados" parcelas={atrasadas} onExecutar={abrirModal} />
+                    <GrupoSection titulo="📅 Vencem hoje" parcelas={deHoje} onExecutar={abrirModal} />
+                    <GrupoSection titulo="📆 Próximos 7 dias" parcelas={proximos7} onExecutar={abrirModal} />
+                    <GrupoSection titulo="🗓️ Próximos 30 dias" parcelas={proximos30} onExecutar={abrirModal} />
+                    {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
+                      <p className="text-muted-foreground text-sm">Nenhum pagamento pendente nos próximos 30 dias.</p>
+                    )}
+                  </div>
+
+                  {vigencia.length > 0 && (
+                    <Card className="border-orange-200 bg-orange-50 h-fit">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-orange-700">⏰ Alertas de Vigência — Termo Aditivo</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {vigencia.map(a => (
+                          <div key={a.id} className="rounded-md border border-orange-200 bg-white p-3">
+                            <p className="font-medium text-sm">{a.projeto_nome}</p>
+                            <p className="text-xs text-orange-700 font-semibold mt-0.5">{a.titulo}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
+                            <p className="text-xs text-muted-foreground">Vigência até: {formatDate(a.data_referencia)}</p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Tab Lembretes avulsos */}
+            <TabsContent value="lembretes" className="mt-4">
+              {loadingLembretes && <p className="text-muted-foreground text-sm">Carregando lembretes...</p>}
+              {!loadingLembretes && (
+                <div className="space-y-6">
+                  {lembretesAtrasados.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">⚠️ Atrasados</h3>
+                      {lembretesAtrasados.map(l => (
+                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                      ))}
+                    </div>
+                  )}
+                  {lembretesPendentes.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">📋 Pendentes</h3>
+                      {lembretesPendentes.map(l => (
+                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                      ))}
+                    </div>
+                  )}
+                  {lembretesConcluidos.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">✅ Concluídos</h3>
+                      {lembretesConcluidos.map(l => (
+                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                      ))}
+                    </div>
+                  )}
+                  {lembretes.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                      <BellIcon className="size-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">Nenhum lembrete avulso criado ainda.</p>
+                      <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
+                        <PlusIcon className="size-4 mr-1" /> Criar primeiro lembrete
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
 
         {/* Modal executar pagamento */}
-        <Dialog open={!!parcelaSelecionada} onOpenChange={(o) => !o && setParcelaSelecionada(null)}>
+        <Dialog open={!!parcelaSelecionada} onOpenChange={o => !o && setParcelaSelecionada(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Registrar Pagamento</DialogTitle>
@@ -222,8 +445,8 @@ export default function LembretesPage() {
                 <div className="space-y-2">
                   <Label>Fornecedor / Prestador *</Label>
                   <SelectComCriar
-                    value={form.fornecedor_id}
-                    onValueChange={v => setForm(f => ({ ...f, fornecedor_id: v }))}
+                    value={formExec.fornecedor_id}
+                    onValueChange={v => setFormExec(f => ({ ...f, fornecedor_id: v }))}
                     opcoes={fornecedores.map(f => ({ id: f.id, label: f.razao_social_nome }))}
                     placeholder="Selecionar..."
                     labelCriar="Criar novo fornecedor"
@@ -232,15 +455,15 @@ export default function LembretesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Data de Pagamento *</Label>
-                  <Input type="date" value={form.data_pagamento_real} onChange={(e) => setForm((f) => ({ ...f, data_pagamento_real: e.target.value }))} />
+                  <Input type="date" value={formExec.data_pagamento_real} onChange={e => setFormExec(f => ({ ...f, data_pagamento_real: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
                   <Label>Nº Documento Fiscal</Label>
-                  <Input placeholder="NF / RPA / Recibo..." value={form.numero_documento_fiscal} onChange={(e) => setForm((f) => ({ ...f, numero_documento_fiscal: e.target.value }))} />
+                  <Input placeholder="NF / RPA / Recibo..." value={formExec.numero_documento_fiscal} onChange={e => setFormExec(f => ({ ...f, numero_documento_fiscal: e.target.value }))} />
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setParcelaSelecionada(null)}>Cancelar</Button>
-                  <Button onClick={executar} disabled={salvando || !form.fornecedor_id || !form.data_pagamento_real}>
+                  <Button onClick={executar} disabled={salvando || !formExec.fornecedor_id || !formExec.data_pagamento_real}>
                     {salvando ? "Salvando..." : "Confirmar Pagamento"}
                   </Button>
                 </div>
@@ -248,12 +471,74 @@ export default function LembretesPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Modal novo lembrete */}
+        <Dialog open={openNovoLembrete} onOpenChange={setOpenNovoLembrete}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle>Novo Lembrete</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Título *</Label>
+                <Input placeholder="Ex: Renovar contrato, Entregar relatório..." value={formLembrete.titulo} onChange={e => setFormLembrete(f => ({ ...f, titulo: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Textarea placeholder="Detalhes adicionais..." value={formLembrete.descricao} onChange={e => setFormLembrete(f => ({ ...f, descricao: e.target.value }))} rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Data de Vencimento *</Label>
+                  <Input type="date" value={formLembrete.data_vencimento} onChange={e => setFormLembrete(f => ({ ...f, data_vencimento: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor (opcional)</Label>
+                  <Input type="number" placeholder="0,00" value={formLembrete.valor} onChange={e => setFormLembrete(f => ({ ...f, valor: e.target.value }))} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Projeto (opcional)</Label>
+                <Select value={formLembrete.projeto_id} onValueChange={v => setFormLembrete(f => ({ ...f, projeto_id: v === "nenhum" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nenhum">Nenhum</SelectItem>
+                    {projetos.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formLembrete.notificar_email}
+                    onChange={e => setFormLembrete(f => ({ ...f, notificar_email: e.target.checked }))}
+                    className="size-4 rounded"
+                  />
+                  Notificar por e-mail
+                </Label>
+                {formLembrete.notificar_email && (
+                  <Input type="email" placeholder="email@exemplo.com" value={formLembrete.email_destino} onChange={e => setFormLembrete(f => ({ ...f, email_destino: e.target.value }))} />
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpenNovoLembrete(false)}>Cancelar</Button>
+              <Button onClick={salvarLembrete} disabled={salvandoLembrete}>
+                {salvandoLembrete ? "Salvando..." : "Criar Lembrete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <CriarFornecedorDialog
+          open={openFornecedor}
+          onOpenChange={setOpenFornecedor}
+          onCriado={novo => setFornecedores(prev => [...prev, novo])}
+        />
       </SidebarInset>
-      <CriarFornecedorDialog
-        open={openFornecedor}
-        onOpenChange={setOpenFornecedor}
-        onCriado={novo => setFornecedores(prev => [...prev, novo])}
-      />
     </SidebarProvider>
   )
 }

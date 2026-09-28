@@ -97,5 +97,38 @@ export interface LocalDatabase {
   termos_aditivos: TermoAditivo[]
 }
 
+// ?? Lembretes Avulsos ??????????????????????????????????????????????????
+export type StatusLembrete = 'PENDENTE' | 'CONCLUIDO' | 'CANCELADO'
+
+export interface LembreteAvulso {
+  id: string
+  titulo: string
+  descricao: string | null
+  data_vencimento: string
+  projeto_id: string | null
+  valor: number | null
+  recorrente: boolean
+  frequencia_dias: number | null
+  status: StatusLembrete
+  notificar_email: boolean
+  email_destino: string | null
+  created_at: string
+  updated_at: string
+  projetos?: { id: string; nome: string } | null
+}
+
+export interface LembreteAvulsoInsert {
+  titulo: string
+  descricao?: string | null
+  data_vencimento: string
+  projeto_id?: string | null
+  valor?: number | null
+  recorrente?: boolean
+  frequencia_dias?: number | null
+  status?: StatusLembrete
+  notificar_email?: boolean
+  email_destino?: string | null
+}
+
 // Re-export Database for convenience
 export type { Database }

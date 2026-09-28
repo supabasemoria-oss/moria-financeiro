@@ -7,6 +7,7 @@ import type {
   ComprovanteComDespesa, ParcelaComRelacoes, DespesaFilters, ParcelaFilters,
   InstituicaoInsert, ProjetoInsert, FornecedorInsert, RubricaInsert,
   DespesaInsert, ComprovanteInsert, TermoAditivoInsert,
+  LembreteAvulso, LembreteAvulsoInsert,
 } from '@/lib/types'
 
 function err(msg: string): never { throw new Error(msg) }
@@ -258,5 +259,31 @@ export const moriaService = {
     if (error) err(error.message)
     await supabase.from('projetos').update({ data_fim: payload.data_fim_nova }).eq('id', payload.projeto_id)
     return data as TermoAditivo
+  },
+
+  // ?? Lembretes Avulsos ???????????????????????????????????????????????????
+  async getLembretesAvulsos(projetoId?: string): Promise<LembreteAvulso[]> {
+    let q = supabase.from('lembretes_avulsos').select('*, projetos(id, nome)').order('data_vencimento')
+    if (projetoId) q = q.eq('projeto_id', projetoId) as typeof q
+    const { data, error } = await q
+    if (error) err(error.message)
+    return (data ?? []) as unknown as LembreteAvulso[]
+  },
+
+  async createLembreteAvulso(payload: LembreteAvulsoInsert): Promise<LembreteAvulso> {
+    const { data, error } = await supabase.from('lembretes_avulsos').insert(payload).select('*, projetos(id, nome)').single()
+    if (error) err(error.message)
+    return data as unknown as LembreteAvulso
+  },
+
+  async updateLembreteAvulso(id: string, payload: Partial<LembreteAvulsoInsert>): Promise<LembreteAvulso> {
+    const { data, error } = await supabase.from('lembretes_avulsos').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id).select('*, projetos(id, nome)').single()
+    if (error) err(error.message)
+    return data as unknown as LembreteAvulso
+  },
+
+  async deleteLembreteAvulso(id: string): Promise<void> {
+    const { error } = await supabase.from('lembretes_avulsos').delete().eq('id', id)
+    if (error) err(error.message)
   },
 }
