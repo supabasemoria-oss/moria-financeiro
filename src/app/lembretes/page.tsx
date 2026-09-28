@@ -28,6 +28,7 @@ import { toast } from "sonner"
 import {
   BellIcon, AlertTriangleIcon, CalendarClockIcon,
   CheckCircleIcon, ClockIcon, PlusIcon, TrashIcon, CheckIcon, BellOffIcon,
+  SunIcon, MoonIcon, Loader2Icon,
 } from "lucide-react"
 import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
@@ -178,6 +179,24 @@ export default function LembretesPage() {
     valor: "", notificar_email: false, email_destino: "",
   })
   const [salvandoLembrete, setSavingLembrete] = useState(false)
+  const [sendingType, setSendingType] = useState<string | null>(null)
+
+  async function handleSendSummary(type: "morning" | "evening") {
+    setSendingType(type)
+    try {
+      const res = await fetch(`/api/push/send?type=${type}`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      if (data.whatsappError) throw new Error(data.whatsappError)
+      const label = type === "morning" ? "Resumo de hoje" : "Resumo de amanhã"
+      toast.success(`${label} enviado com sucesso via WhatsApp!`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Falha ao enviar"
+      toast.error("Erro ao enviar: " + msg)
+    } finally {
+      setSendingType(null)
+    }
+  }
 
   const carregarLembretes = useCallback(async () => {
     setLoadingLembretes(true)
@@ -359,9 +378,43 @@ export default function LembretesPage() {
                   )}
                 </TabsTrigger>
               </TabsList>
-              <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
-                <PlusIcon className="size-4 mr-1" /> Novo Lembrete
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendSummary("morning")}
+                  disabled={sendingType !== null}
+                  className="gap-1.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                  title="Disparar resumo das contas que vencem hoje via WhatsApp"
+                >
+                  {sendingType === "morning" ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <SunIcon className="size-3.5 text-amber-500" />
+                  )}
+                  {sendingType === "morning" ? "Enviando..." : "Enviar Resumo de Hoje"}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendSummary("evening")}
+                  disabled={sendingType !== null}
+                  className="gap-1.5 text-xs text-indigo-700 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
+                  title="Disparar resumo antecipado do dia seguinte via WhatsApp"
+                >
+                  {sendingType === "evening" ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <MoonIcon className="size-3.5 text-indigo-500" />
+                  )}
+                  {sendingType === "evening" ? "Enviando..." : "Enviar Resumo de Amanhã"}
+                </Button>
+
+                <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
+                  <PlusIcon className="size-4 mr-1" /> Novo Lembrete
+                </Button>
+              </div>
             </div>
 
             {/* Tab Parcelas */}

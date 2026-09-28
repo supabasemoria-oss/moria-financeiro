@@ -477,21 +477,21 @@ export function WhatsAppConnectCard() {
                 </p>
               </div>
 
-              {/* Botões de Teste */}
+              {/* Botões de Envio e Teste */}
               <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleTestSend("morning")}
                   disabled={testingType !== null || !phone}
-                  className="gap-1.5 text-xs"
+                  className="gap-1.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
                 >
                   {testingType === "morning" ? (
                     <Loader2Icon className="size-3.5 animate-spin" />
                   ) : (
                     <SunIcon className="size-3.5 text-amber-500" />
                   )}
-                  {testingType === "morning" ? "Enviando..." : "Testar Resumo de Hoje"}
+                  {testingType === "morning" ? "Enviando..." : "Enviar Resumo de Hoje"}
                 </Button>
 
                 <Button
@@ -499,14 +499,14 @@ export function WhatsAppConnectCard() {
                   size="sm"
                   onClick={() => handleTestSend("evening")}
                   disabled={testingType !== null || !phone}
-                  className="gap-1.5 text-xs"
+                  className="gap-1.5 text-xs text-indigo-700 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
                 >
                   {testingType === "evening" ? (
                     <Loader2Icon className="size-3.5 animate-spin" />
                   ) : (
                     <MoonIcon className="size-3.5 text-indigo-500" />
                   )}
-                  {testingType === "evening" ? "Enviando..." : "Testar Resumo de Amanhã"}
+                  {testingType === "evening" ? "Enviando..." : "Enviar Resumo de Amanhã"}
                 </Button>
 
                 <Button
