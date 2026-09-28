@@ -142,34 +142,33 @@ async function handleDispatch(searchParams: URLSearchParams, body: any = {}) {
       const valorAmanha = amanhaList.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
 
       msg = `🌙 *Moriá Financeiro — Resumo Antecipado de Amanhã*\n` +
-        `📅 *Planejamento para:* ${formatarDataBR(amanhaSt)}\n\n`
+        `Planejamento para: ${formatarDataBR(amanhaSt)}\n\n`
 
       if (totalAmanha === 0 && atrasadas.length === 0) {
-        msg += `✅ Nenhuma conta prevista para vencer amanhã! Todas as obrigações em dia.\n`
+        msg += `Nenhuma conta prevista para vencer amanhã. Todas as obrigações em dia.\n\n`
       } else {
         if (totalAmanha > 0) {
-          msg += `📋 *Contas com vencimento amanhã:* ${totalAmanha}\n`
+          msg += `*Contas com vencimento amanhã:* ${totalAmanha}\n`
           if (valorAmanha > 0) {
-            msg += `💰 *Total previsto:* ${formatarMoeda(valorAmanha)}\n`
+            msg += `*Total previsto:* ${formatarMoeda(valorAmanha)}\n`
           }
-          msg += `\n*Detalhamento:*\n`
+          msg += `\n*Detalhamento:*\n\n`
           for (const p of amanhaList.slice(0, 8)) {
             const proj = (p.projetos as any)?.nome ? `[${(p.projetos as any).nome}] ` : ''
-            msg += `• ${proj}${p.descricao} — *${formatarMoeda(p.valor_previsto)}*\n`
+            msg += `• ${proj}${p.descricao} — *${formatarMoeda(p.valor_previsto)}*\n\n`
           }
           for (const l of lembretesAmanha.slice(0, 4)) {
-            msg += `• 🔔 ${l.titulo}${l.valor ? ` — *${formatarMoeda(l.valor)}*` : ''}\n`
+            msg += `• ${l.titulo}${l.valor ? ` — *${formatarMoeda(l.valor)}*` : ''}\n\n`
           }
-          msg += `\n`
         }
 
         if (atrasadas.length > 0) {
           const valorAtrasadas = atrasadas.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
-          msg += `⚠️ *Atenção:* Existem *${atrasadas.length}* conta(s) pendente(s) em atraso (${formatarMoeda(valorAtrasadas)}).\n\n`
+          msg += `*Atenção:* Existem *${atrasadas.length}* conta(s) pendente(s) em atraso (${formatarMoeda(valorAtrasadas)}).\n\n`
         }
       }
 
-      msg += `🔗 *Acesse o painel para executar os pagamentos:*\nhttps://moria-financeiro.vercel.app/lembretes`
+      msg += `*Acesse o painel para executar os pagamentos:*\nhttps://moria-financeiro.vercel.app/lembretes`
 
     } else if (activeType === 'morning' || activeType === 'auto') {
       // Resumo do Dia Presente (D0)
@@ -177,41 +176,40 @@ async function handleDispatch(searchParams: URLSearchParams, body: any = {}) {
       const valorHoje = hojeList.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
 
       msg = `☀️ *Moriá Financeiro — Resumo de Vencimentos de Hoje*\n` +
-        `📅 *Data:* ${formatarDataBR(hojeSt)}\n\n`
+        `Data: ${formatarDataBR(hojeSt)}\n\n`
 
       if (totalHoje === 0 && atrasadas.length === 0) {
-        msg += `✅ Não há contas vencendo hoje. Dia tranquilo!\n`
+        msg += `Não há contas vencendo hoje. Dia tranquilo!\n\n`
       } else {
         if (totalHoje > 0) {
-          msg += `🎯 *Contas que vencem HOJE:* ${totalHoje}\n`
+          msg += `*Contas que vencem HOJE:* ${totalHoje}\n`
           if (valorHoje > 0) {
-            msg += `💰 *Total a pagar hoje:* ${formatarMoeda(valorHoje)}\n`
+            msg += `*Total a pagar hoje:* ${formatarMoeda(valorHoje)}\n`
           }
-          msg += `\n*Obrigações do dia:*\n`
+          msg += `\n*Obrigações do dia:*\n\n`
           for (const p of hojeList.slice(0, 8)) {
             const proj = (p.projetos as any)?.nome ? `[${(p.projetos as any).nome}] ` : ''
-            msg += `• ${proj}${p.descricao} — *${formatarMoeda(p.valor_previsto)}*\n`
+            msg += `• ${proj}${p.descricao} — *${formatarMoeda(p.valor_previsto)}*\n\n`
           }
           for (const l of lembretesHoje.slice(0, 4)) {
-            msg += `• 🔔 ${l.titulo}${l.valor ? ` — *${formatarMoeda(l.valor)}*` : ''}\n`
+            msg += `• ${l.titulo}${l.valor ? ` — *${formatarMoeda(l.valor)}*` : ''}\n\n`
           }
-          msg += `\n`
         }
 
         if (atrasadas.length > 0) {
           const valorAtrasadas = atrasadas.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
-          msg += `⚠️ *Atrasadas:* ${atrasadas.length} parcela(s) pendente(s) (${formatarMoeda(valorAtrasadas)}).\n\n`
+          msg += `*Atrasadas:* ${atrasadas.length} parcela(s) pendente(s) (${formatarMoeda(valorAtrasadas)}).\n\n`
         }
       }
 
-      msg += `🔗 *Executar baixas e pagamentos agora:*\nhttps://moria-financeiro.vercel.app/lembretes`
+      msg += `*Executar baixas e pagamentos agora:*\nhttps://moria-financeiro.vercel.app/lembretes`
 
     } else {
       // Teste simples
       msg = `🔔 *Moriá Financeiro — Teste de Conexão WhatsApp*\n\n` +
-        `Conexão estabelecida com sucesso com o microserviço Baileys no Render.\n` +
+        `Conexão estabelecida com sucesso com o microserviço Baileys no Render.\n\n` +
         `Data e Hora: ${formatarDataBR(hojeSt)} às ${horaAtual}\n\n` +
-        `🔗 Painel de Lembretes: https://moria-financeiro.vercel.app/lembretes`
+        `Painel de Lembretes: https://moria-financeiro.vercel.app/lembretes`
     }
 
     try {

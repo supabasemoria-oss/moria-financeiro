@@ -50,11 +50,11 @@ export async function POST(req: Request) {
 
     const mensagem =
       `🚨 *Moriá — Alerta Imediato de Pagamento*\n\n` +
-      `📋 *Conta:* ${descricao || titulo || 'Nova obrigação cadastrada'}\n` +
-      (projetoNome ? `🏢 *Projeto:* ${projetoNome}\n` : '') +
-      (valorFormatado ? `💰 *Valor:* ${valorFormatado}\n` : '') +
-      (vencimento ? `📅 *Vencimento:* ${vencimento}\n` : '') +
-      `\n🔗 *Executar pagamento agora:*\n${executionLink}`
+      `*Conta:* ${descricao || titulo || 'Nova obrigação cadastrada'}\n\n` +
+      (projetoNome ? `*Projeto:* ${projetoNome}\n\n` : '') +
+      (valorFormatado ? `*Valor:* ${valorFormatado}\n\n` : '') +
+      (vencimento ? `*Vencimento:* ${vencimento}\n\n` : '') +
+      `*Executar pagamento agora:*\n${executionLink}`
 
     const res = await fetch(`${apiUrl}/send`, {
       method: 'POST',
