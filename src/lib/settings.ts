@@ -7,6 +7,10 @@ export interface MoriaSettings {
   whatsapp_api_key: string
   whatsapp_phone: string
   whatsapp_enabled: boolean
+  whatsapp_summary_mode: 'hoje' | 'amanha' | 'ambos'
+  whatsapp_morning_time: string
+  whatsapp_evening_time: string
+  whatsapp_immediate_alerts: boolean
 }
 
 const DEFAULTS: MoriaSettings = {
@@ -16,6 +20,10 @@ const DEFAULTS: MoriaSettings = {
   whatsapp_api_key: "",
   whatsapp_phone: "",
   whatsapp_enabled: false,
+  whatsapp_summary_mode: "ambos",
+  whatsapp_morning_time: "08:00",
+  whatsapp_evening_time: "18:00",
+  whatsapp_immediate_alerts: true,
 }
 
 // Cache local para evitar query repetida no mesmo render
@@ -24,7 +32,7 @@ let cache: MoriaSettings | null = null
 export async function getSettingsAsync(): Promise<MoriaSettings> {
   const { data, error } = await supabase
     .from('app_settings')
-    .select('gemini_api_key, gemini_model, whatsapp_api_url, whatsapp_api_key, whatsapp_phone, whatsapp_enabled')
+    .select('gemini_api_key, gemini_model, whatsapp_api_url, whatsapp_api_key, whatsapp_phone, whatsapp_enabled, whatsapp_summary_mode, whatsapp_morning_time, whatsapp_evening_time, whatsapp_immediate_alerts')
     .eq('id', 'global')
     .single()
   if (error || !data) return { ...DEFAULTS }
@@ -35,6 +43,10 @@ export async function getSettingsAsync(): Promise<MoriaSettings> {
     whatsapp_api_key: data.whatsapp_api_key || DEFAULTS.whatsapp_api_key,
     whatsapp_phone: data.whatsapp_phone || DEFAULTS.whatsapp_phone,
     whatsapp_enabled: data.whatsapp_enabled ?? DEFAULTS.whatsapp_enabled,
+    whatsapp_summary_mode: (data.whatsapp_summary_mode as any) || DEFAULTS.whatsapp_summary_mode,
+    whatsapp_morning_time: data.whatsapp_morning_time || DEFAULTS.whatsapp_morning_time,
+    whatsapp_evening_time: data.whatsapp_evening_time || DEFAULTS.whatsapp_evening_time,
+    whatsapp_immediate_alerts: data.whatsapp_immediate_alerts ?? DEFAULTS.whatsapp_immediate_alerts,
   }
   cache = settings
   return settings

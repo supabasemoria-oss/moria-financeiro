@@ -24,6 +24,12 @@ export type Database = {
           whatsapp_api_key: string | null
           whatsapp_phone: string | null
           whatsapp_enabled: boolean | null
+          whatsapp_summary_mode: string | null
+          whatsapp_morning_time: string | null
+          whatsapp_evening_time: string | null
+          whatsapp_immediate_alerts: boolean | null
+          whatsapp_last_morning_sent: string | null
+          whatsapp_last_evening_sent: string | null
         }
         Insert: {
           gemini_api_key?: string
@@ -34,6 +40,12 @@ export type Database = {
           whatsapp_api_key?: string | null
           whatsapp_phone?: string | null
           whatsapp_enabled?: boolean | null
+          whatsapp_summary_mode?: string | null
+          whatsapp_morning_time?: string | null
+          whatsapp_evening_time?: string | null
+          whatsapp_immediate_alerts?: boolean | null
+          whatsapp_last_morning_sent?: string | null
+          whatsapp_last_evening_sent?: string | null
         }
         Update: {
           gemini_api_key?: string
@@ -44,6 +56,12 @@ export type Database = {
           whatsapp_api_key?: string | null
           whatsapp_phone?: string | null
           whatsapp_enabled?: boolean | null
+          whatsapp_summary_mode?: string | null
+          whatsapp_morning_time?: string | null
+          whatsapp_evening_time?: string | null
+          whatsapp_immediate_alerts?: boolean | null
+          whatsapp_last_morning_sent?: string | null
+          whatsapp_last_evening_sent?: string | null
         }
         Relationships: []
       }

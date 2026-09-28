@@ -15,6 +15,11 @@ import {
   Edit2Icon,
   CheckIcon,
   RotateCcwIcon,
+  ClockIcon,
+  SunIcon,
+  MoonIcon,
+  BellRingIcon,
+  CalendarDaysIcon,
 } from "lucide-react"
 import {
   Card,
@@ -28,6 +33,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import { getSettingsAsync, saveSettings } from "@/lib/settings"
 
@@ -38,12 +50,17 @@ export function WhatsAppConnectCard() {
   const [isEditingUrl, setIsEditingUrl] = useState(false)
   const [phone, setPhone] = useState("")
   const [enabled, setEnabled] = useState(false)
+  const [summaryMode, setSummaryMode] = useState<"hoje" | "amanha" | "ambos">("ambos")
+  const [morningTime, setMorningTime] = useState("08:00")
+  const [eveningTime, setEveningTime] = useState("18:00")
+  const [immediateAlerts, setImmediateAlerts] = useState(true)
+
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [connectedUser, setConnectedUser] = useState<string | null>(null)
   const [loadingQr, setLoadingQr] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [testing, setTesting] = useState(false)
+  const [testingType, setTestingType] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -55,6 +72,10 @@ export function WhatsAppConnectCard() {
       }
       setPhone(s.whatsapp_phone || "")
       setEnabled(s.whatsapp_enabled ?? false)
+      setSummaryMode(s.whatsapp_summary_mode || "ambos")
+      setMorningTime(s.whatsapp_morning_time || "08:00")
+      setEveningTime(s.whatsapp_evening_time || "18:00")
+      setImmediateAlerts(s.whatsapp_immediate_alerts ?? true)
     })
   }, [])
 
@@ -89,10 +110,8 @@ export function WhatsAppConnectCard() {
     const url = apiUrl.trim().replace(/\/+$/, "")
     if (!url) return
 
-    // Busca imediata
     fetchStatusAndQr(url)
 
-    // Polling a cada 4 segundos
     pollingRef.current = setInterval(() => {
       fetchStatusAndQr(url)
     }, 4000)
@@ -109,8 +128,12 @@ export function WhatsAppConnectCard() {
         whatsapp_api_url: apiUrl.trim(),
         whatsapp_phone: phone.trim(),
         whatsapp_enabled: enabled,
+        whatsapp_summary_mode: summaryMode,
+        whatsapp_morning_time: morningTime,
+        whatsapp_evening_time: eveningTime,
+        whatsapp_immediate_alerts: immediateAlerts,
       })
-      toast.success("Configurações do WhatsApp salvas.")
+      toast.success("Configurações do WhatsApp salvas com sucesso.")
       setIsEditingUrl(false)
       fetchStatusAndQr()
     } catch {
@@ -120,14 +143,8 @@ export function WhatsAppConnectCard() {
     }
   }
 
-  async function handleTestSend() {
-    const cleanUrl = apiUrl.trim().replace(/\/+$/, "")
+  async function handleTestSend(type: "simple" | "morning" | "evening") {
     const cleanPhone = phone.trim().replace(/\D/g, "")
-
-    if (!cleanUrl) {
-      toast.error("Informe a URL da API do WhatsApp.")
-      return
-    }
     if (!cleanPhone) {
       toast.error("Informe o telefone de destino para o teste.")
       return
@@ -137,15 +154,12 @@ export function WhatsAppConnectCard() {
       return
     }
 
-    setTesting(true)
+    setTestingType(type)
     try {
-      const res = await fetch(`${cleanUrl}/send`, {
+      const res = await fetch(`/api/push/send?type=${type}&test=true`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          number: cleanPhone,
-          message: "🔔 Moriá Financeiro: Teste de conexão do WhatsApp efetuado com sucesso!",
-        }),
+        body: JSON.stringify({ phone: cleanPhone }),
       })
 
       const data = await res.json()
@@ -153,12 +167,22 @@ export function WhatsAppConnectCard() {
         throw new Error(data.error || `HTTP ${res.status}`)
       }
 
-      toast.success("Mensagem de teste enviada com sucesso no WhatsApp!")
+      if (data.whatsappError) {
+        throw new Error(data.whatsappError)
+      }
+
+      const label =
+        type === "morning"
+          ? "Resumo de Hoje"
+          : type === "evening"
+          ? "Resumo de Amanhã"
+          : "Mensagem Simples"
+      toast.success(`${label} enviado com sucesso no WhatsApp!`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Falha ao enviar mensagem"
       toast.error("Erro no teste: " + msg)
     } finally {
-      setTesting(false)
+      setTestingType(null)
     }
   }
 
@@ -232,7 +256,7 @@ export function WhatsAppConnectCard() {
           </Button>
         </div>
         <CardDescription className="text-xs">
-          Envio automático de lembretes de parcelas a vencer diretamente no seu WhatsApp pessoal ou administrativo.
+          Envio automático de lembretes e resumos diários de parcelas a vencer diretamente no seu WhatsApp pessoal ou administrativo.
         </CardDescription>
       </CardHeader>
 
@@ -249,15 +273,15 @@ export function WhatsAppConnectCard() {
               htmlFor="whatsapp_enabled"
               className="text-sm font-medium leading-none cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
-              Ativar envio automático de lembretes no WhatsApp
+              Ativar envio de mensagens no WhatsApp
             </label>
             <p className="text-xs text-muted-foreground">
-              Dispara mensagens para o número abaixo ao verificar parcelas vencendo ou atrasadas.
+              Habilita resumos periódicos e alertas instantâneos de pagamentos.
             </p>
           </div>
         </div>
 
-        {/* Inputs de Configuração */}
+        {/* Inputs de Configuração Básica */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Telefone */}
           <div className="grid gap-2">
@@ -274,7 +298,7 @@ export function WhatsAppConnectCard() {
               className="font-mono text-sm"
             />
             <p className="text-[11px] text-muted-foreground">
-              Formato com DDI (55) + DDD + Número. Exemplo: <code>5511999998888</code>
+              Formato internacional com DDI (55) + DDD + Número. Exemplo: <code>5521982188560</code>
             </p>
           </div>
 
@@ -339,6 +363,103 @@ export function WhatsAppConnectCard() {
           </div>
         </div>
 
+        {/* Bloco de Configuração de Horários e Antecedência */}
+        <div className="rounded-xl border bg-background/60 p-4 space-y-4">
+          <div className="flex items-center gap-2 border-b pb-2">
+            <ClockIcon className="size-4 text-emerald-600" />
+            <h4 className="font-semibold text-sm text-foreground">
+              Regras de Resumo Diário e Antecedência
+            </h4>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Modo de Resumo */}
+            <div className="grid gap-2">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <CalendarDaysIcon className="size-3.5 text-muted-foreground" />
+                Modo do Resumo
+              </Label>
+              <Select
+                value={summaryMode}
+                onValueChange={(val: any) => setSummaryMode(val)}
+              >
+                <SelectTrigger className="text-xs h-9">
+                  <SelectValue placeholder="Selecione o modo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hoje">Dia Presente (Vencem Hoje)</SelectItem>
+                  <SelectItem value="amanha">Dia Seguinte (Antecipado)</SelectItem>
+                  <SelectItem value="ambos">Ambos (Hoje + Amanhã)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Escolha se prefere receber contas de hoje, de amanhã ou nos dois momentos.
+              </p>
+            </div>
+
+            {/* Horário do Resumo de Hoje */}
+            {(summaryMode === "hoje" || summaryMode === "ambos") && (
+              <div className="grid gap-2">
+                <Label htmlFor="morning_time" className="text-xs font-medium flex items-center gap-1">
+                  <SunIcon className="size-3.5 text-amber-500" />
+                  Horário do Resumo de Hoje
+                </Label>
+                <Input
+                  id="morning_time"
+                  type="time"
+                  value={morningTime}
+                  onChange={(e) => setMorningTime(e.target.value)}
+                  className="font-mono text-sm h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Horário para receber o resumo das contas que vencem no dia corrente.
+                </p>
+              </div>
+            )}
+
+            {/* Horário do Resumo de Amanhã (Antecipado) */}
+            {(summaryMode === "amanha" || summaryMode === "ambos") && (
+              <div className="grid gap-2">
+                <Label htmlFor="evening_time" className="text-xs font-medium flex items-center gap-1">
+                  <MoonIcon className="size-3.5 text-indigo-500" />
+                  Horário do Resumo de Amanhã
+                </Label>
+                <Input
+                  id="evening_time"
+                  type="time"
+                  value={eveningTime}
+                  onChange={(e) => setEveningTime(e.target.value)}
+                  className="font-mono text-sm h-9"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Horário de antecedência para planejar pagamentos do dia seguinte.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Alertas Imediatos */}
+          <div className="flex items-center space-x-2 pt-2 border-t">
+            <Checkbox
+              id="immediate_alerts"
+              checked={immediateAlerts}
+              onCheckedChange={(checked) => setImmediateAlerts(Boolean(checked))}
+            />
+            <div className="grid gap-0.5 leading-none">
+              <label
+                htmlFor="immediate_alerts"
+                className="text-xs font-medium leading-none cursor-pointer flex items-center gap-1.5"
+              >
+                <BellRingIcon className="size-3.5 text-emerald-600" />
+                Alertas Imediatos em Tempo Real
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Dispara mensagem individual com link direto para execução assim que uma nova pendência ou alerta urgente for gerado.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Área de Conexão com QR Code Permanente */}
         <div className="rounded-xl border bg-card p-6 flex flex-col items-center justify-center text-center">
           {isConnected ? (
@@ -351,25 +472,56 @@ export function WhatsAppConnectCard() {
                   WhatsApp Conectado com Sucesso!
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  Sessão ativa e pronta para envio de lembretes.
+                  Sessão ativa e pronta para envio de resumos e alertas com link.
                   {connectedUser ? ` Identificador: +${connectedUser}` : ""}
                 </p>
               </div>
 
+              {/* Botões de Teste */}
               <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleTestSend}
-                  disabled={testing || !phone}
-                  className="gap-1.5"
+                  onClick={() => handleTestSend("morning")}
+                  disabled={testingType !== null || !phone}
+                  className="gap-1.5 text-xs"
                 >
-                  {testing ? (
+                  {testingType === "morning" ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <SunIcon className="size-3.5 text-amber-500" />
+                  )}
+                  {testingType === "morning" ? "Enviando..." : "Testar Resumo de Hoje"}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestSend("evening")}
+                  disabled={testingType !== null || !phone}
+                  className="gap-1.5 text-xs"
+                >
+                  {testingType === "evening" ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <MoonIcon className="size-3.5 text-indigo-500" />
+                  )}
+                  {testingType === "evening" ? "Enviando..." : "Testar Resumo de Amanhã"}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestSend("simple")}
+                  disabled={testingType !== null || !phone}
+                  className="gap-1.5 text-xs"
+                >
+                  {testingType === "simple" ? (
                     <Loader2Icon className="size-3.5 animate-spin" />
                   ) : (
                     <SendIcon className="size-3.5" />
                   )}
-                  {testing ? "Enviando..." : "Enviar Mensagem de Teste"}
+                  {testingType === "simple" ? "Enviando..." : "Teste Simples"}
                 </Button>
 
                 <Button
@@ -377,7 +529,7 @@ export function WhatsAppConnectCard() {
                   size="sm"
                   onClick={handleLogout}
                   disabled={disconnecting}
-                  className="gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/30"
+                  className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 border-destructive/30"
                 >
                   {disconnecting ? (
                     <Loader2Icon className="size-3.5 animate-spin" />
