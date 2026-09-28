@@ -12,7 +12,7 @@ export interface MoriaSettings {
 const DEFAULTS: MoriaSettings = {
   gemini_api_key: "",
   gemini_model: "gemini-3.8-flash",
-  whatsapp_api_url: "",
+  whatsapp_api_url: "https://moria-whatsapp.onrender.com",
   whatsapp_api_key: "",
   whatsapp_phone: "",
   whatsapp_enabled: false,

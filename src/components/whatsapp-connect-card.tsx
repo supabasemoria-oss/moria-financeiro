@@ -5,7 +5,6 @@ import {
   MessageSquareIcon,
   QrCodeIcon,
   CheckCircle2Icon,
-  AlertCircleIcon,
   RefreshCwIcon,
   SendIcon,
   SaveIcon,
@@ -13,6 +12,9 @@ import {
   PhoneIcon,
   GlobeIcon,
   Loader2Icon,
+  Edit2Icon,
+  CheckIcon,
+  RotateCcwIcon,
 } from "lucide-react"
 import {
   Card,
@@ -29,14 +31,17 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getSettingsAsync, saveSettings } from "@/lib/settings"
 
+const DEFAULT_API_URL = "https://moria-whatsapp.onrender.com"
+
 export function WhatsAppConnectCard() {
-  const [apiUrl, setApiUrl] = useState("")
+  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL)
+  const [isEditingUrl, setIsEditingUrl] = useState(false)
   const [phone, setPhone] = useState("")
   const [enabled, setEnabled] = useState(false)
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [connectedUser, setConnectedUser] = useState<string | null>(null)
-  const [checking, setChecking] = useState(false)
+  const [loadingQr, setLoadingQr] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
@@ -45,55 +50,57 @@ export function WhatsAppConnectCard() {
   // Carregar configuracoes salvas
   useEffect(() => {
     getSettingsAsync().then((s) => {
-      setApiUrl(s.whatsapp_api_url || "")
+      if (s.whatsapp_api_url && s.whatsapp_api_url.trim()) {
+        setApiUrl(s.whatsapp_api_url.trim())
+      }
       setPhone(s.whatsapp_phone || "")
       setEnabled(s.whatsapp_enabled ?? false)
     })
   }, [])
 
-  // Verificar status e QR
-  const checkStatus = useCallback(async (currentUrl?: string) => {
-    const url = (currentUrl ?? apiUrl).trim().replace(/\/+$/, "")
+  // Buscar status e QR Code
+  const fetchStatusAndQr = useCallback(async (targetUrl?: string) => {
+    const url = (targetUrl ?? apiUrl).trim().replace(/\/+$/, "")
     if (!url) return
 
     try {
-      setChecking(true)
       const res = await fetch(`${url}/qr`, { cache: "no-store" })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
 
-      setIsConnected(!!data.connected)
+      const connected = Boolean(data.connected)
+      setIsConnected(connected)
       setConnectedUser(data.user || null)
-      if (data.qr) {
-        setQrCode(data.qr)
-      } else if (data.connected) {
+
+      if (connected) {
         setQrCode(null)
+      } else if (data.qr) {
+        setQrCode(data.qr)
       }
     } catch {
-      // Falha ao conectar na API (servidor desligado ou URL incorreta)
-      setIsConnected(false)
+      // Se falhar (ex: serviço acordando), manter tentativa
     } finally {
-      setChecking(false)
+      setLoadingQr(false)
     }
   }, [apiUrl])
 
-  // Efeito de polling enquanto desconectado
+  // Polling contínuo para manter QR Code vivo na tela o tempo todo
   useEffect(() => {
-    const cleanUrl = apiUrl.trim().replace(/\/+$/, "")
-    if (!cleanUrl) return
+    const url = apiUrl.trim().replace(/\/+$/, "")
+    if (!url) return
 
-    // Chamada inicial
-    checkStatus(cleanUrl)
+    // Busca imediata
+    fetchStatusAndQr(url)
 
-    // Polling a cada 5 segundos
+    // Polling a cada 4 segundos
     pollingRef.current = setInterval(() => {
-      checkStatus(cleanUrl)
-    }, 5000)
+      fetchStatusAndQr(url)
+    }, 4000)
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
     }
-  }, [apiUrl, checkStatus])
+  }, [apiUrl, fetchStatusAndQr])
 
   async function handleSave() {
     setSaving(true)
@@ -104,7 +111,8 @@ export function WhatsAppConnectCard() {
         whatsapp_enabled: enabled,
       })
       toast.success("Configurações do WhatsApp salvas.")
-      checkStatus()
+      setIsEditingUrl(false)
+      fetchStatusAndQr()
     } catch {
       toast.error("Erro ao salvar configurações do WhatsApp.")
     } finally {
@@ -121,11 +129,11 @@ export function WhatsAppConnectCard() {
       return
     }
     if (!cleanPhone) {
-      toast.error("Informe o número de telefone de destino.")
+      toast.error("Informe o telefone de destino para o teste.")
       return
     }
     if (!isConnected) {
-      toast.error("WhatsApp não está conectado. Leia o QR Code primeiro.")
+      toast.error("WhatsApp não está conectado. Escaneie o QR Code primeiro.")
       return
     }
 
@@ -165,7 +173,9 @@ export function WhatsAppConnectCard() {
       toast.success("Sessão desconectada. Gerando novo QR Code...")
       setIsConnected(false)
       setConnectedUser(null)
-      setTimeout(() => checkStatus(), 1500)
+      setQrCode(null)
+      setLoadingQr(true)
+      setTimeout(() => fetchStatusAndQr(), 1500)
     } catch {
       toast.error("Erro ao desconectar sessão do WhatsApp.")
     } finally {
@@ -196,14 +206,14 @@ export function WhatsAppConnectCard() {
                 className="text-[10px] px-2 text-amber-700 border-amber-500/30 bg-amber-500/10 flex items-center gap-1 animate-pulse"
               >
                 <QrCodeIcon className="size-3" />
-                Aguardando Leitura
+                QR Code Pronto para Leitura
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 className="text-[10px] px-2 text-muted-foreground border-border"
               >
-                Desconectado
+                {loadingQr ? "Iniciando Serviço..." : "Aguardando Sessão"}
               </Badge>
             )}
           </div>
@@ -211,12 +221,14 @@ export function WhatsAppConnectCard() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => checkStatus()}
-            disabled={checking || !apiUrl}
+            onClick={() => {
+              setLoadingQr(true)
+              fetchStatusAndQr()
+            }}
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
           >
-            <RefreshCwIcon className={`size-3.5 mr-1 ${checking ? "animate-spin" : ""}`} />
-            Atualizar
+            <RefreshCwIcon className={`size-3.5 mr-1 ${loadingQr ? "animate-spin" : ""}`} />
+            Atualizar QR
           </Button>
         </div>
         <CardDescription className="text-xs">
@@ -247,6 +259,7 @@ export function WhatsAppConnectCard() {
 
         {/* Inputs de Configuração */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Telefone */}
           <div className="grid gap-2">
             <Label htmlFor="whatsapp_phone" className="text-sm font-medium flex items-center gap-1.5">
               <PhoneIcon className="size-3.5" />
@@ -261,33 +274,75 @@ export function WhatsAppConnectCard() {
               className="font-mono text-sm"
             />
             <p className="text-[11px] text-muted-foreground">
-              Formato internacional com DDI (55) + DDD + Número.
+              Formato com DDI (55) + DDD + Número. Exemplo: <code>5511999998888</code>
             </p>
           </div>
 
+          {/* URL da API com botão de Editar */}
           <div className="grid gap-2">
-            <Label htmlFor="whatsapp_api_url" className="text-sm font-medium flex items-center gap-1.5">
-              <GlobeIcon className="size-3.5" />
-              URL da API WhatsApp (Microserviço)
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="whatsapp_api_url" className="text-sm font-medium flex items-center gap-1.5">
+                <GlobeIcon className="size-3.5" />
+                URL da API WhatsApp
+              </Label>
+              {isEditingUrl ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiUrl(DEFAULT_API_URL)
+                      toast.info("URL restaurada para o padrão.")
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 mr-2"
+                  >
+                    <RotateCcwIcon className="size-3" />
+                    Restaurar Padrão
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingUrl(false)}
+                    className="h-6 px-2 text-xs text-emerald-600 hover:text-emerald-700"
+                  >
+                    <CheckIcon className="size-3 mr-1" />
+                    Concluir
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingUrl(true)}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Edit2Icon className="size-3 mr-1" />
+                  Editar
+                </Button>
+              )}
+            </div>
+
             <Input
               id="whatsapp_api_url"
               type="url"
-              placeholder="https://moria-whatsapp.onrender.com"
               value={apiUrl}
+              disabled={!isEditingUrl}
               onChange={(e) => setApiUrl(e.target.value)}
-              className="font-mono text-sm"
+              className={`font-mono text-sm ${!isEditingUrl ? "bg-muted/40 cursor-default" : ""}`}
             />
             <p className="text-[11px] text-muted-foreground">
-              Endereço do microserviço Baileys hospedado no Render ou local (ex: http://localhost:3001).
+              {isEditingUrl
+                ? "Altere a URL caso utilize um servidor WhatsApp próprio."
+                : "URL padrão gerenciada no Render. Clique em Editar para alterar."}
             </p>
           </div>
         </div>
 
-        {/* Área de Conexão com QR Code */}
-        <div className="rounded-xl border bg-card p-4 flex flex-col items-center justify-center text-center">
+        {/* Área de Conexão com QR Code Permanente */}
+        <div className="rounded-xl border bg-card p-6 flex flex-col items-center justify-center text-center">
           {isConnected ? (
-            <div className="flex flex-col items-center gap-3 py-4">
+            <div className="flex flex-col items-center gap-3 py-2">
               <div className="size-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600">
                 <CheckCircle2Icon className="size-8" />
               </div>
@@ -301,7 +356,7 @@ export function WhatsAppConnectCard() {
                 </p>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -329,67 +384,63 @@ export function WhatsAppConnectCard() {
                   ) : (
                     <LogOutIcon className="size-3.5" />
                   )}
-                  {disconnecting ? "Desconectando..." : "Desconectar"}
+                  {disconnecting ? "Desconectando..." : "Desconectar Sessão"}
                 </Button>
               </div>
             </div>
           ) : qrCode ? (
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="bg-white p-3 rounded-lg shadow-sm border">
+            <div className="flex flex-col items-center gap-4">
+              <div className="bg-white p-3 rounded-xl shadow-md border border-emerald-500/20 ring-4 ring-emerald-500/5">
                 <img
                   src={qrCode}
                   alt="QR Code WhatsApp"
-                  className="size-56 object-contain"
+                  className="size-64 sm:size-72 object-contain"
                 />
               </div>
-              <div className="space-y-1 max-w-sm">
-                <h4 className="font-semibold text-sm text-foreground flex items-center justify-center gap-1.5">
-                  <QrCodeIcon className="size-4 text-emerald-600" />
-                  Escaneie o QR Code com o WhatsApp
+
+              <div className="space-y-2 max-w-md">
+                <h4 className="font-semibold text-base text-foreground flex items-center justify-center gap-1.5">
+                  <QrCodeIcon className="size-5 text-emerald-600" />
+                  Escaneie o QR Code com seu WhatsApp
                 </h4>
-                <ol className="text-xs text-muted-foreground text-left list-decimal list-inside space-y-1 pt-1">
-                  <li>Abra o WhatsApp no seu smartphone</li>
-                  <li>Acesse <b>Configurações</b> &gt; <b>Aparelhos conectados</b></li>
-                  <li>Toque em <b>Conectar um aparelho</b></li>
-                  <li>Aponte a câmera para o código acima</li>
-                </ol>
+
+                <div className="text-xs text-muted-foreground text-left bg-muted/40 rounded-lg p-3 border space-y-1">
+                  <p className="font-medium text-foreground">Como conectar:</p>
+                  <ol className="list-decimal list-inside space-y-1 pt-0.5">
+                    <li>Abra o aplicativo <b>WhatsApp</b> no celular</li>
+                    <li>Toque em <b>Mais opções</b> (Android) ou <b>Configurações</b> (iPhone)</li>
+                    <li>Selecione <b>Aparelhos conectados</b></li>
+                    <li>Toque em <b>Conectar um aparelho</b> e aponte para a tela</li>
+                  </ol>
+                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
                 <RefreshCwIcon className="size-3 animate-spin text-emerald-600" />
-                Atualização em tempo real ativa
-              </p>
+                Atualização automática contínua
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3 py-6 max-w-sm">
-              <div className="size-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                <AlertCircleIcon className="size-6" />
+            <div className="flex flex-col items-center gap-3 py-8 max-w-sm">
+              <div className="size-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600">
+                <Loader2Icon className="size-8 animate-spin" />
               </div>
               <div className="space-y-1">
                 <h4 className="font-medium text-sm text-foreground">
-                  Nenhuma sessão ativa detectada
+                  Carregando QR Code do WhatsApp...
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  Certifique-se de que a URL do microserviço está configurada e o serviço está online.
+                  Conectando ao microserviço Baileys no Render. O código aparecerá em instantes.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => checkStatus()}
-                disabled={checking || !apiUrl}
-                className="gap-1.5"
-              >
-                <RefreshCwIcon className={`size-3.5 ${checking ? "animate-spin" : ""}`} />
-                {checking ? "Conectando..." : "Verificar Conexão"}
-              </Button>
             </div>
           )}
         </div>
 
-        {/* Botão Salvar Configurações */}
+        {/* Rodapé com Salvar */}
         <div className="flex items-center justify-between pt-1">
           <p className="text-[11px] text-muted-foreground">
-            🔒 O microserviço Baileys opera em sandbox isolada no Render sem armazenar mensagens.
+            🔒 O microserviço opera em nuvem segura sem armazenamento de mensagens.
           </p>
 
           <Button
