@@ -75,9 +75,55 @@ async function sendPushNotifications() {
     tag: 'moria-diario',
   })
 
-  // Buscar todas as subscriptions
+  // Disparo via WhatsApp (se configurado e habilitado em app_settings)
+  let whatsappSent = false
+  let whatsappError: string | null = null
+
+  try {
+    const { data: settings } = await supabase
+      .from('app_settings')
+      .select('whatsapp_api_url, whatsapp_phone, whatsapp_enabled')
+      .eq('id', 'global')
+      .single()
+
+    if (settings?.whatsapp_enabled && settings?.whatsapp_api_url && settings?.whatsapp_phone) {
+      const waUrl = settings.whatsapp_api_url.trim().replace(/\/+$/, '')
+      const msg =
+        `🔔 *Moriá Financeiro — Lembrete de Pagamentos*\n\n` +
+        `Total de pendências: *${totalPendentes}*\n\n` +
+        linhas.join('\n') +
+        `\n\n🔗 Acesse os detalhes: https://moria-financeiro.vercel.app/lembretes`
+
+      const waRes = await fetch(`${waUrl}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          number: settings.whatsapp_phone,
+          message: msg,
+        }),
+      })
+
+      if (waRes.ok) {
+        whatsappSent = true
+      } else {
+        const errJson = await waRes.json().catch(() => ({}))
+        whatsappError = errJson?.error || `HTTP ${waRes.status}`
+      }
+    }
+  } catch (err: unknown) {
+    whatsappError = err instanceof Error ? err.message : 'Falha na conexão WhatsApp'
+  }
+
+  // Buscar todas as subscriptions de WebPush
   const { data: subscriptions } = await supabase.from('push_subscriptions').select('*')
-  if (!subscriptions?.length) return Response.json({ sent: 0, message: 'Sem subscriptions' })
+  if (!subscriptions?.length) {
+    return Response.json({
+      sent: 0,
+      message: 'Sem subscriptions de navegador',
+      whatsappSent,
+      whatsappError,
+    })
+  }
 
   let sent = 0
   const expired: string[] = []
@@ -102,5 +148,10 @@ async function sendPushNotifications() {
     await supabase.from('push_subscriptions').delete().in('endpoint', expired)
   }
 
-  return Response.json({ sent, expired: expired.length })
+  return Response.json({
+    sent,
+    expired: expired.length,
+    whatsappSent,
+    whatsappError,
+  })
 }

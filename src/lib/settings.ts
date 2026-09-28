@@ -3,11 +3,19 @@ import { supabase } from '@/lib/supabase'
 export interface MoriaSettings {
   gemini_api_key: string
   gemini_model: string
+  whatsapp_api_url: string
+  whatsapp_api_key: string
+  whatsapp_phone: string
+  whatsapp_enabled: boolean
 }
 
 const DEFAULTS: MoriaSettings = {
   gemini_api_key: "",
   gemini_model: "gemini-3.8-flash",
+  whatsapp_api_url: "",
+  whatsapp_api_key: "",
+  whatsapp_phone: "",
+  whatsapp_enabled: false,
 }
 
 // Cache local para evitar query repetida no mesmo render
@@ -16,13 +24,17 @@ let cache: MoriaSettings | null = null
 export async function getSettingsAsync(): Promise<MoriaSettings> {
   const { data, error } = await supabase
     .from('app_settings')
-    .select('gemini_api_key, gemini_model')
+    .select('gemini_api_key, gemini_model, whatsapp_api_url, whatsapp_api_key, whatsapp_phone, whatsapp_enabled')
     .eq('id', 'global')
     .single()
   if (error || !data) return { ...DEFAULTS }
-  const settings = {
+  const settings: MoriaSettings = {
     gemini_api_key: data.gemini_api_key || DEFAULTS.gemini_api_key,
     gemini_model: data.gemini_model || DEFAULTS.gemini_model,
+    whatsapp_api_url: data.whatsapp_api_url || DEFAULTS.whatsapp_api_url,
+    whatsapp_api_key: data.whatsapp_api_key || DEFAULTS.whatsapp_api_key,
+    whatsapp_phone: data.whatsapp_phone || DEFAULTS.whatsapp_phone,
+    whatsapp_enabled: data.whatsapp_enabled ?? DEFAULTS.whatsapp_enabled,
   }
   cache = settings
   return settings

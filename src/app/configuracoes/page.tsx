@@ -13,6 +13,7 @@ import {
   ZapIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
+import { WhatsAppConnectCard } from "@/components/whatsapp-connect-card"
 import {
   Card,
   CardContent,
@@ -308,6 +309,9 @@ export default function ConfiguracoesPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Seção WhatsApp */}
+      <WhatsAppConnectCard />
     </DashboardShell>
   )
 }

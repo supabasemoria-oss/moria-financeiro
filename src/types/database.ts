@@ -20,18 +20,30 @@ export type Database = {
           gemini_model: string
           id: string
           updated_at: string
+          whatsapp_api_url: string | null
+          whatsapp_api_key: string | null
+          whatsapp_phone: string | null
+          whatsapp_enabled: boolean | null
         }
         Insert: {
           gemini_api_key?: string
           gemini_model?: string
           id?: string
           updated_at?: string
+          whatsapp_api_url?: string | null
+          whatsapp_api_key?: string | null
+          whatsapp_phone?: string | null
+          whatsapp_enabled?: boolean | null
         }
         Update: {
           gemini_api_key?: string
           gemini_model?: string
           id?: string
           updated_at?: string
+          whatsapp_api_url?: string | null
+          whatsapp_api_key?: string | null
+          whatsapp_phone?: string | null
+          whatsapp_enabled?: boolean | null
         }
         Relationships: []
       }

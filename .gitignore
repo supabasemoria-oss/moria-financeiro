@@ -35,6 +35,9 @@ yarn-error.log*
 .env*.local
 .env*
 data/auth_info
+auth_info_baileys
+services/whatsapp/auth_info_baileys
+services/whatsapp/node_modules
 
 # vercel
 .vercel
