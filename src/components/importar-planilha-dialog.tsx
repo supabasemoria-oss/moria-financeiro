@@ -12,6 +12,11 @@ import {
   SparklesIcon,
   Building2Icon,
   FolderPlusIcon,
+  CalendarDaysIcon,
+  CreditCardIcon,
+  UsersIcon,
+  CoinsIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react"
 import {
   Dialog,
@@ -84,6 +89,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
   const [projetos, setProjetos] = React.useState<any[]>([])
   const [projetoSelecionadoId, setProjetoSelecionadoId] = React.useState<string>(projetoId || "")
   const [modoDestino, setModoDestino] = React.useState<"auto_criar" | "existente">("auto_criar")
+  const [abaVisualizacao, setAbaVisualizacao] = React.useState<"pagamentos" | "colunas">("pagamentos")
 
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -107,6 +113,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
     setErro(null)
     setCadastrarFornecedores(true)
     setModoDestino("auto_criar")
+    setAbaVisualizacao("pagamentos")
   }
 
   function handleClose(v: boolean) {
@@ -132,6 +139,12 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
 
       setResultado(res)
       setMapeamento(res.mapeamento)
+
+      if (res.rubricas_detectadas && res.rubricas_detectadas.length > 0) {
+        setAbaVisualizacao("pagamentos")
+      } else {
+        setAbaVisualizacao("colunas")
+      }
 
       // Se temos projetoId passado via prop, focar nele; caso contrário, se a planilha tiver dados de proposta/OSC, focar em auto_criar
       if (projetoId) {
@@ -234,10 +247,19 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
             }))
 
       let criadas = 0
+      let totalParcelasGeradas = 0
 
-      // 2. Criar rubricas: se a skill identificou rubricas estruturadas de alta fidelidade
+      // 2. Criar rubricas com ciclo de pagamentos: RECORRENTE para diárias/meses > 1 com geração de parcelas mensais
       if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
         for (const rub of resultado.rubricas_detectadas) {
+          const meses =
+            rub.periodo_meses && rub.periodo_meses > 1
+              ? rub.periodo_meses
+              : rub.unidade?.toLowerCase().includes("mês") || rub.unidade?.toLowerCase().includes("mes")
+              ? Math.round(rub.quantidade)
+              : 1
+          const tipoPagamento = meses > 1 ? "RECORRENTE" : "UNICO"
+
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
             descricao: rub.descricao,
@@ -246,8 +268,13 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
             quantidade: rub.quantidade,
             unidade: rub.unidade || "UN",
             valor_unitario: rub.valor_unitario,
+            tipo_pagamento: tipoPagamento,
+            num_parcelas: meses,
+            frequencia_meses: 1,
+            dia_vencimento: 10,
           })
           criadas++
+          totalParcelasGeradas += meses
         }
       } else {
         // Fallback para linhas mapeadas manualmente
@@ -275,6 +302,14 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
             (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
           )
 
+          const isMensal =
+            obj.unidade?.toLowerCase().includes("mes") ||
+            obj.unidade?.toLowerCase().includes("mês")
+          const numParcelas =
+            isMensal && !isNaN(quantidade) && quantidade > 1
+              ? Math.round(quantidade)
+              : 1
+
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
             descricao,
@@ -284,47 +319,68 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
             quantidade: isNaN(quantidade) ? 1 : quantidade,
             unidade: obj.unidade?.trim() || "UN",
             valor_unitario: isNaN(valor_unitario) ? 0 : valor_unitario,
+            tipo_pagamento: numParcelas > 1 ? "RECORRENTE" : "UNICO",
+            num_parcelas: numParcelas,
+            frequencia_meses: 1,
+            dia_vencimento: 10,
           })
           criadas++
+          totalParcelasGeradas += numParcelas
         }
       }
 
-      // 3. Auto-cadastro de fornecedores identificados nas cotações
+      // 3. Auto-cadastro de fornecedores identificados nas cotações e vencedores
       let fornecedoresCriados = 0
-      if (
-        cadastrarFornecedores &&
-        resultado.fornecedores_detectados &&
-        resultado.fornecedores_detectados.length > 0
-      ) {
-        try {
-          const existentes = await mroscService.getFornecedores()
-          const cnpjsExistentes = new Set(
-            existentes.map((f) => f.cpf_cnpj.replace(/\D/g, ""))
-          )
-
-          for (const f of resultado.fornecedores_detectados) {
-            const rawCnpj = f.cpf_cnpj.replace(/\D/g, "")
-            if (!cnpjsExistentes.has(rawCnpj)) {
-              await mroscService.createFornecedor({
-                razao_social_nome: f.razao_social_nome,
-                cpf_cnpj: f.cpf_cnpj,
-              })
-              cnpjsExistentes.add(rawCnpj)
-              fornecedoresCriados++
+      if (cadastrarFornecedores) {
+        const todosFornecedores = [...(resultado.fornecedores_detectados || [])]
+        if (resultado.rubricas_detectadas) {
+          for (const rub of resultado.rubricas_detectadas) {
+            if (
+              rub.fornecedor_selecionado &&
+              !todosFornecedores.some(
+                (f) => f.cpf_cnpj === rub.fornecedor_selecionado?.cpf_cnpj
+              )
+            ) {
+              todosFornecedores.push(rub.fornecedor_selecionado)
             }
           }
-        } catch (errFornecedores) {
-          console.warn("Aviso ao auto-cadastrar fornecedores cotados:", errFornecedores)
+        }
+
+        if (todosFornecedores.length > 0) {
+          try {
+            const existentes = await mroscService.getFornecedores()
+            const cnpjsExistentes = new Set(
+              existentes.map((f) => f.cpf_cnpj.replace(/\D/g, ""))
+            )
+
+            for (const f of todosFornecedores) {
+              const rawCnpj = f.cpf_cnpj.replace(/\D/g, "")
+              if (!cnpjsExistentes.has(rawCnpj)) {
+                await mroscService.createFornecedor({
+                  razao_social_nome: f.razao_social_nome,
+                  cpf_cnpj: f.cpf_cnpj,
+                })
+                cnpjsExistentes.add(rawCnpj)
+                fornecedoresCriados++
+              }
+            }
+          } catch (errFornecedores) {
+            console.warn("Aviso ao auto-cadastrar fornecedores cotados:", errFornecedores)
+          }
         }
       }
 
       setEtapa("concluido")
-      if (fornecedoresCriados > 0) {
+      if (totalParcelasGeradas > 0) {
         toast.success(
-          `${criadas} rubrica(s) e ${fornecedoresCriados} fornecedor(es) vinculados com sucesso no projeto ${nomeProjetoFinal}.`
+          `${criadas} rubrica(s) e ${totalParcelasGeradas} parcela(s) financeira(s) geradas no projeto ${nomeProjetoFinal}${
+            fornecedoresCriados > 0 ? ` com ${fornecedoresCriados} fornecedor(es) cadastrado(s)` : ""
+          }.`
         )
       } else {
-        toast.success(`${criadas} rubrica(s) importada(s) com sucesso no projeto ${nomeProjetoFinal}.`)
+        toast.success(
+          `${criadas} rubrica(s) importada(s) com sucesso no projeto ${nomeProjetoFinal}.`
+        )
       }
       onImportado?.()
     } catch (e: unknown) {
@@ -351,10 +407,29 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
     mapeamento.filter((m) => m.campo_sistema).map((m) => m.campo_sistema)
   )
 
+  const totalParcelasEstimadas = resultado?.rubricas_detectadas
+    ? resultado.rubricas_detectadas.reduce((acc, r) => {
+        const meses =
+          r.periodo_meses && r.periodo_meses > 1
+            ? r.periodo_meses
+            : r.unidade?.toLowerCase().includes("mês") ||
+              r.unidade?.toLowerCase().includes("mes")
+            ? Math.round(r.quantidade)
+            : 1
+        return acc + meses
+      }, 0)
+    : 0
+
+  const totalValorEstimado = resultado?.rubricas_detectadas
+    ? resultado.rubricas_detectadas.reduce((acc, r) => acc + r.valor_total, 0)
+    : resultado?.metadados?.valor_total_estimado || 0
+
+  const fornecedoresContagem = resultado?.fornecedores_detectados?.length || 0
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UploadIcon className="size-4" />
@@ -567,111 +642,279 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
               </label>
             )}
 
-            {/* 4. Mapeamento com propostas da I.A. explícitas */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-foreground">
-                    Mapeamento de Colunas
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    A I.A. propõe o melhor campo com base na Skill MROSC. Você pode aceitar ou ajustar livremente.
-                  </p>
+            {/* 4. Alternância entre Ciclo de Pagamentos do Gestor e Mapeamento de Colunas */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-2">
+                <div className="flex items-center gap-1.5 p-1 bg-muted rounded-lg w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setAbaVisualizacao("pagamentos")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                      abaVisualizacao === "pagamentos"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <CalendarDaysIcon className="size-3.5 text-emerald-600" />
+                    <span>Programação de Pagamentos</span>
+                    {resultado.rubricas_detectadas && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold">
+                        {resultado.rubricas_detectadas.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAbaVisualizacao("colunas")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                      abaVisualizacao === "colunas"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <SlidersHorizontalIcon className="size-3.5 text-blue-500" />
+                    <span>Mapeamento de Colunas</span>
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 text-muted-foreground font-semibold">
+                      {mapeamento.length}
+                    </span>
+                  </button>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={aplicarTodasSugestoesIA}
-                  className="h-7 text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
-                >
-                  <SparklesIcon className="size-3 text-emerald-500" />
-                  Reaplicar sugestões da IA
-                </Button>
+
+                {abaVisualizacao === "colunas" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={aplicarTodasSugestoesIA}
+                    className="h-7 text-xs gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer self-start sm:self-auto"
+                  >
+                    <SparklesIcon className="size-3 text-emerald-500" />
+                    Reaplicar sugestões da IA
+                  </Button>
+                )}
               </div>
 
-              <div className="max-h-64 overflow-y-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[45%]">Coluna da planilha</TableHead>
-                      <TableHead className="w-[25%]">Proposta da I.A.</TableHead>
-                      <TableHead className="w-[30%]">Campo escolhido</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mapeamento.map((m) => (
-                      <TableRow key={m.indice}>
-                        <TableCell className="font-mono text-xs py-2">
-                          <span className="font-medium text-foreground">
-                            {m.coluna_original || `Coluna ${m.indice}`}
-                          </span>
-                          {m.motivo_ia && (
-                            <span className="block text-[11px] text-muted-foreground font-sans mt-0.5">
-                              {m.motivo_ia}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-2">
-                          {m.sugestao_ia ? (
-                            <Badge
-                              variant="outline"
-                              className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[11px] gap-1 py-0.5 font-normal"
-                            >
-                              <SparklesIcon className="size-3 text-emerald-500" />
-                              {CAMPO_LABELS[m.sugestao_ia] ?? m.sugestao_ia}
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-muted-foreground/70 text-[11px] py-0.5 font-normal"
-                            >
-                              Ignorar
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-2">
-                          <Select
-                            value={m.campo_sistema ?? "__ignorar__"}
-                            onValueChange={(v) =>
-                              atualizarCampo(
-                                m.indice,
-                                v === "__ignorar__" ? null : v
-                              )
-                            }
-                          >
-                            <SelectTrigger className="h-7 text-xs w-full">
-                              <SelectValue>
-                                {(val) => {
-                                  if (!val || val === "__ignorar__") return "— ignorar —"
-                                  return CAMPO_LABELS[val as any] ?? val
-                                }}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__ignorar__">
-                                — ignorar —
-                              </SelectItem>
-                              {CAMPOS_SISTEMA.map((c) => (
-                                <SelectItem
-                                  key={c.campo}
-                                  value={c.campo}
-                                  disabled={
-                                    camposUsados.has(c.campo) &&
-                                    m.campo_sistema !== c.campo
-                                  }
+              {/* ABA 1: PROGRAMAÇÃO DE PAGAMENTOS DO GESTOR */}
+              {abaVisualizacao === "pagamentos" && (
+                <div className="space-y-3">
+                  {/* Resumo numérico do ciclo de desembolso */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg border bg-muted/20">
+                      <span className="text-[11px] text-muted-foreground block">Total Reservado</span>
+                      <span className="text-sm font-bold text-foreground">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValorEstimado)}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg border bg-muted/20">
+                      <span className="text-[11px] text-muted-foreground block">Rubricas Previstas</span>
+                      <span className="text-sm font-bold text-emerald-600">
+                        {resultado.rubricas_detectadas?.length || 0} itens
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg border bg-muted/20">
+                      <span className="text-[11px] text-muted-foreground block">Parcelas Financeiras</span>
+                      <span className="text-sm font-bold text-blue-600">
+                        {totalParcelasEstimadas} parcelas automáticas
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg border bg-muted/20">
+                      <span className="text-[11px] text-muted-foreground block">Fornecedores Cotados</span>
+                      <span className="text-sm font-bold text-violet-600">
+                        {fornecedoresContagem} identificados
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tabela detalhada do ciclo */}
+                  {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
+                    <div className="max-h-72 overflow-y-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[35%]">O que pagar (Item / Despesa)</TableHead>
+                            <TableHead className="w-[30%]">Quem recebe (Fornecedor Cotado)</TableHead>
+                            <TableHead className="w-[15%] text-center">Parcelamento</TableHead>
+                            <TableHead className="w-[10%] text-right">Mensal</TableHead>
+                            <TableHead className="w-[10%] text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {resultado.rubricas_detectadas.map((rub, idx) => {
+                            const meses =
+                              rub.periodo_meses && rub.periodo_meses > 1
+                                ? rub.periodo_meses
+                                : rub.unidade?.toLowerCase().includes("mês") ||
+                                  rub.unidade?.toLowerCase().includes("mes")
+                                ? Math.round(rub.quantidade)
+                                : 1
+                            return (
+                              <TableRow key={idx}>
+                                <TableCell className="py-2.5">
+                                  <div className="font-semibold text-xs text-foreground">
+                                    {rub.descricao}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
+                                      {rub.codigo_natureza_despesa}
+                                    </Badge>
+                                    <Badge
+                                      variant="secondary"
+                                      className={`text-[10px] py-0 px-1 ${
+                                        rub.codigo_natureza_despesa === "33904700"
+                                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                                          : rub.tipo === "RH"
+                                          ? "bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                                          : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                      }`}
+                                    >
+                                      {rub.codigo_natureza_despesa === "33904700" ? "ENCARGOS CLT" : rub.tipo}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2.5">
+                                  {rub.fornecedor_selecionado ? (
+                                    <div>
+                                      <span className="font-medium text-xs block text-foreground">
+                                        {rub.fornecedor_selecionado.razao_social_nome}
+                                      </span>
+                                      <span className="text-[11px] font-mono text-muted-foreground block">
+                                        {rub.fornecedor_selecionado.cpf_cnpj}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground italic">
+                                      {rub.codigo_natureza_despesa === "33904700"
+                                        ? "Guia Previdência / FGTS"
+                                        : "Cotação sob demanda"}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-2.5 text-center">
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[11px] font-normal ${
+                                      meses > 1
+                                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {meses > 1 ? `${meses} parcelas mensais` : "Pagamento único"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-2.5 text-right font-mono text-xs text-foreground">
+                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                    rub.valor_unitario
+                                  )}
+                                  <span className="block text-[10px] text-muted-foreground font-sans">
+                                    /{rub.unidade || "un"}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="py-2.5 text-right font-mono text-xs font-semibold text-foreground">
+                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                    rub.valor_total
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-xs text-muted-foreground rounded-lg border bg-muted/20">
+                      Nenhuma rubrica estruturada pré-detectada. Alterne para a aba de Mapeamento de Colunas para importar por colunas.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ABA 2: MAPEAMENTO DE COLUNAS */}
+              {abaVisualizacao === "colunas" && (
+                <div className="space-y-3">
+                  <div className="max-h-64 overflow-y-auto rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[45%]">Coluna da planilha</TableHead>
+                          <TableHead className="w-[25%]">Proposta da I.A.</TableHead>
+                          <TableHead className="w-[30%]">Campo escolhido</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {mapeamento.map((m) => (
+                          <TableRow key={m.indice}>
+                            <TableCell className="font-mono text-xs py-2">
+                              <span className="font-medium text-foreground">
+                                {m.coluna_original || `Coluna ${m.indice}`}
+                              </span>
+                              {m.motivo_ia && (
+                                <span className="block text-[11px] text-muted-foreground font-sans mt-0.5">
+                                  {m.motivo_ia}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2">
+                              {m.sugestao_ia ? (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[11px] gap-1 py-0.5 font-normal"
                                 >
-                                  {CAMPO_LABELS[c.campo] ?? c.campo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                                  <SparklesIcon className="size-3 text-emerald-500" />
+                                  {CAMPO_LABELS[m.sugestao_ia] ?? m.sugestao_ia}
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-muted-foreground/70 text-[11px] py-0.5 font-normal"
+                                >
+                                  Ignorar
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2">
+                              <Select
+                                value={m.campo_sistema ?? "__ignorar__"}
+                                onValueChange={(v) =>
+                                  atualizarCampo(
+                                    m.indice,
+                                    v === "__ignorar__" ? null : v
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs w-full">
+                                  <SelectValue>
+                                    {(val) => {
+                                      if (!val || val === "__ignorar__") return "— ignorar —"
+                                      return CAMPO_LABELS[val as any] ?? val
+                                    }}
+                                  </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__ignorar__">
+                                    — ignorar —
+                                  </SelectItem>
+                                  {CAMPOS_SISTEMA.map((c) => (
+                                    <SelectItem
+                                      key={c.campo}
+                                      value={c.campo}
+                                      disabled={
+                                        camposUsados.has(c.campo) &&
+                                        m.campo_sistema !== c.campo
+                                      }
+                                    >
+                                      {CAMPO_LABELS[c.campo] ?? c.campo}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 5. Prévia de Rubricas */}

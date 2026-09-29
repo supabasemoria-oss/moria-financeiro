@@ -34,6 +34,8 @@ export interface RubricaSkillExtraida {
   valor_unitario: number
   valor_total: number
   codigo_natureza_despesa: string
+  periodo_meses?: number
+  fornecedor_selecionado?: FornecedorIdentificado | null
 }
 
 export interface ResultadoMapeamento {
@@ -281,6 +283,31 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
         codNat = "33903000"
       }
 
+      let periodoMeses = 1
+      const colQtdPeriodo = header.findIndex((h) => h.includes("PERÍODO") || h.includes("PERIODO"))
+      if (colQtdPeriodo !== -1) {
+        const txt = String(row[colQtdPeriodo] || "")
+        const match = txt.match(/(\d+)/)
+        if (match) periodoMeses = parseInt(match[1], 10)
+      }
+
+      // Identificar o fornecedor vencedor cotado
+      let fornecedorVencedor: FornecedorIdentificado | null = null
+      for (const cot of cotacaoIndices) {
+        const cotVl = parseMoedaBR(row[cot.vlUnit])
+        const rz = String(row[cot.razao] || "").trim()
+        const doc = formatarCnpj(String(row[cot.cnpj] || "").trim())
+        if (cotVl > 0 && Math.abs(cotVl - vlUnit) < 0.05 && rz && doc) {
+          fornecedorVencedor = { razao_social_nome: rz, cpf_cnpj: doc }
+          break
+        }
+      }
+      if (!fornecedorVencedor && cotacaoIndices.length > 0) {
+        const rz = String(row[cotacaoIndices[0].razao] || "").trim()
+        const doc = formatarCnpj(String(row[cotacaoIndices[0].cnpj] || "").trim())
+        if (rz && doc) fornecedorVencedor = { razao_social_nome: rz, cpf_cnpj: doc }
+      }
+
       cotacaoIndices.forEach((cot) => {
         const rz = String(row[cot.razao] || "").trim()
         const doc = formatarCnpj(String(row[cot.cnpj] || "").trim())
@@ -300,6 +327,8 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
         valor_unitario: vlUnit,
         valor_total: vlTotal,
         codigo_natureza_despesa: codNat,
+        periodo_meses: periodoMeses,
+        fornecedor_selecionado: fornecedorVencedor,
       })
     }
   } else if (modelo === "MODELO_B_DESCRITIVO") {
@@ -363,11 +392,18 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
       const vlUnit = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[0]]) : parseMoedaBR(row[row.length - 2])
       const vlTotal = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[1]]) : qtd * vlUnit
 
+      const periodoMeses = Math.round(parseMoedaBR(row[7])) || 8
+      let fornecedorVencedor: FornecedorIdentificado | null = null
+
       ;[9, 12, 15].forEach((col) => {
         const f = extrairFornecedorDeTexto(row[col])
         if (f && sanitizarCnpj(f.cpf_cnpj).length === 14) {
           if (!fornecedoresMap.has(f.cpf_cnpj)) {
             fornecedoresMap.set(f.cpf_cnpj, f)
+          }
+          const cotVl = parseMoedaBR(row[col + 1])
+          if (!fornecedorVencedor && cotVl > 0 && Math.abs(cotVl - vlUnit) < 0.05) {
+            fornecedorVencedor = f
           }
         }
       })
@@ -388,6 +424,8 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
         valor_unitario: vlUnit,
         valor_total: vlTotal,
         codigo_natureza_despesa: codNat,
+        periodo_meses: periodoMeses,
+        fornecedor_selecionado: fornecedorVencedor,
       })
     }
   }

@@ -96,18 +96,18 @@ Esta skill define as diretrizes, heurísticas e especificações técnicas para 
           "razao_social": "LOPES E LOPES ASSESSORIA EMPRESARIAL LTDA",
           "cnpj": "17728273000150",
           "valor_unitario": 1650.00,
-          "valor_total": 198000.00
-        }
-      ]
-    }
-  ],
-  "fornecedores_identificados": [
-    {
-      "razao_social": "LOPES E LOPES ASSESSORIA EMPRESARIAL LTDA",
-      "cnpj": "17728273000150",
-      "telefone": null
-    }
-  ],
-  "cronograma_mensal": []
-}
-```
+---
+
+## 4. Mapeamento Direto do Ciclo de Pagamentos do Gestor
+
+A planilha orçamentária fornece todos os dados necessários para o gestor programar e executar os pagamentos reais:
+
+| Dimensão de Pagamento | Campo na Planilha | Destino no Sistema | Exemplo Real |
+|---|---|---|---|
+| **O que pagar** | `ITEM` ou Título do Cargo/Serviço | `rubricas_orcamentarias.descricao` | "Articulador Social" |
+| **Quanto pagar por mês** | `VALOR UNITÁRIO` selecionado | `rubricas_orcamentarias.valor_unitario` | R$ 1.650,00 |
+| **Quantas vezes pagar** | `QTD (PERÍODO)` (ex: 12 meses) | `rubricas_orcamentarias.num_parcelas` e geração de parcelas | 12 parcelas mensais em `parcelas_pagamento` |
+| **Tributos e encargos** | Linhas de Tributo/Encargos CLT (68.16%) | Rubricas vinculadas com código `33904700` | "Articulador Social — Encargos" (R$ 1.124,64/mês) |
+| **Quem vai receber** | Razão Social e CNPJ da cotação vencedora | Tabela `fornecedores` vinculada | LOPES E LOPES (CNPJ 17.728.273/0001-50) |
+| **Total reservado** | `VALOR TOTAL` aprovado | `rubricas_orcamentarias.valor_total` | R$ 198.000,00 |
+
