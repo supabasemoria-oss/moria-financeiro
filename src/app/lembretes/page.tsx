@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
+import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
 import { mroscService } from "@/lib/api/mrosc-service"
@@ -142,6 +143,7 @@ export default function LembretesPage() {
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
   const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof mroscService.getFornecedores>>>([])
   const [formExec, setFormExec] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
+  const [arquivoNf, setArquivoNf] = useState<File | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [openFornecedor, setOpenFornecedor] = useState(false)
 
@@ -149,6 +151,7 @@ export default function LembretesPage() {
     const forns = await mroscService.getFornecedores()
     setFornecedores(forns)
     setFormExec({ fornecedor_id: "", data_pagamento_real: getTodaySaoPaulo(), numero_documento_fiscal: "" })
+    setArquivoNf(null)
     setParcelaSelecionada(p)
   }
 
@@ -160,9 +163,11 @@ export default function LembretesPage() {
         fornecedor_id: formExec.fornecedor_id,
         data_pagamento_real: formExec.data_pagamento_real,
         numero_documento_fiscal: formExec.numero_documento_fiscal || undefined,
+        arquivo_nota_fiscal: arquivoNf,
       })
       toast.success("Pagamento registrado com sucesso!")
       setParcelaSelecionada(null)
+      setArquivoNf(null)
       refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao registrar")
@@ -533,10 +538,15 @@ export default function LembretesPage() {
                   <Label>Data de Pagamento *</Label>
                   <Input type="date" value={formExec.data_pagamento_real} onChange={e => setFormExec(f => ({ ...f, data_pagamento_real: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Nº Documento Fiscal</Label>
-                  <Input placeholder="NF / RPA / Recibo..." value={formExec.numero_documento_fiscal} onChange={e => setFormExec(f => ({ ...f, numero_documento_fiscal: e.target.value }))} />
-                </div>
+                <CampoNotaFiscal
+                  numero={formExec.numero_documento_fiscal}
+                  onNumeroChange={v => setFormExec(f => ({ ...f, numero_documento_fiscal: v }))}
+                  arquivo={arquivoNf}
+                  onArquivoChange={setArquivoNf}
+                  labelNumero="Nº Documento Fiscal / Recibo (Opcional)"
+                  placeholderNumero="NF / RPA / Recibo..."
+                  idInput="lembrete_nf_file"
+                />
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setParcelaSelecionada(null)}>Cancelar</Button>
                   <Button onClick={executar} disabled={salvando || !formExec.fornecedor_id || !formExec.data_pagamento_real}>

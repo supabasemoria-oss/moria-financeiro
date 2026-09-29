@@ -35,6 +35,7 @@ import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
+import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
@@ -79,6 +80,7 @@ function ExecucaoContent() {
 
   // Dialog Nova Despesa
   const [openDespesa, setOpenDespesa] = useState(false)
+  const [arquivoNfDespesa, setArquivoNfDespesa] = useState<File | null>(null)
   const [despesaForm, setDespesaForm] = useState({
     projeto_id: initialProjetoId || "",
     rubrica_id: "",
@@ -104,6 +106,7 @@ function ExecucaoContent() {
 
   // Dialog Quitar Parcela
   const [openQuitar, setOpenQuitar] = useState(false)
+  const [arquivoNfQuitar, setArquivoNfQuitar] = useState<File | null>(null)
   const [parcelaParaQuitar, setParcelaParaQuitar] = useState<ParcelaComRelacoes | null>(null)
   const [quitarForm, setQuitarForm] = useState({
     fornecedor_id: "",
@@ -314,8 +317,8 @@ function ExecucaoContent() {
         numero_documento_fiscal: despesaForm.numero_documento_fiscal || null,
         status: despesaForm.status,
         data_pagamento: despesaForm.status === "PAGO" ? despesaForm.data_despesa : null,
-      })
-      toast.success("Despesa registrada com sucesso!")
+      }, arquivoNfDespesa)
+      toast.success("Despesa e comprovante registrados com sucesso!")
       setDespesaForm({
         ...despesaForm,
         rubrica_id: "",
@@ -324,6 +327,7 @@ function ExecucaoContent() {
         valor: "",
         numero_documento_fiscal: "",
       })
+      setArquivoNfDespesa(null)
       setOpenDespesa(false)
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {
@@ -374,6 +378,7 @@ function ExecucaoContent() {
   // Abrir Modal de Quitar Parcela
   function handleAbrirQuitar(parcela: ParcelaComRelacoes) {
     setParcelaParaQuitar(parcela)
+    setArquivoNfQuitar(null)
     setQuitarForm({
       fornecedor_id: fornecedores[0]?.id || "",
       data_pagamento_real: getTodaySaoPaulo(),
@@ -398,10 +403,12 @@ function ExecucaoContent() {
         data_pagamento_real: quitarForm.data_pagamento_real,
         numero_documento_fiscal: quitarForm.numero_documento_fiscal || undefined,
         observacoes: quitarForm.observacoes || undefined,
+        arquivo_nota_fiscal: arquivoNfQuitar,
       })
       toast.success("Parcela quitada com sucesso! Despesa registrada no livro caixa.")
       setOpenQuitar(false)
       setParcelaParaQuitar(null)
+      setArquivoNfQuitar(null)
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao quitar parcela"
@@ -1158,27 +1165,25 @@ function ExecucaoContent() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="quitar_data">Data do Pagamento *</Label>
-                <Input
-                  id="quitar_data"
-                  type="date"
-                  value={quitarForm.data_pagamento_real}
-                  onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="quitar_doc">Nº Nota Fiscal / Recibo</Label>
-                <Input
-                  id="quitar_doc"
-                  placeholder="Ex: NF 10423"
-                  value={quitarForm.numero_documento_fiscal}
-                  onChange={(e) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: e.target.value }))}
-                />
-              </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="quitar_data">Data do Pagamento *</Label>
+              <Input
+                id="quitar_data"
+                type="date"
+                value={quitarForm.data_pagamento_real}
+                onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
+              />
             </div>
+
+            <CampoNotaFiscal
+              numero={quitarForm.numero_documento_fiscal}
+              onNumeroChange={(val) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
+              arquivo={arquivoNfQuitar}
+              onArquivoChange={setArquivoNfQuitar}
+              labelNumero="Nº Nota Fiscal / Recibo (Opcional)"
+              placeholderNumero="Ex: NF 10423"
+              idInput="quitar_nf_file"
+            />
 
             <div className="grid gap-1.5">
               <Label htmlFor="quitar_obs">Observações / Forma de Pagamento</Label>
@@ -1412,7 +1417,7 @@ function ExecucaoContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="desp_valor">Valor (R$) *</Label>
                   <Input
@@ -1435,16 +1440,17 @@ function ExecucaoContent() {
                     onChange={(e) => setDespesaForm({ ...despesaForm, data_despesa: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="desp_doc">Nº NF / Recibo</Label>
-                  <Input
-                    id="desp_doc"
-                    placeholder="NF 001234"
-                    value={despesaForm.numero_documento_fiscal}
-                    onChange={(e) => setDespesaForm({ ...despesaForm, numero_documento_fiscal: e.target.value })}
-                  />
-                </div>
               </div>
+
+              <CampoNotaFiscal
+                numero={despesaForm.numero_documento_fiscal}
+                onNumeroChange={(val) => setDespesaForm({ ...despesaForm, numero_documento_fiscal: val })}
+                arquivo={arquivoNfDespesa}
+                onArquivoChange={setArquivoNfDespesa}
+                labelNumero="Nº Nota Fiscal / Recibo (Opcional)"
+                placeholderNumero="Ex: NF 001234"
+                idInput="desp_nf_file"
+              />
 
               <div className="grid gap-2">
                 <Label htmlFor="desp_status">Status Inicial</Label>

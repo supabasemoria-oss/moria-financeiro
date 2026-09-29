@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
+import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { ParcelaComRelacoes, Fornecedor } from "@/lib/types"
@@ -41,6 +42,7 @@ export function CronogramaRapido() {
   const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([])
   const [openFornecedor, setOpenFornecedor] = React.useState(false)
   const [savingQuitacao, setSavingQuitacao] = React.useState(false)
+  const [arquivoNf, setArquivoNf] = React.useState<File | null>(null)
   const [quitarForm, setQuitarForm] = React.useState({
     fornecedor_id: "",
     data_pagamento_real: getTodaySaoPaulo(),
@@ -68,6 +70,7 @@ export function CronogramaRapido() {
   // Abrir Modal de Quitar
   const handleAbrirQuitar = React.useCallback(async (parcela: ParcelaComRelacoes) => {
     setParcelaParaQuitar(parcela)
+    setArquivoNf(null)
     try {
       const forns = await mroscService.getFornecedores()
       setFornecedores(forns)
@@ -99,10 +102,12 @@ export function CronogramaRapido() {
         data_pagamento_real: quitarForm.data_pagamento_real,
         numero_documento_fiscal: quitarForm.numero_documento_fiscal || undefined,
         observacoes: quitarForm.observacoes || undefined,
+        arquivo_nota_fiscal: arquivoNf,
       })
-      toast.success("Parcela quitada com sucesso! Despesa registrada no livro caixa.")
+      toast.success("Parcela quitada com sucesso! Despesa e comprovante registrados.")
       setOpenQuitar(false)
       setParcelaParaQuitar(null)
+      setArquivoNf(null)
       loadParcelas()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao quitar parcela"
@@ -423,32 +428,27 @@ export function CronogramaRapido() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="quitar_data" className="text-xs">
-                    Data do Pagamento *
-                  </Label>
-                  <Input
-                    id="quitar_data"
-                    type="date"
-                    required
-                    value={quitarForm.data_pagamento_real}
-                    onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
-                  />
-                </div>
-
-                <div className="grid gap-1.5">
-                  <Label htmlFor="quitar_doc" className="text-xs">
-                    Nº NF / Comprovante
-                  </Label>
-                  <Input
-                    id="quitar_doc"
-                    placeholder="Ex: NF 10423"
-                    value={quitarForm.numero_documento_fiscal}
-                    onChange={(e) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: e.target.value }))}
-                  />
-                </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_data" className="text-xs">
+                  Data do Pagamento *
+                </Label>
+                <Input
+                  id="quitar_data"
+                  type="date"
+                  required
+                  value={quitarForm.data_pagamento_real}
+                  onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
+                />
               </div>
+
+              <CampoNotaFiscal
+                numero={quitarForm.numero_documento_fiscal}
+                onNumeroChange={(val) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
+                arquivo={arquivoNf}
+                onArquivoChange={setArquivoNf}
+                labelNumero="Nº Nota Fiscal / Documento (Opcional)"
+                placeholderNumero="Ex: NF 10423"
+              />
 
               <div className="grid gap-1.5">
                 <Label htmlFor="quitar_obs" className="text-xs">

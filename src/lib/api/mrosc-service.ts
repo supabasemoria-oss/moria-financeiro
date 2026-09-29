@@ -148,10 +148,18 @@ export const mroscService = {
     return data as unknown as DespesaComRelacoes[]
   },
 
-  async createDespesa(payload: DespesaInsert): Promise<Despesa> {
+  async createDespesa(payload: DespesaInsert, arquivo_nota_fiscal?: File | null): Promise<Despesa> {
     const { data, error } = await supabase.from('despesas').insert(payload).select().single()
     if (error) err(error.message)
-    return data as Despesa
+    const despesa = data as Despesa
+    if (arquivo_nota_fiscal && despesa) {
+      try {
+        await this.uploadComprovante(arquivo_nota_fiscal, despesa.id, 'NOTA_FISCAL')
+      } catch (uploadError) {
+        console.error('Erro ao fazer upload da nota fiscal na criação de despesa:', uploadError)
+      }
+    }
+    return despesa
   },
 
   async updateDespesa(id: string, payload: Partial<DespesaInsert>): Promise<Despesa> {
@@ -165,7 +173,7 @@ export const mroscService = {
     if (error) err(error.message)
   },
 
-  // ?? Comprovantes ?????????????????????????????????
+  // ── Comprovantes ─────────────────────────────────
   async getComprovantes(despesaId?: string): Promise<ComprovanteComDespesa[]> {
     let q = supabase.from('comprovantes').select('*, despesas(*)')
     if (despesaId) q = q.eq('despesa_id', despesaId) as typeof q
@@ -193,7 +201,7 @@ export const mroscService = {
     return data.publicUrl
   },
 
-  // ?? Parcelas ?????????????????????????????????????
+  // ── Parcelas ─────────────────────────────────────
   async getParcelas(filters?: ParcelaFilters): Promise<ParcelaComRelacoes[]> {
     let q = supabase.from('parcelas_pagamento').select('*, rubricas_orcamentarias(*), projetos(*), despesas(*)')
     if (filters?.projetoId) q = q.eq('projeto_id', filters.projetoId) as typeof q
@@ -228,7 +236,16 @@ export const mroscService = {
     return parcelas
   },
 
-  async executarParcela(parcelaId: string, dados: { fornecedor_id: string; data_pagamento_real: string; numero_documento_fiscal?: string; observacoes?: string }): Promise<ParcelaPagamento> {
+  async executarParcela(
+    parcelaId: string,
+    dados: {
+      fornecedor_id: string
+      data_pagamento_real: string
+      numero_documento_fiscal?: string
+      observacoes?: string
+      arquivo_nota_fiscal?: File | null
+    }
+  ): Promise<ParcelaPagamento> {
     const { data: parcela, error: pErr } = await supabase.from('parcelas_pagamento').select('*').eq('id', parcelaId).single()
     if (pErr) err(pErr.message)
     const p = parcela as ParcelaPagamento
@@ -241,6 +258,15 @@ export const mroscService = {
       observacoes: dados.observacoes ?? null,
     }).select().single()
     if (dErr) err(dErr.message)
+
+    if (dados.arquivo_nota_fiscal && despesa) {
+      try {
+        await this.uploadComprovante(dados.arquivo_nota_fiscal, (despesa as Despesa).id, 'NOTA_FISCAL')
+      } catch (uploadError) {
+        console.error('Erro ao fazer upload da nota fiscal na execução:', uploadError)
+      }
+    }
+
     const { data: updated, error: uErr } = await supabase.from('parcelas_pagamento').update({
       status: 'PAGO', data_pagamento_real: dados.data_pagamento_real,
       despesa_id: (despesa as Despesa).id,
