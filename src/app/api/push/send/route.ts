@@ -1,12 +1,25 @@
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY!
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY!
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const dynamic = 'force-dynamic'
 
-webpush.setVapidDetails('mailto:ti@moria.org.br', VAPID_PUBLIC, VAPID_PRIVATE)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+function setupWebPush(): boolean {
+  const pub = process.env.VAPID_PUBLIC_KEY
+  const priv = process.env.VAPID_PRIVATE_KEY
+  if (pub && priv) {
+    try {
+      webpush.setVapidDetails('mailto:ti@moria.org.br', pub, priv)
+      return true
+    } catch (e) {
+      console.error('Falha ao configurar VAPID:', e)
+      return false
+    }
+  }
+  return false
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -242,11 +255,14 @@ async function handleDispatch(searchParams: URLSearchParams, body: any = {}) {
   }
 
   // Notificações WebPush no Navegador
-  const { data: subscriptions } = await supabase.from('push_subscriptions').select('*')
   let webPushSent = 0
   const expired: string[] = []
+  const vapidReady = setupWebPush()
 
-  if (subscriptions?.length) {
+  if (vapidReady) {
+    const { data: subscriptions } = await supabase.from('push_subscriptions').select('*')
+
+    if (subscriptions?.length) {
     const totalItens = atrasadas.length + hojeList.length + amanhaList.length
     const payload = JSON.stringify({
       title: `Moriá — ${totalItens} item(ns) pendente(s)`,
@@ -269,8 +285,9 @@ async function handleDispatch(searchParams: URLSearchParams, body: any = {}) {
       }
     }
 
-    if (expired.length) {
-      await supabase.from('push_subscriptions').delete().in('endpoint', expired)
+      if (expired.length) {
+        await supabase.from('push_subscriptions').delete().in('endpoint', expired)
+      }
     }
   }
 

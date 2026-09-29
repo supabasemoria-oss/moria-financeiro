@@ -1,18 +1,16 @@
-import webpush from 'web-push'
+import type { PushSubscription } from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY!
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY!
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const dynamic = 'force-dynamic'
 
-webpush.setVapidDetails('mailto:ti@moria.org.br', VAPID_PUBLIC, VAPID_PRIVATE)
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const { subscription } = body as { subscription: webpush.PushSubscription }
+  const { subscription } = body as { subscription: PushSubscription }
 
   if (!subscription?.endpoint) {
     return Response.json({ error: 'Subscription inválida' }, { status: 400 })
