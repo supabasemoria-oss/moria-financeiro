@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { SectionCards } from "@/components/section-cards"
+import { CronogramaRapido } from "@/components/cronograma-rapido"
 import { ImportarPlanilhaDialog } from "@/components/importar-planilha-dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { useMroscQuery } from "@/hooks/use-mrosc-query"
@@ -53,6 +54,7 @@ function DashboardContent() {
         />
       </div>
       <SectionCards />
+      <CronogramaRapido />
     </>
   )
 }
