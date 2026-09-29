@@ -845,17 +845,25 @@ function OrcamentoContent() {
             <div>
               <Select value={filtroPeriodo} onValueChange={(v) => v && setFiltroPeriodo(v)}>
                 <SelectTrigger className="h-9 text-xs">
-                  <CalendarIcon className="size-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue placeholder="Período / Vencimento" />
+                  <CalendarIcon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Período: Todos">
+                    {(val: string | null) => {
+                      if (!val || val === "ALL") return "Período: Todos"
+                      if (val === "ESTA_SEMANA") return "Período: Esta Semana"
+                      if (val === "ESTE_MES") return "Período: Este Mês"
+                      if (val === "PROXIMO_MES") return "Período: Próximo Mês"
+                      return `Mês: ${formatYearMonth(val)}`
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Todos os Períodos</SelectItem>
-                  <SelectItem value="ESTA_SEMANA">⚡ Esta Semana</SelectItem>
-                  <SelectItem value="ESTE_MES">📅 Este Mês</SelectItem>
-                  <SelectItem value="PROXIMO_MES">⏩ Próximo Mês</SelectItem>
+                  <SelectItem value="ESTA_SEMANA">Esta Semana</SelectItem>
+                  <SelectItem value="ESTE_MES">Este Mês</SelectItem>
+                  <SelectItem value="PROXIMO_MES">Próximo Mês</SelectItem>
                   {mesesDisponiveis.map((ym) => (
                     <SelectItem key={ym} value={ym}>
-                      🗓️ {formatYearMonth(ym)}
+                      {formatYearMonth(ym)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -866,8 +874,20 @@ function OrcamentoContent() {
             <div>
               <Select value={filtroTipo} onValueChange={(v) => v && setFiltroTipo(v)}>
                 <SelectTrigger className="h-9 text-xs">
-                  <SlidersHorizontalIcon className="size-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue placeholder="Tipo de Despesa" />
+                  <SlidersHorizontalIcon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Tipo: Todos">
+                    {(val: string | null) => {
+                      if (!val || val === "ALL") return "Tipo: Todos"
+                      const tiposMap: Record<string, string> = {
+                        RH: "Tipo: RH / CLT",
+                        SERVICO: "Tipo: Serviços",
+                        MATERIAL: "Tipo: Materiais",
+                        LOCACAO: "Tipo: Locação",
+                        OUTROS: "Tipo: Outros",
+                      }
+                      return tiposMap[val] || `Tipo: ${val}`
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Todos os Tipos MROSC</SelectItem>
@@ -884,8 +904,20 @@ function OrcamentoContent() {
             <div>
               <Select value={filtroSaldo} onValueChange={(v) => v && setFiltroSaldo(v)}>
                 <SelectTrigger className="h-9 text-xs">
-                  <CheckCircle2Icon className="size-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue placeholder="Situação da Execução" />
+                  <CheckCircle2Icon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Situação: Todas">
+                    {(val: string | null) => {
+                      if (!val || val === "ALL") return "Situação: Todas"
+                      const statusMap: Record<string, string> = {
+                        DISPONIVEL: "Com Saldo Disponível",
+                        EM_EXECUCAO: "Em Execução (Pago > 0)",
+                        NAO_INICIADO: "Não Iniciada (0% pago)",
+                        ESGOTADO: "100% Executada",
+                        ESTOURADO: "Déficit / Estourada",
+                      }
+                      return statusMap[val] || `Situação: ${val}`
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Todas as Situações</SelectItem>
