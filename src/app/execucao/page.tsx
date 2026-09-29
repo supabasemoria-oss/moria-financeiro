@@ -293,19 +293,17 @@ function ExecucaoContent() {
     }
   }, [projetos, despesas, parcelas, filterProjeto])
 
-  // Filtragem por status e busca textual
+  // Filtragem por status e busca textual (sem forçamento artificial)
   const parcelasFiltradas = useMemo(() => {
     let list = parcelas
 
-    // Por padrão (ALL), Contas a Pagar exibe apenas obrigações a liquidar (pendentes e atrasadas)
+    // Contas a Pagar exibe apenas obrigações a liquidar (pendentes e atrasadas)
     if (filterStatus === "ALL") {
-      list = list.filter(
-        (p) => (p.status !== "PAGO" && p.status !== "CANCELADO") || p.id === initialParcelaId
-      )
+      list = list.filter((p) => p.status !== "PAGO" && p.status !== "CANCELADO")
     } else if (filterStatus === "PENDENTE") {
-      list = list.filter((p) => p.status === "PENDENTE" || p.id === initialParcelaId)
+      list = list.filter((p) => p.status === "PENDENTE")
     } else if (filterStatus === "ATRASADO") {
-      list = list.filter((p) => p.status === "ATRASADO" || p.id === initialParcelaId)
+      list = list.filter((p) => p.status === "ATRASADO")
     } else if (filterStatus === "PAGO") {
       list = list.filter((p) => p.status === "PAGO")
     }
@@ -318,7 +316,7 @@ function ExecucaoContent() {
         (p.projetos?.nome && p.projetos.nome.toLowerCase().includes(term)) ||
         (p.rubricas_orcamentarias?.descricao && p.rubricas_orcamentarias.descricao.toLowerCase().includes(term))
     )
-  }, [parcelas, filterStatus, searchTerm, initialParcelaId])
+  }, [parcelas, filterStatus, searchTerm])
 
   const despesasFiltradas = useMemo(() => {
     let list = despesas
@@ -453,18 +451,13 @@ function ExecucaoContent() {
     setOpenQuitar(true)
   }
 
-  // Auto-abrir parcela se parcelaId for fornecido na URL
+  // Auto-abrir parcela se parcelaId for fornecido na URL e for realmente pendente
   useEffect(() => {
     if (initialParcelaId && parcelas.length > 0 && openedParcelaRef.current !== initialParcelaId) {
       const target = parcelas.find((p) => p.id === initialParcelaId)
-      if (target) {
+      if (target && target.status !== "PAGO" && target.status !== "CANCELADO") {
         openedParcelaRef.current = initialParcelaId
-        setActiveTab("parcelas")
-        if (target.status !== "PAGO") {
-          handleAbrirQuitar(target)
-        } else {
-          toast.info(`Parcela "${target.descricao}" já consta como quitada.`)
-        }
+        handleAbrirQuitar(target)
       }
     }
   }, [initialParcelaId, parcelas])
@@ -1078,7 +1071,7 @@ function ExecucaoContent() {
                           <TableRow
                             key={parcela.id}
                             className={
-                              parcela.id === initialParcelaId
+                              parcela.id === initialParcelaId && parcela.status !== "PAGO"
                                 ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-l-4 border-l-emerald-500"
                                 : ""
                             }
