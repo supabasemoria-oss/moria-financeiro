@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, Suspense } from "react"
+import { useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
@@ -47,6 +47,8 @@ import { toast } from "sonner"
 function ExecucaoContent() {
   const searchParams = useSearchParams()
   const initialProjetoId = searchParams.get("projetoId") || ""
+  const initialRubricaId = searchParams.get("rubricaId") || ""
+  const initialParcelaId = searchParams.get("parcelaId") || ""
 
   const {
     projetoId: globalProjetoId,
@@ -65,10 +67,12 @@ function ExecucaoContent() {
   const [filterProjeto, setFilterProjeto] = useState<string>(
     initialProjetoId || globalProjetoId || "ALL"
   )
+  const [filterRubrica, setFilterRubrica] = useState<string>(initialRubricaId || "ALL")
   const [filterFornecedor, setFilterFornecedor] = useState<string>("ALL")
   const [filterStatus, setFilterStatus] = useState<string>("ALL")
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [activeTab, setActiveTab] = useState<string>("parcelas")
+  const openedParcelaRef = useRef<string | null>(null)
 
   // Estados de controle
   const [loading, setLoading] = useState(true)
@@ -149,7 +153,7 @@ function ExecucaoContent() {
         setParcelaForm((prev) => ({ ...prev, projeto_id: projData[0].id }))
       }
 
-      await refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
+      await refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro desconhecido"
       toast.error("Erro ao carregar dados: " + msg)
@@ -158,13 +162,20 @@ function ExecucaoContent() {
     }
   }
 
-  async function refreshMovimentacoes(projId: string, fornId: string, status: string) {
+  async function refreshMovimentacoes(
+    projId: string = filterProjeto,
+    fornId: string = filterFornecedor,
+    status: string = filterStatus,
+    rubId: string = filterRubrica
+  ) {
     const despFilters: any = {}
     if (projId !== "ALL") despFilters.projetoId = projId
+    if (rubId !== "ALL") despFilters.rubrica_id = rubId
     if (status !== "ALL" && (status === "PAGO" || status === "PENDENTE")) despFilters.status = status
 
     const parcFilters: any = {}
     if (projId !== "ALL") parcFilters.projetoId = projId
+    if (rubId !== "ALL") parcFilters.rubricaId = rubId
     if (status !== "ALL") parcFilters.status = status
 
     const [despData, parcData] = await Promise.all([
@@ -181,19 +192,25 @@ function ExecucaoContent() {
     setDespesas(despFiltradas)
     setParcelas(parcData)
 
-    // Carregar rubricas do projeto ativo para validações
-    const targetProjId = projId !== "ALL" ? projId : (despesaForm.projeto_id || (projetos[0]?.id ?? ""))
-    if (targetProjId) {
-      try {
-        const rbs = await mroscService.getRubricas(targetProjId)
-        setRubricas(rbs)
-      } catch {}
-    }
+    // Carregar rubricas para validações e filtros
+    const targetProjId = projId !== "ALL" ? projId : (despesaForm.projeto_id || undefined)
+    try {
+      const rbs = await mroscService.getRubricas(targetProjId)
+      setRubricas(rbs)
+    } catch {}
   }
 
   useEffect(() => {
     loadData()
   }, [])
+
+  // Sincronizar parâmetros de URL (projetoId e rubricaId)
+  useEffect(() => {
+    const pId = searchParams.get("projetoId")
+    const rId = searchParams.get("rubricaId")
+    if (pId && pId !== filterProjeto) setFilterProjeto(pId)
+    if (rId && rId !== filterRubrica) setFilterRubrica(rId)
+  }, [searchParams])
 
   useEffect(() => {
     if (globalProjetoId && globalProjetoId !== filterProjeto) {
@@ -202,8 +219,8 @@ function ExecucaoContent() {
   }, [globalProjetoId])
 
   useEffect(() => {
-    refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
-  }, [filterProjeto, filterFornecedor, filterStatus])
+    refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+  }, [filterProjeto, filterFornecedor, filterStatus, filterRubrica])
 
   // Carregar rubricas ao mudar projeto do modal de despesa
   useEffect(() => {
@@ -394,17 +411,40 @@ function ExecucaoContent() {
   }
 
   // Abrir Modal de Quitar Parcela
-  function handleAbrirQuitar(parcela: ParcelaComRelacoes) {
+  async function handleAbrirQuitar(parcela: ParcelaComRelacoes) {
     setParcelaParaQuitar(parcela)
     setArquivoNfQuitar(null)
+    let currentForns = fornecedores
+    if (currentForns.length === 0) {
+      try {
+        currentForns = await mroscService.getFornecedores()
+        setFornecedores(currentForns)
+      } catch {}
+    }
     setQuitarForm({
-      fornecedor_id: fornecedores[0]?.id || "",
+      fornecedor_id: currentForns[0]?.id || "",
       data_pagamento_real: getTodaySaoPaulo(),
       numero_documento_fiscal: "",
       observacoes: "",
     })
     setOpenQuitar(true)
   }
+
+  // Auto-abrir parcela se parcelaId for fornecido na URL
+  useEffect(() => {
+    if (initialParcelaId && parcelas.length > 0 && openedParcelaRef.current !== initialParcelaId) {
+      const target = parcelas.find((p) => p.id === initialParcelaId)
+      if (target) {
+        openedParcelaRef.current = initialParcelaId
+        setActiveTab("parcelas")
+        if (target.status !== "PAGO") {
+          handleAbrirQuitar(target)
+        } else {
+          toast.info(`Parcela "${target.descricao}" já consta como quitada.`)
+        }
+      }
+    }
+  }, [initialParcelaId, parcelas])
 
   // Confirmar Quitação de Parcela (MROSC Liquidação)
   async function handleConfirmarQuitacao() {
@@ -778,6 +818,57 @@ function ExecucaoContent() {
                   </Select>
                 </div>
 
+                {/* Filtro Rubrica */}
+                <div className="w-56">
+                  <Select
+                    value={filterRubrica}
+                    onValueChange={(val) => setFilterRubrica(val ?? "ALL")}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Rubrica">
+                        {(val) => {
+                          if (!val || val === "ALL") return "Todas as Rubricas"
+                          const r = rubricas.find((item) => item.id === val)
+                          return r ? `${r.codigo_natureza_despesa} - ${r.descricao}` : val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todas as Rubricas</SelectItem>
+                      {rubricas.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          <span className="font-mono text-emerald-600 font-semibold mr-1.5">
+                            {r.codigo_natureza_despesa}
+                          </span>
+                          <span className="truncate max-w-[200px]">{r.descricao}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {filterRubrica !== "ALL" && (
+                  <Badge
+                    variant="secondary"
+                    className="h-8 px-2.5 gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-normal"
+                  >
+                    <span>
+                      Rubrica:{" "}
+                      <strong className="font-semibold">
+                        {rubricas.find((r) => r.id === filterRubrica)?.codigo_natureza_despesa || "Ativa"}
+                      </strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFilterRubrica("ALL")}
+                      className="ml-0.5 hover:text-destructive font-bold text-xs"
+                      title="Limpar filtro de rubrica"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                )}
+
                 {/* Filtro Fornecedor */}
                 <div className="w-52">
                   <Select value={filterFornecedor} onValueChange={(val) => setFilterFornecedor(val ?? "ALL")}>
@@ -935,7 +1026,14 @@ function ExecucaoContent() {
                         const venceHoje = dias === 0 && parcela.status !== "PAGO"
 
                         return (
-                          <TableRow key={parcela.id}>
+                          <TableRow
+                            key={parcela.id}
+                            className={
+                              parcela.id === initialParcelaId
+                                ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-l-4 border-l-emerald-500"
+                                : ""
+                            }
+                          >
                             <TableCell className="font-mono text-xs text-muted-foreground">
                               {parcela.numero_parcela}/{parcela.total_parcelas}
                             </TableCell>

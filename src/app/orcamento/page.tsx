@@ -227,9 +227,13 @@ function OrcamentoContent() {
       }
 
       // 3. Filtro de Saldo / Execução
-      const totalGasto = (rubrica.despesas || [])
+      const totalGastoDespesas = (rubrica.despesas || [])
         .filter((d) => d.status === "PAGO")
         .reduce((acc, curr) => acc + Number(curr.valor), 0)
+      const totalGastoParcelas = (rubrica.parcelas_pagamento || [])
+        .filter((p) => p.status === "PAGO")
+        .reduce((acc, curr) => acc + Number(curr.valor_previsto), 0)
+      const totalGasto = Math.max(totalGastoDespesas, totalGastoParcelas)
       const saldo = Number(rubrica.valor_total || 0) - totalGasto
 
       if (filtroSaldo === "DISPONIVEL" && saldo <= 0) return false
@@ -1021,17 +1025,24 @@ function OrcamentoContent() {
           /* ================================================================= */
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredRubricas.map((rubrica) => {
-              const totalGasto = (rubrica.despesas || [])
+              const totalGastoDespesas = (rubrica.despesas || [])
                 .filter((d) => d.status === "PAGO")
                 .reduce((acc, curr) => acc + Number(curr.valor), 0)
+              const totalGastoParcelas = (rubrica.parcelas_pagamento || [])
+                .filter((p) => p.status === "PAGO")
+                .reduce((acc, curr) => acc + Number(curr.valor_previsto), 0)
+              const totalGasto = Math.max(totalGastoDespesas, totalGastoParcelas)
               const saldoItem = Number(rubrica.valor_total) - totalGasto
               const percentGasto =
                 Number(rubrica.valor_total) > 0 ? (totalGasto / Number(rubrica.valor_total)) * 100 : 0
 
-              // Próxima parcela a vencer
-              const parcelasPendentes = (rubrica.parcelas_pagamento || []).filter(
+              // Parcelas e desembolsos
+              const todasParcelas = rubrica.parcelas_pagamento || []
+              const totalParcelas = todasParcelas.length
+              const parcelasPendentes = todasParcelas.filter(
                 (p) => p.status !== "PAGO" && p.status !== "CANCELADO"
               )
+              const parcelasPagas = todasParcelas.filter((p) => p.status === "PAGO")
               const proximaParcela = parcelasPendentes[0]
 
               return (
@@ -1136,20 +1147,36 @@ function OrcamentoContent() {
                     </div>
 
                     {/* Indicador de Desembolso / Parcelas */}
-                    {rubrica.parcelas_pagamento && rubrica.parcelas_pagamento.length > 0 && (
+                    {totalParcelas > 0 && (
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t">
                         <span className="flex items-center gap-1">
                           <ClockIcon className="size-3 text-muted-foreground" />
-                          {rubrica.parcelas_pagamento.length} desembolso(s)
+                          {parcelasPendentes.length === 0 ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                              {totalParcelas} desembolso(s) quitado(s)
+                            </span>
+                          ) : parcelasPagas.length > 0 ? (
+                            <span>
+                              <strong className="text-foreground">{parcelasPendentes.length}</strong> de {totalParcelas} desembolso(s)
+                            </span>
+                          ) : (
+                            <span>
+                              {totalParcelas} desembolso(s)
+                            </span>
+                          )}
                         </span>
-                        {proximaParcela && (
+                        {proximaParcela ? (
                           <span className="text-[10px] font-mono">
                             Próx: {formatCurrency(proximaParcela.valor_previsto)} em{" "}
                             {proximaParcela.data_vencimento
                               ? proximaParcela.data_vencimento.split("-").reverse().join("/")
                               : "-"}
                           </span>
-                        )}
+                        ) : parcelasPagas.length > 0 ? (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            ✓ 100% Executado
+                          </span>
+                        ) : null}
                       </div>
                     )}
                   </CardContent>
@@ -1170,7 +1197,7 @@ function OrcamentoContent() {
                         <Link
                           href={`/execucao?projetoId=${rubrica.projeto_id || selectedProjetoId}&rubricaId=${
                             rubrica.id
-                          }`}
+                          }${proximaParcela ? `&parcelaId=${proximaParcela.id}` : ""}`}
                         />
                       }
                       className="h-7 text-xs gap-1"
@@ -1227,9 +1254,13 @@ function OrcamentoContent() {
 
                 <TableBody>
                   {filteredRubricas.map((rubrica) => {
-                    const totalGasto = (rubrica.despesas || [])
+                    const totalGastoDespesas = (rubrica.despesas || [])
                       .filter((d) => d.status === "PAGO")
                       .reduce((acc, curr) => acc + Number(curr.valor), 0)
+                    const totalGastoParcelas = (rubrica.parcelas_pagamento || [])
+                      .filter((p) => p.status === "PAGO")
+                      .reduce((acc, curr) => acc + Number(curr.valor_previsto), 0)
+                    const totalGasto = Math.max(totalGastoDespesas, totalGastoParcelas)
                     const saldo = Number(rubrica.valor_total || 0) - totalGasto
 
                     return (
@@ -1279,6 +1310,10 @@ function OrcamentoContent() {
                           const todasPagas = parcelasMes.every((p) => p.status === "PAGO")
                           const temAtrasada = parcelasMes.some((p) => p.status === "ATRASADO")
 
+                          const primeiraPendente = parcelasMes.find(
+                            (p) => p.status !== "PAGO" && p.status !== "CANCELADO"
+                          )
+
                           return (
                             <TableCell key={ym} className="text-center">
                               <div className="flex flex-col items-center gap-0.5">
@@ -1288,13 +1323,23 @@ function OrcamentoContent() {
                                     ✓ Pago
                                   </span>
                                 ) : temAtrasada ? (
-                                  <span className="text-[9px] text-destructive font-semibold">
+                                  <Link
+                                    href={`/execucao?projetoId=${rubrica.projeto_id || selectedProjetoId}&rubricaId=${
+                                      rubrica.id
+                                    }${primeiraPendente ? `&parcelaId=${primeiraPendente.id}` : ""}`}
+                                    className="text-[9px] text-destructive font-semibold hover:underline"
+                                  >
                                     Atrasada
-                                  </span>
+                                  </Link>
                                 ) : (
-                                  <span className="text-[9px] text-muted-foreground">
+                                  <Link
+                                    href={`/execucao?projetoId=${rubrica.projeto_id || selectedProjetoId}&rubricaId=${
+                                      rubrica.id
+                                    }${primeiraPendente ? `&parcelaId=${primeiraPendente.id}` : ""}`}
+                                    className="text-[9px] text-muted-foreground hover:text-emerald-600 hover:underline"
+                                  >
                                     {parcelasMes.length > 1 ? `${parcelasMes.length} parc.` : "Previsto"}
-                                  </span>
+                                  </Link>
                                 )}
                               </div>
                             </TableCell>
