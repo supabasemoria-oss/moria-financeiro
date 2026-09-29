@@ -15,6 +15,7 @@ const titleMap: Record<string, string> = {
   "/projetos": "Projetos e Termos de Parceria",
   "/fornecedores": "Fornecedores e Prestadores de Serviço",
   "/orcamento": "Previsão Orçamentária e Travas de Teto",
+  "/execucao": "Execução Financeira e Controle de Saldo",
   "/financeiro": "Execução Financeira e Controle de Saldo",
   "/comprovantes": "Upload e Tipificação de Comprovantes",
   "/prestacao-contas": "Prestação de Contas e Transferegov",

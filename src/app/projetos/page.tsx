@@ -470,9 +470,9 @@ export default function ProjetosPage() {
                           <CalculatorIcon className="size-3" />
                           Orçamento
                         </Button>
-                        <Button size="sm" variant="outline" render={<Link href={`/financeiro?projetoId=${proj.id}`} />} className="h-7 text-xs gap-1">
+                        <Button size="sm" variant="outline" render={<Link href={`/execucao?projetoId=${proj.id}`} />} className="h-7 text-xs gap-1">
                           <ReceiptIcon className="size-3" />
-                          Despesas
+                          Execução
                         </Button>
                         <Button
                           size="sm"

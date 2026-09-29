@@ -251,6 +251,17 @@ export const moriaService = {
     return data as ParcelaPagamento
   },
 
+  async createParcela(payload: any): Promise<ParcelaPagamento> {
+    const { data, error } = await supabase.from('parcelas_pagamento').insert(payload).select().single()
+    if (error) err(error.message)
+    return data as ParcelaPagamento
+  },
+
+  async deleteParcela(id: string): Promise<void> {
+    const { error } = await supabase.from('parcelas_pagamento').delete().eq('id', id)
+    if (error) err(error.message)
+  },
+
   // ?? Termos Aditivos ??????????????????????????????
   async getTermosAditivos(projetoId?: string): Promise<TermoAditivo[]> {
     let q = supabase.from('termos_aditivos').select('*').order('numero_aditivo', { ascending: false })

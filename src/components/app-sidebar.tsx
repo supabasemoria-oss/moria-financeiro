@@ -64,7 +64,7 @@ const navOperacional = [
   },
   {
     title: "Execução Financeira",
-    url: "/financeiro",
+    url: "/execucao",
     icon: <ReceiptIcon className="size-4" />,
   },
 ]
@@ -110,7 +110,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     },
     {
       title: "Execução Financeira",
-      url: "/financeiro",
+      url: "/execucao",
       icon: <ReceiptIcon className="size-4" />,
     },
     {
