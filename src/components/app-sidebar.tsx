@@ -97,11 +97,6 @@ const navAdmin = [
   },
 ]
 
-const currentUser = {
-  name: "Administrador",
-  email: "admin@mrosc.org.br",
-  avatar: "/logo-symbol.png",
-}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { urgentes, atencao } = useAlertas()
@@ -173,7 +168,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={currentUser} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

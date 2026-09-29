@@ -86,6 +86,42 @@ export type Database = {
         }
         Relationships: []
       }
+      usuarios: {
+        Row: {
+          id: string
+          email: string
+          nome: string
+          cargo: string | null
+          role: string
+          telefone: string | null
+          ativo: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          nome: string
+          cargo?: string | null
+          role?: string
+          telefone?: string | null
+          ativo?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          nome?: string
+          cargo?: string | null
+          role?: string
+          telefone?: string | null
+          ativo?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       comprovantes: {
         Row: {
           content_type: string | null
