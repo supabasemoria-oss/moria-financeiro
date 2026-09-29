@@ -14,10 +14,6 @@ export interface MoriaSettings {
   nome_sistema: string
   subtitulo_sistema: string
   logo_url: string | null
-  razao_social: string | null
-  cnpj: string | null
-  email_contato: string | null
-  telefone_contato: string | null
 }
 
 const DEFAULTS: MoriaSettings = {
@@ -34,10 +30,6 @@ const DEFAULTS: MoriaSettings = {
   nome_sistema: "MROSC Gestão",
   subtitulo_sistema: "MROSC • Lei 13.019",
   logo_url: "/logo-symbol.png",
-  razao_social: "",
-  cnpj: "",
-  email_contato: "",
-  telefone_contato: "",
 }
 
 // Cache local para evitar query repetida no mesmo render
@@ -64,10 +56,6 @@ export async function getSettingsAsync(): Promise<MoriaSettings> {
     nome_sistema: (data as any).nome_sistema || DEFAULTS.nome_sistema,
     subtitulo_sistema: (data as any).subtitulo_sistema || DEFAULTS.subtitulo_sistema,
     logo_url: (data as any).logo_url || DEFAULTS.logo_url,
-    razao_social: (data as any).razao_social || DEFAULTS.razao_social,
-    cnpj: (data as any).cnpj || DEFAULTS.cnpj,
-    email_contato: (data as any).email_contato || DEFAULTS.email_contato,
-    telefone_contato: (data as any).telefone_contato || DEFAULTS.telefone_contato,
   }
   cache = settings
   return settings

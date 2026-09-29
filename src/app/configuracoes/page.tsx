@@ -12,7 +12,6 @@ import {
   SaveIcon,
   ZapIcon,
   UploadIcon,
-  Building2Icon,
   UsersIcon,
   MessageSquareIcon,
 } from "lucide-react"
@@ -45,7 +44,6 @@ import {
   uploadSystemLogo,
   testGeminiConnection,
 } from "@/lib/settings"
-import { maskCnpj, maskTelefone } from "@/lib/masks"
 import { useSystemSettings } from "@/contexts/system-context"
 
 interface GeminiModel {
@@ -62,10 +60,6 @@ export default function ConfiguracoesPage() {
   const [nomeSistema, setNomeSistema] = useState("")
   const [subtituloSistema, setSubtituloSistema] = useState("")
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
-  const [razaoSocial, setRazaoSocial] = useState("")
-  const [cnpj, setCnpj] = useState("")
-  const [emailContato, setEmailContato] = useState("")
-  const [telefoneContato, setTelefoneContato] = useState("")
   const [savingIdentidade, setSavingIdentidade] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
@@ -87,10 +81,6 @@ export default function ConfiguracoesPage() {
       setNomeSistema(s.nome_sistema)
       setSubtituloSistema(s.subtitulo_sistema)
       setLogoUrl(s.logo_url)
-      setRazaoSocial(s.razao_social || "")
-      setCnpj(s.cnpj || "")
-      setEmailContato(s.email_contato || "")
-      setTelefoneContato(s.telefone_contato || "")
 
       setApiKey(s.gemini_api_key)
       setModel(s.gemini_model)
@@ -108,10 +98,6 @@ export default function ConfiguracoesPage() {
         nome_sistema: nomeSistema.trim() || "MROSC Gestão",
         subtitulo_sistema: subtituloSistema.trim() || "MROSC • Lei 13.019",
         logo_url: logoUrl,
-        razao_social: razaoSocial.trim() || null,
-        cnpj: cnpj.trim() || null,
-        email_contato: emailContato.trim() || null,
-        telefone_contato: telefoneContato.trim() || null,
       })
       await refreshSettings()
       window.dispatchEvent(new Event("system_settings_updated"))
@@ -231,7 +217,7 @@ export default function ConfiguracoesPage() {
       <Tabs defaultValue="sistema" className="space-y-6">
         <TabsList className="bg-muted/60 p-1 rounded-xl border flex flex-wrap h-auto gap-1">
           <TabsTrigger value="sistema" className="gap-2 px-3.5 py-2 text-xs font-medium cursor-pointer">
-            <Building2Icon className="size-4" />
+            <SettingsIcon className="size-4" />
             Identidade & Sistema
           </TabsTrigger>
           <TabsTrigger value="usuarios" className="gap-2 px-3.5 py-2 text-xs font-medium cursor-pointer">
@@ -254,13 +240,13 @@ export default function ConfiguracoesPage() {
             <CardHeader className="pb-3 border-b">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Building2Icon className="size-5 text-primary" />
+                  <SettingsIcon className="size-5 text-primary" />
                   <div>
                     <CardTitle className="text-base font-semibold">
-                      Identidade Visual & Dados do Sistema
+                      Identidade Visual do Sistema
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Personalize o nome, logotipo e dados cadastrais exibidos na plataforma e relatórios.
+                      Personalize o nome e logotipo exibidos na plataforma.
                     </CardDescription>
                   </div>
                 </div>
@@ -346,52 +332,6 @@ export default function ConfiguracoesPage() {
                   </div>
                 </div>
 
-                {/* Dados da Organização */}
-                <div className="pt-2 border-t space-y-4">
-                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <Building2Icon className="size-4 text-muted-foreground" />
-                    Dados da Entidade Mantenedora
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="razao_social">Razão Social / Nome da OSC</Label>
-                      <Input
-                        id="razao_social"
-                        value={razaoSocial}
-                        onChange={(e) => setRazaoSocial(e.target.value)}
-                        placeholder="Nome oficial da organização"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cnpj">CNPJ</Label>
-                      <Input
-                        id="cnpj"
-                        value={cnpj}
-                        onChange={(e) => setCnpj(maskCnpj(e.target.value))}
-                        placeholder="00.000.000/0000-00"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="email_contato">E-mail de Contato</Label>
-                      <Input
-                        id="email_contato"
-                        type="email"
-                        value={emailContato}
-                        onChange={(e) => setEmailContato(e.target.value)}
-                        placeholder="contato@organizacao.org.br"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="telefone_contato">Telefone / Suporte</Label>
-                      <Input
-                        id="telefone_contato"
-                        value={telefoneContato}
-                        onChange={(e) => setTelefoneContato(maskTelefone(e.target.value))}
-                        placeholder="(00) 0000-0000"
-                      />
-                    </div>
-                  </div>
-                </div>
 
                 <div className="flex justify-end pt-2">
                   <Button type="submit" disabled={savingIdentidade} className="gap-2">
