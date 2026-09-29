@@ -3,8 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+  return createClient(url, key)
+}
 
 function setupWebPush(): boolean {
   const pub = process.env.VAPID_PUBLIC_KEY
@@ -21,8 +24,6 @@ function setupWebPush(): boolean {
   return false
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   return handleDispatch(searchParams)
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
 }
 
 async function handleDispatch(searchParams: URLSearchParams, body: any = {}) {
+  const supabase = getSupabase()
   const requestedType = searchParams.get('type') || body.type || 'auto'
   const isCron = searchParams.get('cron') === 'true'
   const isTest = searchParams.get('test') === 'true'

@@ -3,12 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+  return createClient(url, key)
+}
 
 export async function POST(req: Request) {
+  const supabase = getSupabase()
   const body = await req.json()
   const { subscription } = body as { subscription: PushSubscription }
 
@@ -28,6 +30,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const supabase = getSupabase()
   const { endpoint } = await req.json()
   if (!endpoint) return Response.json({ error: 'endpoint obrigatório' }, { status: 400 })
   await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
