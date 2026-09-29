@@ -16,6 +16,7 @@ import {
   BellIcon,
 } from "lucide-react"
 import { useAlertas } from "@/hooks/use-alertas"
+import { useSystemSettings } from "@/contexts/system-context"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -85,6 +86,11 @@ const navDocumental = [
 
 const navAdmin = [
   {
+    title: "Usuários",
+    url: "/usuarios",
+    icon: <UsersIcon className="size-4" />,
+  },
+  {
     title: "Configurações",
     url: "/configuracoes",
     icon: <SettingsIcon className="size-4" />,
@@ -92,14 +98,19 @@ const navAdmin = [
 ]
 
 const currentUser = {
-  name: "Consultor Moriá",
-  email: "consultoria@moriaprojetos.com.br",
+  name: "Administrador",
+  email: "admin@mrosc.org.br",
   avatar: "/logo-symbol.png",
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { urgentes, atencao } = useAlertas()
+  const { settings } = useSystemSettings()
   const badgeCount = urgentes + atencao
+
+  const nomeSistema = settings?.nome_sistema || "MROSC Gestão"
+  const subtituloSistema = settings?.subtitulo_sistema || "MROSC • Lei 13.019"
+  const logoSistema = settings?.logo_url || "/logo-symbol.png"
 
   const navOperacionalComBadge = [
     {
@@ -132,18 +143,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               render={<Link href="/" />}
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground py-2"
             >
-              <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-background border p-1 shadow-2xs">
-                <Image
-                  src="/logo-symbol.png"
-                  alt="Moriá"
-                  width={30}
-                  height={30}
-                  className="object-contain"
+              <div className="flex aspect-square size-9 shrink-0 items-center justify-center rounded-lg bg-background border p-1 shadow-2xs overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoSistema}
+                  alt={nomeSistema}
+                  className="size-7 object-contain rounded"
+                  onError={(e) => {
+                    // Fallback se imagem quebrar
+                    (e.target as HTMLImageElement).src = "/logo-symbol.png"
+                  }}
                 />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold tracking-wide text-foreground">Moriá Gestão</span>
-                <span className="truncate text-xs text-muted-foreground">MROSC • Lei 13.019</span>
+                <span className="truncate font-semibold tracking-wide text-foreground">{nomeSistema}</span>
+                <span className="truncate text-xs text-muted-foreground">{subtituloSistema}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -9,6 +9,7 @@ import type {
   InstituicaoInsert, ProjetoInsert, FornecedorInsert, RubricaInsert,
   DespesaInsert, ComprovanteInsert, TermoAditivoInsert,
   LembreteAvulso, LembreteAvulsoInsert,
+  Usuario, UsuarioInsert, UsuarioUpdate,
 } from '@/lib/types'
 
 function err(msg: string): never { throw new Error(msg) }
@@ -302,6 +303,52 @@ export const mroscService = {
   async deleteLembreteAvulso(id: string): Promise<void> {
     const { error } = await supabase.from('lembretes_avulsos').delete().eq('id', id)
     if (error) err(error.message)
+  },
+
+  // ── Gestão de Usuários ────────────────────────────────────────────────
+  async getUsuarios(): Promise<Usuario[]> {
+    const res = await fetch('/api/usuarios')
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro ao carregar usuários')
+    }
+    return res.json()
+  },
+
+  async createUsuario(payload: UsuarioInsert): Promise<Usuario> {
+    const res = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro ao criar usuário')
+    }
+    return res.json()
+  },
+
+  async updateUsuario(id: string, payload: UsuarioUpdate): Promise<Usuario> {
+    const res = await fetch(`/api/usuarios/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro ao atualizar usuário')
+    }
+    return res.json()
+  },
+
+  async deleteUsuario(id: string): Promise<void> {
+    const res = await fetch(`/api/usuarios/${id}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro ao excluir usuário')
+    }
   },
 }
 

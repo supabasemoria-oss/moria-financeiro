@@ -131,5 +131,39 @@ export interface LembreteAvulsoInsert {
   email_destino?: string | null
 }
 
+// ── Usuários ────────────────────────────────────────────────────────
+export type RoleUsuario = 'ADMIN' | 'OPERADOR' | 'CONSULTA'
+
+export interface Usuario {
+  id: string
+  email: string
+  nome: string
+  cargo: string | null
+  role: RoleUsuario
+  telefone: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface UsuarioInsert {
+  email: string
+  nome: string
+  cargo?: string | null
+  role?: RoleUsuario
+  telefone?: string | null
+  password?: string
+  ativo?: boolean
+}
+
+export interface UsuarioUpdate {
+  nome?: string
+  cargo?: string | null
+  role?: RoleUsuario
+  telefone?: string | null
+  password?: string
+  ativo?: boolean
+}
+
 // Re-export Database for convenience
 export type { Database }

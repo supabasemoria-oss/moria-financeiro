@@ -6,11 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import Image from "next/image"
+import { useSystemSettings } from "@/contexts/system-context"
 
 export default function LoginPage() {
+  const { settings } = useSystemSettings()
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const nomeSistema = settings?.nome_sistema || "MROSC Gestão"
+  const logoSistema = settings?.logo_url || "/logo.png"
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -25,11 +29,21 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2">
-          <Image src="/logo.png" alt="Mori?" width={80} height={80} className="rounded-xl" />
-          <h1 className="text-xl font-semibold">Moriá Financeiro</h1>
-          <p className="text-sm text-muted-foreground text-center">
-            Acesso restrito a administradores
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="size-20 rounded-2xl bg-background border p-2 flex items-center justify-center shadow-xs overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSistema}
+              alt={nomeSistema}
+              className="max-h-full max-w-full object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/logo.png"
+              }}
+            />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight">{nomeSistema}</h1>
+          <p className="text-sm text-muted-foreground">
+            Acesso restrito a administradores e operadores
           </p>
         </div>
         <Card>

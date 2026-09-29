@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   SettingsIcon,
   BotIcon,
@@ -11,7 +11,13 @@ import {
   EyeOffIcon,
   SaveIcon,
   ZapIcon,
+  UploadIcon,
+  ImageIcon,
+  Building2Icon,
+  UsersIcon,
+  ShieldCheckIcon,
 } from "lucide-react"
+import Link from "next/link"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { WhatsAppConnectCard } from "@/components/whatsapp-connect-card"
 import {
@@ -36,8 +42,11 @@ import { toast } from "sonner"
 import {
   getSettingsAsync,
   saveSettings,
+  uploadSystemLogo,
   testGeminiConnection,
 } from "@/lib/settings"
+import { maskCnpj, maskTelefone } from "@/lib/masks"
+import { useSystemSettings } from "@/contexts/system-context"
 
 interface GeminiModel {
   name: string
@@ -46,6 +55,21 @@ interface GeminiModel {
 }
 
 export default function ConfiguracoesPage() {
+  const { refreshSettings } = useSystemSettings()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Identidade do Sistema
+  const [nomeSistema, setNomeSistema] = useState("")
+  const [subtituloSistema, setSubtituloSistema] = useState("")
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [razaoSocial, setRazaoSocial] = useState("")
+  const [cnpj, setCnpj] = useState("")
+  const [emailContato, setEmailContato] = useState("")
+  const [telefoneContato, setTelefoneContato] = useState("")
+  const [savingIdentidade, setSavingIdentidade] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  // Gemini
   const [apiKey, setApiKey] = useState("")
   const [model, setModel] = useState("gemini-3.8-flash")
   const [showKey, setShowKey] = useState(false)
@@ -60,6 +84,14 @@ export default function ConfiguracoesPage() {
 
   useEffect(() => {
     getSettingsAsync().then((s) => {
+      setNomeSistema(s.nome_sistema)
+      setSubtituloSistema(s.subtitulo_sistema)
+      setLogoUrl(s.logo_url)
+      setRazaoSocial(s.razao_social || "")
+      setCnpj(s.cnpj || "")
+      setEmailContato(s.email_contato || "")
+      setTelefoneContato(s.telefone_contato || "")
+
       setApiKey(s.gemini_api_key)
       setModel(s.gemini_model)
       if (s.gemini_api_key) {
@@ -67,6 +99,59 @@ export default function ConfiguracoesPage() {
       }
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSalvarIdentidade(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingIdentidade(true)
+    try {
+      await saveSettings({
+        nome_sistema: nomeSistema.trim() || "MROSC Gestão",
+        subtitulo_sistema: subtituloSistema.trim() || "MROSC • Lei 13.019",
+        logo_url: logoUrl,
+        razao_social: razaoSocial.trim() || null,
+        cnpj: cnpj.trim() || null,
+        email_contato: emailContato.trim() || null,
+        telefone_contato: telefoneContato.trim() || null,
+      })
+      await refreshSettings()
+      window.dispatchEvent(new Event("system_settings_updated"))
+      toast.success("Identidade e dados do sistema salvos com sucesso!")
+    } catch {
+      toast.error("Erro ao salvar dados do sistema.")
+    } finally {
+      setSavingIdentidade(false)
+    }
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem válido (PNG, JPG, SVG ou WebP).")
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 5MB.")
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const publicUrl = await uploadSystemLogo(file)
+      setLogoUrl(publicUrl)
+      await saveSettings({ logo_url: publicUrl })
+      await refreshSettings()
+      window.dispatchEvent(new Event("system_settings_updated"))
+      toast.success("Logotipo atualizado com sucesso!")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido"
+      toast.error("Erro ao enviar logotipo: " + msg)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
 
   async function fetchModels(key: string) {
     if (!key.trim()) return
@@ -144,9 +229,184 @@ export default function ConfiguracoesPage() {
           Configurações
         </h2>
         <p className="text-sm text-muted-foreground">
-          Credenciais e preferências do sistema Moriá.
+          Identidade visual, preferências e integrações da plataforma.
         </p>
       </div>
+
+      {/* Seção Identidade do Sistema */}
+      <Card className="border-border">
+        <CardHeader className="pb-3 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2Icon className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base font-semibold">
+                  Identidade Visual & Dados do Sistema
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Personalize o nome, logotipo e dados cadastrais exibidos na plataforma e relatórios.
+                </CardDescription>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-6">
+          <form onSubmit={handleSalvarIdentidade} className="space-y-6">
+            {/* Logotipo */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 p-4 rounded-xl border bg-muted/20">
+              <div className="relative flex aspect-square size-20 shrink-0 items-center justify-center rounded-xl bg-background border p-2 shadow-xs overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoUrl || "/logo-symbol.png"}
+                  alt="Logotipo"
+                  className="max-h-full max-w-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/logo-symbol.png"
+                  }}
+                />
+              </div>
+              <div className="space-y-2 flex-1">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">Logotipo do Sistema</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Formatos recomendados: PNG, SVG ou JPG (máx. 5MB). Aparecerá no menu lateral e cabeçalhos.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="gap-2"
+                  >
+                    <UploadIcon className="size-3.5" />
+                    {uploadingLogo ? "Enviando..." : "Alterar Logotipo"}
+                  </Button>
+                  {logoUrl && logoUrl !== "/logo-symbol.png" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setLogoUrl("/logo-symbol.png")}
+                      className="text-xs text-muted-foreground"
+                    >
+                      Restaurar Padrão
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Nome e Subtítulo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="nome_sistema">Nome do Sistema *</Label>
+                <Input
+                  id="nome_sistema"
+                  value={nomeSistema}
+                  onChange={(e) => setNomeSistema(e.target.value)}
+                  placeholder="Ex: MROSC Gestão"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="subtitulo_sistema">Subtítulo / Descrição Curta</Label>
+                <Input
+                  id="subtitulo_sistema"
+                  value={subtituloSistema}
+                  onChange={(e) => setSubtituloSistema(e.target.value)}
+                  placeholder="Ex: MROSC • Lei 13.019"
+                />
+              </div>
+            </div>
+
+            {/* Dados da Organização */}
+            <div className="pt-2 border-t space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <Building2Icon className="size-4 text-muted-foreground" />
+                Dados da Entidade Mantenedora
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="razao_social">Razão Social / Nome da OSC</Label>
+                  <Input
+                    id="razao_social"
+                    value={razaoSocial}
+                    onChange={(e) => setRazaoSocial(e.target.value)}
+                    placeholder="Nome oficial da organização"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cnpj">CNPJ</Label>
+                  <Input
+                    id="cnpj"
+                    value={cnpj}
+                    onChange={(e) => setCnpj(maskCnpj(e.target.value))}
+                    placeholder="00.000.000/0000-00"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email_contato">E-mail de Contato</Label>
+                  <Input
+                    id="email_contato"
+                    type="email"
+                    value={emailContato}
+                    onChange={(e) => setEmailContato(e.target.value)}
+                    placeholder="contato@organizacao.org.br"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="telefone_contato">Telefone / Suporte</Label>
+                  <Input
+                    id="telefone_contato"
+                    value={telefoneContato}
+                    onChange={(e) => setTelefoneContato(maskTelefone(e.target.value))}
+                    placeholder="(00) 0000-0000"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={savingIdentidade} className="gap-2">
+                <SaveIcon className="size-4" />
+                {savingIdentidade ? "Salvando..." : "Salvar Identidade do Sistema"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Card Atalho Usuários */}
+      <Card className="border-border bg-muted/20">
+        <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <UsersIcon className="size-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Controle de Usuários e Permissões</h3>
+              <p className="text-xs text-muted-foreground">
+                Cadastre novos administradores, operadores e gerencie senhas e acessos à plataforma.
+              </p>
+            </div>
+          </div>
+          <Button render={<Link href="/usuarios" />} variant="outline" className="gap-2 shrink-0">
+            <UsersIcon className="size-4" />
+            Gerenciar Usuários
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Seção Gemini */}
       <Card className="border-blue-500/20 bg-blue-500/5">
