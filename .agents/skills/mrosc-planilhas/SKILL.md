@@ -25,15 +25,28 @@ Esta skill define as diretrizes, heurísticas e especificações técnicas para 
   - Rubricas de RH frequentemente acompanhadas por rubricas de `Tributo / Encargos`.
   - Padrão CLT do terceiro setor: INSS Patronal 20%, FGTS 8%, SAT 1%, PIS 1%, COFINS 5.80%, 13º Salário 8.33%, Férias 2.23%, Projeção de Férias/Encargos 21.80% (Total: ~68.16%).
 
-### Modelo B: Descritivo com Cotações Concatenadas
+### Modelo B: Descritivo com Cotações Concatenadas (Ministérios / Emendas)
 - **Exemplo de Referência:** `Planilha Inpro ministério das mulheres V11 Final (4).xls`
-- **Cabeçalho:** OSC Proponente, Número da Proposta, Ministério / Órgão Concedente.
+- **Cabeçalho:** OSC Proponente (`INSTITUTO PROVER`), Número da Proposta (`009415/2026`), Órgão Concedente.
+- **Divisão em Etapas Orçamentárias:**
+  - `Etapa 1.1`: Recursos Humanos, Coordenação e Serviços de Gestão (Itens 1 a 13, ex: Coordenador Geral, Instrutores, Assessoria, Locação de Veículos).
+  - `Etapa 2.1`: Materiais e Serviços Gráficos (Itens 1 e 2, ex: Banner e Confecção de Material Didático).
 - **Estrutura de Colunas:**
-  - `N°`, `DESCRIÇÃO / ESPECIFICAÇÃO`: Texto longo contendo atribuições, requisitos e carga horária.
-  - `QUANTIDADE`, `MESES`, `TOTAL DIÁRIAS/MESES`.
-  - `COTAÇÕES`: Célula única para o fornecedor com formato `Razão Social, CNPJ, Telefone`, seguida de valor unitário e total.
-  - `COTAÇÃO SELECIONADA`: Menor preço cotado.
-  - `ABAS DE CRONOGRAMA`: Abas adicionais (ex: `Planilha2`) com desembolso mês a mês (Mês 1 a Mês 8).
+  - `Col 0`: `Nº` — Número sequencial do item (`1`, `2`, `3`...).
+  - `Col 1`: `Especificação do Item/Serviço` — Título do cargo/serviço, atribuições, requisitos e carga horária.
+  - `Col 6`: Quantidade de profissionais ou unidades por item.
+  - `Col 7`: Diárias / Meses de atuação (ex: 8 meses para coordenação, 6 meses para instrutores).
+  - `Col 8`: `QUANT.` / `TOTAL` — Total calculado (`Qtd * Meses` ou total de unidades).
+  - `Col 9, 12, 15`: Cotações das Empresas 1, 2 e 3 (`Razão Social, CNPJ, Telefone`).
+  - `Col 10, 13, 16`: Valores unitários cotados de cada empresa.
+  - `Col 11, 14, 17`: Valores totais cotados de cada empresa.
+  - `Col 18`: `MENOR VALOR UNITÁRIO COTADO` — Menor cotação unitária selecionada.
+  - `Col 19`: `VALOR TOTAL` — Valor total aprovado do item (`Quantidade Total * Menor Valor Unitário`).
+- **Regras Críticas de Parsing e Filtragem:**
+  - `Robustez de Moeda`: Suporte a formatação com `R$`, vírgulas e pontos em formato americano (`R$ 6,000.00`) ou brasileiro (`R$ 6.000,00`).
+  - `Filtro de Linhas`: Ignorar linhas intermediárias de cabeçalho ("Meta", "Etapa", "Nº", "VALOR TOTAL UNITÁRIO COTADO") e linhas vazias da grade onde valor total e unitário sejam zerados.
+  - `Vencedor da Cotação`: Comparar o valor da `Col 18` com as cotações das colunas `10, 13, 16` para associar o fornecedor vencedor exato com CNPJ.
+  - `Consistência com Valor Global`: A soma de todas as rubricas válidas deve igualar com precisão de centavos o `TOTAL (VALOR GLOBAL)` grafado na planilha.
 
 ### Modelo C: Planilha Simples / Tabela Direta
 - Linha de cabeçalho direta: `Item`, `Descrição`, `Quantidade`, `Unidade`, `Valor Unitário`, `Valor Total`.

@@ -61,12 +61,38 @@ export const CAMPOS_SISTEMA = [
 export function parseMoedaBR(val: unknown): number {
   if (typeof val === "number") return isNaN(val) ? 0 : val
   if (!val) return 0
-  const s = String(val).trim()
+  let s = String(val).trim()
   if (!s) return 0
-  if (s.includes(",")) {
-    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0
+  s = s.replace(/^R\$\s*/i, "").trim()
+  if (!s || s === "-" || s === "—") return 0
+
+  if (s.includes(".") && s.includes(",")) {
+    const lastDot = s.lastIndexOf(".")
+    const lastComma = s.lastIndexOf(",")
+    if (lastComma > lastDot) {
+      // Formato brasileiro: 6.000,00
+      s = s.replace(/\./g, "").replace(",", ".")
+    } else {
+      // Formato americano: 6,000.00
+      s = s.replace(/,/g, "")
+    }
+  } else if (s.includes(",")) {
+    const parts = s.split(",")
+    if (parts.length > 2) {
+      s = s.replace(/,/g, "")
+    } else {
+      s = s.replace(",", ".")
+    }
+  } else if (s.includes(".")) {
+    const parts = s.split(".")
+    if (parts.length > 2) {
+      s = s.replace(/\./g, "")
+    }
   }
-  return parseFloat(s) || 0
+
+  s = s.replace(/[^0-9.-]/g, "")
+  const n = parseFloat(s)
+  return isNaN(n) ? 0 : n
 }
 
 export function sanitizarCnpj(val: string | null | undefined): string {
@@ -88,7 +114,7 @@ export function extrairFornecedorDeTexto(texto: unknown): FornecedorIdentificado
 
   const cnpj = cnpjMatch[1]
   const parts = str.split(cnpj)
-  let razao = parts[0].replace(/[,;/-]+$/, "").trim()
+  let razao = parts[0].replace(/[,;/\-\s]+$/, "").trim()
   if (!razao && parts[1]) {
     razao = parts[1].replace(/^[,;/\s-]+/, "").replace(/tel.*$/i, "").trim()
   }
@@ -97,7 +123,7 @@ export function extrairFornecedorDeTexto(texto: unknown): FornecedorIdentificado
   const tel = telMatch ? telMatch[0] : null
 
   return {
-    razao_social_nome: razao || "Fornecedor Cotado",
+    razao_social_nome: razao.replace(/\s*-\s*$/, "").replace(/\s*,\s*$/, "").trim() || "Fornecedor Cotado",
     cpf_cnpj: cnpj,
     telefone: tel,
   }
@@ -156,8 +182,15 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
     const cnpjMatch = lineText.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/)
     if (cnpjMatch && !cnpj_osc) cnpj_osc = formatarCnpj(cnpjMatch[1])
 
-    const oscMatch = lineText.match(/(?:NOME|INSTITUTO|ASSOCIACAO|ORGANIZACAO)\s*:\s*([^,;]+)/i)
-    if (oscMatch && !osc_nome) osc_nome = oscMatch[1].trim()
+    if (!osc_nome && !lineText.toUpperCase().includes("PLANILHA")) {
+      const oscMatch = lineText.match(/(?:INSTITUTO|ASSOCIACAO|ORGANIZACAO|ASSOCIAÇÃO|ORGANIZAÇÃO)\s*([^:–\-\n]+)/i)
+      if (oscMatch) {
+        osc_nome = oscMatch[0].trim()
+      } else {
+        const nomeMatch = lineText.match(/NOME\s*:\s*([^,;]+)/i)
+        if (nomeMatch) osc_nome = nomeMatch[1].trim()
+      }
+    }
   }
 
   // 2. Identificar Modelo Normativo
@@ -291,32 +324,23 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
         if (match) periodoMeses = parseInt(match[1], 10)
       }
 
-      // Identificar o fornecedor vencedor cotado
+      // Identificar o fornecedor vencedor cotado no Modelo A
       let fornecedorVencedor: FornecedorIdentificado | null = null
       for (const cot of cotacaoIndices) {
         const cotVl = parseMoedaBR(row[cot.vlUnit])
         const rz = String(row[cot.razao] || "").trim()
-        const doc = formatarCnpj(String(row[cot.cnpj] || "").trim())
-        if (cotVl > 0 && Math.abs(cotVl - vlUnit) < 0.05 && rz && doc) {
-          fornecedorVencedor = { razao_social_nome: rz, cpf_cnpj: doc }
-          break
-        }
-      }
-      if (!fornecedorVencedor && cotacaoIndices.length > 0) {
-        const rz = String(row[cotacaoIndices[0].razao] || "").trim()
-        const doc = formatarCnpj(String(row[cotacaoIndices[0].cnpj] || "").trim())
-        if (rz && doc) fornecedorVencedor = { razao_social_nome: rz, cpf_cnpj: doc }
-      }
-
-      cotacaoIndices.forEach((cot) => {
-        const rz = String(row[cot.razao] || "").trim()
-        const doc = formatarCnpj(String(row[cot.cnpj] || "").trim())
-        if (rz && doc && sanitizarCnpj(doc).length === 14) {
+        const rawCnpj = sanitizarCnpj(row[cot.cnpj])
+        if (rawCnpj.length === 14 && rz && !rz.toUpperCase().includes("N/A")) {
+          const doc = formatarCnpj(rawCnpj)
+          const objF: FornecedorIdentificado = { razao_social_nome: rz, cpf_cnpj: doc }
           if (!fornecedoresMap.has(doc)) {
-            fornecedoresMap.set(doc, { razao_social_nome: rz, cpf_cnpj: doc })
+            fornecedoresMap.set(doc, objF)
+          }
+          if (!fornecedorVencedor && cotVl > 0 && Math.abs(cotVl - vlUnit) < 0.05) {
+            fornecedorVencedor = objF
           }
         }
-      })
+      }
 
       rubricas.push({
         descricao: itemNome,
@@ -332,9 +356,6 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
       })
     }
   } else if (modelo === "MODELO_B_DESCRITIVO") {
-    const startRow = headerIndex + 2
-    linhasIgnorar.push(headerIndex + 1)
-
     const headerRow = rows[headerIndex]
     for (let j = 0; j < headerRow.length; j++) {
       const colName = String(headerRow[j] || `Coluna ${j}`).trim()
@@ -343,16 +364,16 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
 
       if (j === 1) {
         campo = "descricao"
-        motivo = "Cargo e atribuições do profissional"
-      } else if (j === 8 || colName.toUpperCase() === "TOTAL") {
+        motivo = "Cargo e atribuições / especificação do item"
+      } else if (j === 8 || colName.toUpperCase() === "QUANT." || colName.toUpperCase() === "TOTAL") {
         campo = "quantidade"
-        motivo = "Total de meses/diárias calculados"
-      } else if (colName.toUpperCase().includes("MENOR VALOR") || j === headerRow.length - 2) {
+        motivo = "Quantidade total calculada (profissionais x meses ou unidades)"
+      } else if (j === 18 || colName.toUpperCase().includes("MENOR VALOR")) {
         campo = "valor_unitario"
-        motivo = "Menor cotação selecionada"
+        motivo = "Menor valor unitário cotado"
       } else if (colName.toUpperCase().includes("EMPRESA")) {
         campo = null
-        motivo = "Fornecedor cotado (extraído automaticamente)"
+        motivo = "Cotação de fornecedor (auto-processada)"
       } else {
         campo = null
         motivo = "Coluna acessória"
@@ -367,60 +388,87 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
       })
     }
 
-    for (let i = startRow; i < rows.length; i++) {
+    for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
-      const celulaDesc = String(row[1] || "").trim()
-      if (!celulaDesc || celulaDesc.toUpperCase().includes("TOTAL")) {
+      const c0 = String(row[0] || "").trim()
+      const c1 = String(row[1] || "").trim()
+
+      // Linha de item válida: c0 é numérico ("1", "2", etc.) e c1 não é cabeçalho
+      if (
+        !/^\d+$/.test(c0) ||
+        !c1 ||
+        c1.toUpperCase().includes("ESPECIFICAÇÃO") ||
+        c1.toUpperCase().includes("ESPECIFICACAO") ||
+        c0.toUpperCase().includes("VALOR")
+      ) {
         linhasIgnorar.push(i)
         continue
       }
 
-      const linhasTexto = celulaDesc.split("\n").map((l) => l.trim()).filter(Boolean)
-      const cargoNome = linhasTexto[0].replace(/^[\d.\-\s]+/, "")
+      const vlUnit = parseMoedaBR(row[18])
+      const vlTotal = parseMoedaBR(row[19])
 
-      const qtd = parseMoedaBR(row[8]) || parseMoedaBR(row[6]) || 1
-
-      const numericCols: number[] = []
-      for (let c = row.length - 1; c >= 0; c--) {
-        const v = row[c]
-        if (v && (typeof v === "number" || /^\d+([.,]\d+)?$/.test(String(v).trim()))) {
-          numericCols.unshift(c)
-          if (numericCols.length === 2) break
-        }
+      // Se a linha da grade não tem valores cotados, ignorar
+      if (vlTotal <= 0 && vlUnit <= 0) {
+        linhasIgnorar.push(i)
+        continue
       }
 
-      const vlUnit = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[0]]) : parseMoedaBR(row[row.length - 2])
-      const vlTotal = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[1]]) : qtd * vlUnit
+      const linhasTexto = c1.split("\n").map((l) => l.trim()).filter(Boolean)
+      const cargoNome = linhasTexto[0].replace(/^[\d.\-\s]+/, "").trim()
 
-      const periodoMeses = Math.round(parseMoedaBR(row[7])) || 8
+      const qtdProfissionais = parseMoedaBR(row[6]) || 1
+      const periodoMeses = Math.round(parseMoedaBR(row[7])) || (row[7] === "" ? 1 : 1)
+      const qtdTotal = parseMoedaBR(row[8]) || (qtdProfissionais * periodoMeses) || 1
+
+      // Cotações das 3 empresas nas colunas 9, 12, 15
       let fornecedorVencedor: FornecedorIdentificado | null = null
+      const cotacoes = [
+        { colTxt: 9, colUnit: 10, colTot: 11 },
+        { colTxt: 12, colUnit: 13, colTot: 14 },
+        { colTxt: 15, colUnit: 16, colTot: 17 },
+      ]
 
-      ;[9, 12, 15].forEach((col) => {
-        const f = extrairFornecedorDeTexto(row[col])
+      for (const cot of cotacoes) {
+        const f = extrairFornecedorDeTexto(row[cot.colTxt])
         if (f && sanitizarCnpj(f.cpf_cnpj).length === 14) {
           if (!fornecedoresMap.has(f.cpf_cnpj)) {
             fornecedoresMap.set(f.cpf_cnpj, f)
           }
-          const cotVl = parseMoedaBR(row[col + 1])
-          if (!fornecedorVencedor && cotVl > 0 && Math.abs(cotVl - vlUnit) < 0.05) {
+          const cotVl = parseMoedaBR(row[cot.colUnit])
+          const cotTot = parseMoedaBR(row[cot.colTot])
+          if (!fornecedorVencedor && (Math.abs(cotVl - vlUnit) < 0.05 || Math.abs(cotTot - vlTotal) < 0.05)) {
             fornecedorVencedor = f
           }
         }
-      })
+      }
 
       let tipo: RubricaSkillExtraida["tipo"] = "RH"
       let codNat = "33903600"
-      if (cargoNome.toLowerCase().includes("serviço") || cargoNome.toLowerCase().includes("assessoria")) {
+      if (
+        cargoNome.toLowerCase().includes("serviço") ||
+        cargoNome.toLowerCase().includes("servico") ||
+        cargoNome.toLowerCase().includes("assessoria") ||
+        cargoNome.toLowerCase().includes("transporte")
+      ) {
         tipo = "SERVICO"
         codNat = "33903900"
+      } else if (
+        cargoNome.toLowerCase().includes("banner") ||
+        cargoNome.toLowerCase().includes("material") ||
+        cargoNome.toLowerCase().includes("aquisição") ||
+        cargoNome.toLowerCase().includes("aquisicao")
+      ) {
+        tipo = "MATERIAL"
+        codNat = "33903000"
       }
 
       rubricas.push({
         descricao: cargoNome,
-        especificacao: celulaDesc.slice(0, 300),
+        especificacao: c1.slice(0, 300),
         tipo,
-        quantidade: qtd,
-        unidade: "Meses",
+        quantidade: qtdTotal,
+        unidade: periodoMeses > 1 ? "Meses" : "UN",
         valor_unitario: vlUnit,
         valor_total: vlTotal,
         codigo_natureza_despesa: codNat,
