@@ -162,10 +162,35 @@ export const mroscService = {
     return despesa
   },
 
-  async updateDespesa(id: string, payload: Partial<DespesaInsert>): Promise<Despesa> {
+  async updateDespesa(id: string, payload: Partial<DespesaInsert>, arquivo_nota_fiscal?: File | null): Promise<Despesa> {
     const { data, error } = await supabase.from('despesas').update(payload).eq('id', id).select().single()
     if (error) err(error.message)
-    return data as Despesa
+    const despesa = data as Despesa
+    if (arquivo_nota_fiscal && despesa) {
+      try {
+        await this.uploadComprovante(arquivo_nota_fiscal, despesa.id, 'NOTA_FISCAL')
+      } catch (uploadError) {
+        console.error('Erro ao fazer upload da nota fiscal na atualização de despesa:', uploadError)
+      }
+    }
+    // Sincronizar parcela vinculada se o status for alterado
+    if (payload.status) {
+      const { data: parc } = await supabase.from('parcelas_pagamento').select('id').eq('despesa_id', id).maybeSingle()
+      if (parc) {
+        if (payload.status === 'PENDENTE') {
+          await supabase.from('parcelas_pagamento').update({
+            status: 'PENDENTE',
+            data_pagamento_real: null,
+          }).eq('id', parc.id)
+        } else if (payload.status === 'PAGO') {
+          await supabase.from('parcelas_pagamento').update({
+            status: 'PAGO',
+            data_pagamento_real: payload.data_pagamento || payload.data_despesa || getTodaySaoPaulo(),
+          }).eq('id', parc.id)
+        }
+      }
+    }
+    return despesa
   },
 
   async deleteDespesa(id: string): Promise<void> {

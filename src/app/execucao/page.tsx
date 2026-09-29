@@ -7,6 +7,7 @@ import {
   ReceiptIcon,
   PlusIcon,
   Trash2Icon,
+  PencilIcon,
   CheckCircle2Icon,
   ClockIcon,
   FilterIcon,
@@ -112,6 +113,23 @@ function ExecucaoContent() {
     fornecedor_id: "",
     data_pagamento_real: getTodaySaoPaulo(),
     numero_documento_fiscal: "",
+    observacoes: "",
+  })
+
+  // Dialog Editar Despesa
+  const [openEditarDespesa, setOpenEditarDespesa] = useState(false)
+  const [despesaParaEditar, setDespesaParaEditar] = useState<DespesaComRelacoes | null>(null)
+  const [arquivoNfEditar, setArquivoNfEditar] = useState<File | null>(null)
+  const [editarForm, setEditarForm] = useState({
+    projeto_id: "",
+    rubrica_id: "",
+    fornecedor_id: "",
+    descricao: "",
+    valor: "",
+    data_despesa: getTodaySaoPaulo(),
+    data_pagamento: "",
+    numero_documento_fiscal: "",
+    status: "PENDENTE" as "PENDENTE" | "PAGO" | "CANCELADO",
     observacoes: "",
   })
 
@@ -412,6 +430,79 @@ function ExecucaoContent() {
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao quitar parcela"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Abrir Modal de Editar Despesa
+  async function handleAbrirEditarDespesa(despesa: DespesaComRelacoes) {
+    setDespesaParaEditar(despesa)
+    setArquivoNfEditar(null)
+    setEditarForm({
+      projeto_id: despesa.projeto_id,
+      rubrica_id: despesa.rubrica_id,
+      fornecedor_id: despesa.fornecedor_id || "",
+      descricao: despesa.descricao,
+      valor: maskCurrency(despesa.valor.toFixed(2)),
+      data_despesa: despesa.data_despesa || getTodaySaoPaulo(),
+      data_pagamento: despesa.data_pagamento || (despesa.status === "PAGO" ? (despesa.data_despesa || getTodaySaoPaulo()) : ""),
+      numero_documento_fiscal: despesa.numero_documento_fiscal || "",
+      status: despesa.status,
+      observacoes: (despesa as any).observacoes || "",
+    })
+
+    if (despesa.projeto_id) {
+      try {
+        const rbs = await mroscService.getRubricas(despesa.projeto_id)
+        setRubricas(rbs)
+      } catch (e) {
+        console.error("Erro ao carregar rubricas para edição:", e)
+      }
+    }
+    setOpenEditarDespesa(true)
+  }
+
+  // Confirmar Edição de Despesa
+  async function handleSubmitEditarDespesa(e: React.FormEvent) {
+    e.preventDefault()
+    if (!despesaParaEditar) return
+    const valorNum = parseCurrency(editarForm.valor)
+    if (valorNum <= 0) {
+      toast.error("O valor da despesa deve ser maior que zero.")
+      return
+    }
+    if (!editarForm.rubrica_id) {
+      toast.error("Selecione a rubrica orçamentária vinculada.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      await mroscService.updateDespesa(
+        despesaParaEditar.id,
+        {
+          rubrica_id: editarForm.rubrica_id,
+          fornecedor_id: editarForm.fornecedor_id || despesaParaEditar.fornecedor_id,
+          descricao: editarForm.descricao,
+          valor: valorNum,
+          data_despesa: editarForm.data_despesa,
+          data_pagamento: editarForm.status === "PAGO" ? (editarForm.data_pagamento || editarForm.data_despesa) : null,
+          numero_documento_fiscal: editarForm.numero_documento_fiscal || null,
+          status: editarForm.status,
+          observacoes: editarForm.observacoes || null,
+        },
+        arquivoNfEditar
+      )
+
+      toast.success("Despesa atualizada com sucesso!")
+      setOpenEditarDespesa(false)
+      setDespesaParaEditar(null)
+      setArquivoNfEditar(null)
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao atualizar despesa"
       toast.error(msg)
     } finally {
       setSaving(false)
@@ -1092,22 +1183,34 @@ function ExecucaoContent() {
                           </TableCell>
 
                           <TableCell className="text-right">
-                            <ConfirmDialog
-                              title="Excluir despesa?"
-                              description="A despesa será removida da execução financeira. Esta ação não pode ser desfeita."
-                              confirmLabel="Excluir"
-                              onConfirm={() => handleDeleteDespesa(despesa.id)}
-                              trigger={
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 text-destructive hover:bg-destructive/10"
-                                  aria-label="Excluir"
-                                >
-                                  <Trash2Icon className="size-3.5" />
-                                </Button>
-                              }
-                            />
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleAbrirEditarDespesa(despesa)}
+                                className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                                title="Editar movimentação"
+                                aria-label="Editar"
+                              >
+                                <PencilIcon className="size-3.5" />
+                              </Button>
+                              <ConfirmDialog
+                                title="Excluir despesa?"
+                                description="A despesa será removida da execução financeira. Esta ação não pode ser desfeita."
+                                confirmLabel="Excluir"
+                                onConfirm={() => handleDeleteDespesa(despesa.id)}
+                                trigger={
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7 text-destructive hover:bg-destructive/10 cursor-pointer"
+                                    aria-label="Excluir"
+                                  >
+                                    <Trash2Icon className="size-3.5" />
+                                  </Button>
+                                }
+                              />
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1208,6 +1311,174 @@ function ExecucaoContent() {
               {saving ? "Registrando..." : "Confirmar Quitação"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* DIALOG: EDITAR DESPESA / EXECUÇÃO                   */}
+      {/* ==================================================== */}
+      <Dialog open={openEditarDespesa} onOpenChange={setOpenEditarDespesa}>
+        <DialogContent className="sm:max-w-[580px]">
+          <form onSubmit={handleSubmitEditarDespesa}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PencilIcon className="size-5 text-primary" />
+                Editar Lançamento de Execução
+              </DialogTitle>
+              <DialogDescription>
+                Atualize dados cadastrais, datas, comprovantes ou status da despesa.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-3">
+              {despesaParaEditar?.projetos && (
+                <div className="p-2.5 rounded-lg bg-muted/40 text-xs border flex items-center justify-between">
+                  <span className="text-muted-foreground">Projeto Vinculado:</span>
+                  <strong className="text-foreground font-medium">
+                    {despesaParaEditar.projetos.nome}
+                  </strong>
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit_fornecedor">Fornecedor / Credor Beneficiário</Label>
+                <SelectComCriar
+                  id="edit_fornecedor"
+                  value={editarForm.fornecedor_id}
+                  onValueChange={(val) => setEditarForm((prev) => ({ ...prev, fornecedor_id: val }))}
+                  opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
+                  placeholder="Selecione o fornecedor"
+                  labelCriar="Criar novo fornecedor"
+                  onClickCriar={() => setOpenFornecedor(true)}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit_rubrica">Rubrica Orçamentária Vinculada *</Label>
+                <SelectComCriar
+                  id="edit_rubrica"
+                  value={editarForm.rubrica_id}
+                  onValueChange={(val) => setEditarForm((prev) => ({ ...prev, rubrica_id: val }))}
+                  opcoes={rubricas.map((r) => ({
+                    id: r.id,
+                    label: `${r.codigo_natureza_despesa} - ${r.descricao} (${formatCurrency(r.valor_total)})`,
+                  }))}
+                  placeholder="Selecione a rubrica de despesa..."
+                  labelCriar="Criar nova rubrica"
+                  onClickCriar={() => setOpenRubrica(true)}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit_desc">Descrição do Gasto *</Label>
+                <Input
+                  id="edit_desc"
+                  required
+                  placeholder="Ex: Aquisição de materiais ou serviços..."
+                  value={editarForm.descricao}
+                  onChange={(e) => setEditarForm((prev) => ({ ...prev, descricao: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_valor">Valor (R$) *</Label>
+                  <Input
+                    id="edit_valor"
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    placeholder="0,00"
+                    value={editarForm.valor}
+                    onChange={(e) => setEditarForm((prev) => ({ ...prev, valor: maskCurrency(e.target.value) }))}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_data">Data da Despesa *</Label>
+                  <Input
+                    id="edit_data"
+                    type="date"
+                    required
+                    value={editarForm.data_despesa}
+                    onChange={(e) => setEditarForm((prev) => ({ ...prev, data_despesa: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_status">Status</Label>
+                  <Select
+                    value={editarForm.status}
+                    onValueChange={(val: any) => {
+                      if (val) setEditarForm((prev) => ({ ...prev, status: val }))
+                    }}
+                  >
+                    <SelectTrigger id="edit_status">
+                      <SelectValue>
+                        {(val) =>
+                          val === "PAGO"
+                            ? "Pago"
+                            : val === "CANCELADO"
+                            ? "Cancelado"
+                            : "Pendente"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDENTE">Pendente</SelectItem>
+                      <SelectItem value="PAGO">Pago</SelectItem>
+                      <SelectItem value="CANCELADO">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {editarForm.status === "PAGO" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_data_pag">Data do Pagamento Efetivado</Label>
+                  <Input
+                    id="edit_data_pag"
+                    type="date"
+                    value={editarForm.data_pagamento}
+                    onChange={(e) => setEditarForm((prev) => ({ ...prev, data_pagamento: e.target.value }))}
+                  />
+                </div>
+              )}
+
+              <CampoNotaFiscal
+                numero={editarForm.numero_documento_fiscal}
+                onNumeroChange={(val) => setEditarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
+                arquivo={arquivoNfEditar}
+                onArquivoChange={setArquivoNfEditar}
+                labelNumero="Nº Nota Fiscal / Documento (Opcional)"
+                placeholderNumero="Ex: NF 10423"
+                idInput="edit_nf_file"
+              />
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit_obs">Observações</Label>
+                <Input
+                  id="edit_obs"
+                  placeholder="Informações complementares sobre a transação..."
+                  value={editarForm.observacoes}
+                  onChange={(e) => setEditarForm((prev) => ({ ...prev, observacoes: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpenEditarDespesa(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {saving ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
