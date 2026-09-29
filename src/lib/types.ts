@@ -37,7 +37,11 @@ export type TipoChavePix = Enums<'tipo_chave_pix'>
 
 // ?? Relational types ??????????????????????????????????????????????????
 export type ProjetoComInstituicao = Projeto & { instituicoes: Instituicao | null }
-export type RubricaComDespesas = Rubrica & { despesas: Despesa[] }
+export type RubricaComDespesas = Rubrica & {
+  despesas?: Despesa[]
+  parcelas_pagamento?: ParcelaPagamento[]
+  projetos?: Projeto | null
+}
 export type DespesaComRelacoes = Despesa & {
   projetos: Projeto | null
   rubricas_orcamentarias: Rubrica | null

@@ -35,7 +35,7 @@ function DashboardContent() {
 
   const tableData = rubricas.map((r, idx) => {
     const proj = projetos.find((p) => p.id === r.projeto_id)
-    const totalGasto = r.despesas
+    const totalGasto = (r.despesas || [])
       .filter((d) => d.status === "PAGO")
       .reduce((acc, d) => acc + Number(d.valor || 0), 0)
 

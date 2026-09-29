@@ -101,12 +101,15 @@ export const mroscService = {
   },
 
   // ?? Rubricas ?????????????????????????????????????
-  async getRubricas(projetoId: string): Promise<RubricaComDespesas[]> {
-    const { data, error } = await supabase
+  async getRubricas(projetoId?: string): Promise<RubricaComDespesas[]> {
+    let q = supabase
       .from('rubricas_orcamentarias')
-      .select('*, despesas(*)')
-      .eq('projeto_id', projetoId)
+      .select('*, despesas(*), parcelas_pagamento(*), projetos(*)')
       .order('created_at')
+    if (projetoId && projetoId !== 'ALL') {
+      q = q.eq('projeto_id', projetoId) as typeof q
+    }
+    const { data, error } = await q
     if (error) err(error.message)
     return data as unknown as RubricaComDespesas[]
   },

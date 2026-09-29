@@ -1,12 +1,12 @@
 import type { Despesa, Rubrica, RubricaComDespesas } from "@/lib/types"
 
-export function calcularTotalPago(despesas: Despesa[]): number {
+export function calcularTotalPago(despesas: Despesa[] = []): number {
   return despesas
     .filter((d) => d.status === "PAGO")
     .reduce((acc, d) => acc + Number(d.valor || 0), 0)
 }
 
-export function calcularTotalPendente(despesas: Despesa[]): number {
+export function calcularTotalPendente(despesas: Despesa[] = []): number {
   return despesas
     .filter((d) => d.status === "PENDENTE")
     .reduce((acc, d) => acc + Number(d.valor || 0), 0)
@@ -20,7 +20,7 @@ export function calcularSaldoRubrica(
   percentual: number
   ultrapassou: boolean
 } {
-  const totalGasto = calcularTotalPago(rubrica.despesas)
+  const totalGasto = calcularTotalPago(rubrica.despesas || [])
   const valorTotal = Number(rubrica.valor_total || 0)
   const saldo = valorTotal - totalGasto
   const percentual =
@@ -54,7 +54,7 @@ export function calcularSaldoProjeto(
   ultrapassouTeto: boolean
 } {
   const totalOrcado = calcularTotalOrcado(rubricas)
-  const todasDespesas = rubricas.flatMap((r) => r.despesas)
+  const todasDespesas = rubricas.flatMap((r) => r.despesas || [])
   const totalPago = calcularTotalPago(todasDespesas)
   const totalPendente = calcularTotalPendente(todasDespesas)
 
