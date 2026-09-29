@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { maskCnpj, maskTelefone } from "@/lib/masks"
 import type { Instituicao } from "@/lib/types"
 import { toast } from "sonner"
@@ -26,7 +26,7 @@ export function CriarInstituicaoDialog({ open, onOpenChange, onCriado }: Props) 
     if (!form.razao_social || !form.cnpj) { toast.error("Preencha Razao Social e CNPJ."); return }
     setSaving(true)
     try {
-      const nova = await moriaService.createInstituicao({
+      const nova = await mroscService.createInstituicao({
         razao_social: form.razao_social, cnpj: form.cnpj,
         email: form.email || null, telefone: form.telefone || null, endereco: form.endereco || null,
       })

@@ -12,7 +12,7 @@ interface QueryOptions {
   enabled?: boolean
 }
 
-export function useMoriaQuery<T>(
+export function useMroscQuery<T>(
   fetchFn: () => Promise<T>,
   initialData: T,
   options?: QueryOptions
@@ -56,3 +56,5 @@ export function useMoriaQuery<T>(
 
   return { ...state, refetch }
 }
+
+export const useMoriaQuery = useMroscQuery

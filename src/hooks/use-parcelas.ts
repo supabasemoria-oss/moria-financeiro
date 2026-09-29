@@ -1,7 +1,7 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { ParcelaComRelacoes, ParcelaFilters } from "@/lib/types"
 
 export function useParcelas(filters?: ParcelaFilters) {
@@ -13,7 +13,7 @@ export function useParcelas(filters?: ParcelaFilters) {
     setLoading(true)
     setError(null)
     try {
-      const result = await moriaService.getParcelas(filters)
+      const result = await mroscService.getParcelas(filters)
       setData(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido")

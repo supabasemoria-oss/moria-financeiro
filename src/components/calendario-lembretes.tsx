@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { getTodaySaoPaulo, formatCurrency, TIMEZONE_SP } from "@/lib/utils"
 import type { LembreteAvulso, ParcelaComRelacoes } from "@/lib/types"
 
@@ -50,7 +50,7 @@ export function CalendarioLembretes() {
   // Carregar lembretes avulsos
   React.useEffect(() => {
     let active = true
-    moriaService
+    mroscService
       .getLembretesAvulsos()
       .then((data) => {
         if (active) setLembretesAvulsos(data)

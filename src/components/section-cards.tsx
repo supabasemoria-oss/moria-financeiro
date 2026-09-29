@@ -17,27 +17,27 @@ import {
   DollarSignIcon,
   CheckCircle2Icon,
 } from "lucide-react"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { formatCurrency } from "@/lib/utils"
 import { calcularTotalPago, calcularTotalPendente } from "@/lib/calculos"
-import { useMoriaQuery } from "@/hooks/use-moria-query"
+import { useMroscQuery } from "@/hooks/use-mrosc-query"
 import type { Projeto, Despesa } from "@/lib/types"
 
 export function SectionCards() {
   const fetchProjetos = useCallback(
-    () => moriaService.getProjetos(),
+    () => mroscService.getProjetos(),
     []
   )
   const fetchDespesas = useCallback(
-    () => moriaService.getDespesas(),
+    () => mroscService.getDespesas(),
     []
   )
 
-  const { data: projetos } = useMoriaQuery<Projeto[]>(
+  const { data: projetos } = useMroscQuery<Projeto[]>(
     fetchProjetos,
     []
   )
-  const { data: despesas } = useMoriaQuery<Despesa[]>(
+  const { data: despesas } = useMroscQuery<Despesa[]>(
     fetchDespesas,
     []
   )

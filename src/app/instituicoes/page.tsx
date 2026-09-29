@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { Instituicao, ProjetoComInstituicao } from "@/lib/types"
 import { formatCpfCnpj, formatCurrency } from "@/lib/utils"
 import { maskCnpj, maskTelefone } from "@/lib/masks"
@@ -63,8 +63,8 @@ export default function InstituicoesPage() {
     try {
       setLoading(true)
       const [instData, projData] = await Promise.all([
-        moriaService.getInstituicoes(),
-        moriaService.getProjetos(),
+        mroscService.getInstituicoes(),
+        mroscService.getProjetos(),
       ])
       setInstituicoes(instData)
       setProjetos(projData)
@@ -110,7 +110,7 @@ export default function InstituicoesPage() {
 
     try {
       setSavingCreate(true)
-      await moriaService.createInstituicao({
+      await mroscService.createInstituicao({
         razao_social: createFormData.razao_social.trim(),
         cnpj: createFormData.cnpj.trim(),
         email: createFormData.email.trim() || null,
@@ -153,7 +153,7 @@ export default function InstituicoesPage() {
 
     try {
       setSavingEdit(true)
-      await moriaService.updateInstituicao(editingId, {
+      await mroscService.updateInstituicao(editingId, {
         razao_social: editFormData.razao_social.trim(),
         cnpj: editFormData.cnpj.trim(),
         email: editFormData.email.trim() || null,
@@ -175,7 +175,7 @@ export default function InstituicoesPage() {
   // Handler Delete
   async function handleDelete(id: string) {
     try {
-      await moriaService.deleteInstituicao(id)
+      await mroscService.deleteInstituicao(id)
       toast.success("Instituição excluída com sucesso.")
       await loadData()
     } catch (e: unknown) {

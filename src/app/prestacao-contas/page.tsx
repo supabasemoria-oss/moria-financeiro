@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { Projeto, Rubrica, Despesa } from "@/lib/types"
 import { transferegovExporter } from "@/lib/transferegov/exporter"
 import { formatCurrency } from "@/lib/utils"
@@ -30,7 +30,7 @@ export default function PrestacaoContasPage() {
   useEffect(() => {
     async function fetchProjetos() {
       try {
-        const data = await moriaService.getProjetos()
+        const data = await mroscService.getProjetos()
         setProjetos(data)
         if (data.length > 0) {
           setSelectedProjetoId(data[0].id)
@@ -48,8 +48,8 @@ export default function PrestacaoContasPage() {
     try {
       setLoading(true)
       const [rbs, dsps] = await Promise.all([
-        moriaService.getRubricas(projId),
-        moriaService.getDespesas({ projetoId: projId }),
+        mroscService.getRubricas(projId),
+        mroscService.getDespesas({ projetoId: projId }),
       ])
       setRubricas(rbs)
       setDespesas(dsps)

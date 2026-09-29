@@ -19,7 +19,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useParcelas } from "@/hooks/use-parcelas"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { formatDate, formatCurrency, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import type { LembreteAvulso, ParcelaComRelacoes } from "@/lib/types"
 
@@ -33,7 +33,7 @@ export function LembretesPopover() {
   const carregarLembretes = React.useCallback(async () => {
     try {
       setLoadingLembretes(true)
-      const data = await moriaService.getLembretesAvulsos()
+      const data = await mroscService.getLembretesAvulsos()
       setLembretesAvulsos(data.filter((l) => l.status === "PENDENTE"))
     } catch {
       setLembretesAvulsos([])

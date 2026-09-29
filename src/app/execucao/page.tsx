@@ -35,7 +35,7 @@ import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
@@ -108,8 +108,8 @@ function ExecucaoContent() {
     try {
       setLoading(true)
       const [projData, fornData] = await Promise.all([
-        moriaService.getProjetos(),
-        moriaService.getFornecedores(),
+        mroscService.getProjetos(),
+        mroscService.getFornecedores(),
       ])
       setProjetos(projData)
       setFornecedores(fornData)
@@ -138,8 +138,8 @@ function ExecucaoContent() {
     if (status !== "ALL") parcFilters.status = status
 
     const [despData, parcData] = await Promise.all([
-      moriaService.getDespesas(despFilters),
-      moriaService.getParcelas(parcFilters),
+      mroscService.getDespesas(despFilters),
+      mroscService.getParcelas(parcFilters),
     ])
 
     // Filtrar despesas por fornecedor se selecionado
@@ -155,7 +155,7 @@ function ExecucaoContent() {
     const targetProjId = projId !== "ALL" ? projId : (despesaForm.projeto_id || (projetos[0]?.id ?? ""))
     if (targetProjId) {
       try {
-        const rbs = await moriaService.getRubricas(targetProjId)
+        const rbs = await mroscService.getRubricas(targetProjId)
         setRubricas(rbs)
       } catch {}
     }
@@ -174,7 +174,7 @@ function ExecucaoContent() {
     async function fetchRubricas() {
       if (despesaForm.projeto_id) {
         try {
-          const rbs = await moriaService.getRubricas(despesaForm.projeto_id)
+          const rbs = await mroscService.getRubricas(despesaForm.projeto_id)
           setRubricas(rbs)
         } catch (e) {
           console.error(e)
@@ -289,7 +289,7 @@ function ExecucaoContent() {
 
     try {
       setSaving(true)
-      await moriaService.createDespesa({
+      await mroscService.createDespesa({
         projeto_id: despesaForm.projeto_id,
         rubrica_id: despesaForm.rubrica_id,
         fornecedor_id: despesaForm.fornecedor_id,
@@ -330,7 +330,7 @@ function ExecucaoContent() {
 
     try {
       setSaving(true)
-      await moriaService.createParcela({
+      await mroscService.createParcela({
         projeto_id: parcelaForm.projeto_id,
         rubrica_id: parcelaForm.rubrica_id,
         descricao: parcelaForm.descricao,
@@ -378,7 +378,7 @@ function ExecucaoContent() {
 
     try {
       setSaving(true)
-      await moriaService.executarParcela(parcelaParaQuitar.id, {
+      await mroscService.executarParcela(parcelaParaQuitar.id, {
         fornecedor_id: quitarForm.fornecedor_id,
         data_pagamento_real: quitarForm.data_pagamento_real,
         numero_documento_fiscal: quitarForm.numero_documento_fiscal || undefined,
@@ -400,7 +400,7 @@ function ExecucaoContent() {
   async function handleToggleStatusDespesa(despesa: Despesa) {
     const novoStatus = despesa.status === "PENDENTE" ? "PAGO" : "PENDENTE"
     try {
-      await moriaService.updateDespesa(despesa.id, {
+      await mroscService.updateDespesa(despesa.id, {
         status: novoStatus,
         data_pagamento: novoStatus === "PAGO" ? getTodaySaoPaulo() : null,
       })
@@ -415,7 +415,7 @@ function ExecucaoContent() {
   // Excluir Despesa
   async function handleDeleteDespesa(id: string) {
     try {
-      await moriaService.deleteDespesa(id)
+      await mroscService.deleteDespesa(id)
       toast.success("Despesa excluída com sucesso.")
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {
@@ -427,7 +427,7 @@ function ExecucaoContent() {
   // Excluir Parcela
   async function handleDeleteParcela(id: string) {
     try {
-      await moriaService.deleteParcela(id)
+      await mroscService.deleteParcela(id)
       toast.success("Parcela removida do cronograma.")
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {

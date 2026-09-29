@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -39,8 +39,8 @@ function ComprovantesContent() {
     try {
       setLoading(true)
       const [compData, despData] = await Promise.all([
-        moriaService.getComprovantes(),
-        moriaService.getDespesas(),
+        mroscService.getComprovantes(),
+        mroscService.getDespesas(),
       ])
       setComprovantes(compData)
       setDespesas(despData)
@@ -68,7 +68,7 @@ function ComprovantesContent() {
 
     try {
       setUploading(true)
-      await moriaService.uploadComprovante(file, selectedDespesaId, tipoDocumento)
+      await mroscService.uploadComprovante(file, selectedDespesaId, tipoDocumento)
       toast.success("Comprovante anexado com sucesso ao Supabase Storage!")
       setFile(null)
       setOpen(false)
@@ -82,7 +82,7 @@ function ComprovantesContent() {
   }
 
   function handleViewOrDownload(storagePath: string, fileName: string) {
-    const url = moriaService.getComprovantePublicUrl(storagePath)
+    const url = mroscService.getComprovantePublicUrl(storagePath)
     window.open(url, "_blank")
   }
 

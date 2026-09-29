@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { diffDias } from "@/lib/parcelas"
 import type { Projeto, Instituicao, TermoAditivo, StatusProjeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -94,8 +94,8 @@ export default function ProjetosPage() {
     try {
       setLoading(true)
       const [projData, instData] = await Promise.all([
-        moriaService.getProjetos(),
-        moriaService.getInstituicoes(),
+        mroscService.getProjetos(),
+        mroscService.getInstituicoes(),
       ])
       setProjetos(projData)
       setInstituicoes(instData)
@@ -104,7 +104,7 @@ export default function ProjetosPage() {
       const map: Record<string, TermoAditivo[]> = {}
       await Promise.all(
         projData.map(async (p) => {
-          map[p.id] = await moriaService.getTermosAditivos(p.id)
+          map[p.id] = await mroscService.getTermosAditivos(p.id)
         })
       )
       setTermosMap(map)
@@ -165,7 +165,7 @@ export default function ProjetosPage() {
 
     try {
       setSavingCreate(true)
-      await moriaService.createProjeto({
+      await mroscService.createProjeto({
         nome: createFormData.nome.trim(),
         instituicao_id: createFormData.instituicao_id,
         numero_termo: createFormData.numero_termo.trim() || null,
@@ -202,7 +202,7 @@ export default function ProjetosPage() {
     }
     setSavingInst(true)
     try {
-      const nova = await moriaService.createInstituicao({
+      const nova = await mroscService.createInstituicao({
         razao_social: formInst.razao_social,
         cnpj: formInst.cnpj,
         email: formInst.email || null,
@@ -212,7 +212,7 @@ export default function ProjetosPage() {
       toast.success("Proponente criada com sucesso!")
       setOpenNovaInst(false)
       setFormInst({ razao_social: "", cnpj: "", email: "", telefone: "", endereco: "" })
-      const instData = await moriaService.getInstituicoes()
+      const instData = await mroscService.getInstituicoes()
       setInstituicoes(instData)
       if (nova?.id) {
         setCreateFormData((prev) => ({ ...prev, instituicao_id: nova.id }))
@@ -257,7 +257,7 @@ export default function ProjetosPage() {
 
     try {
       setSavingEdit(true)
-      await moriaService.updateProjeto(editingId, {
+      await mroscService.updateProjeto(editingId, {
         nome: editFormData.nome.trim(),
         instituicao_id: editFormData.instituicao_id,
         numero_termo: editFormData.numero_termo.trim() || null,
@@ -281,7 +281,7 @@ export default function ProjetosPage() {
   // Deletar Projeto
   async function handleDelete(id: string) {
     try {
-      await moriaService.deleteProjeto(id)
+      await mroscService.deleteProjeto(id)
       toast.success("Projeto excluído com sucesso.")
       await loadData()
     } catch (e: unknown) {
@@ -296,7 +296,7 @@ export default function ProjetosPage() {
     setSavingAditivo(true)
     try {
       const termos = termosMap[aditivoProjeto.id] ?? []
-      await moriaService.createTermoAditivo({
+      await mroscService.createTermoAditivo({
         projeto_id: aditivoProjeto.id,
         numero_aditivo: termos.length + 1,
         data_fim_anterior: aditivoProjeto.data_fim,

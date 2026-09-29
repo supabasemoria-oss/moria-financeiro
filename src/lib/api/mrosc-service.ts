@@ -13,7 +13,7 @@ import type {
 
 function err(msg: string): never { throw new Error(msg) }
 
-export const moriaService = {
+export const mroscService = {
 
   // ?? Instituicoes ?????????????????????????????????
   async getInstituicoes(): Promise<Instituicao[]> {
@@ -304,3 +304,5 @@ export const moriaService = {
     if (error) err(error.message)
   },
 }
+
+export const moriaService = mroscService

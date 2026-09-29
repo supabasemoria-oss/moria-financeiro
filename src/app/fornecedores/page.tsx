@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { Fornecedor } from "@/lib/types"
 import { formatCpfCnpj } from "@/lib/utils"
 import { maskCpfCnpj } from "@/lib/masks"
@@ -37,7 +37,7 @@ export default function FornecedoresPage() {
   async function loadData() {
     try {
       setLoading(true)
-      const data = await moriaService.getFornecedores()
+      const data = await mroscService.getFornecedores()
       setFornecedores(data)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro desconhecido"
@@ -60,7 +60,7 @@ export default function FornecedoresPage() {
 
     try {
       setSaving(true)
-      await moriaService.createFornecedor({
+      await mroscService.createFornecedor({
         razao_social_nome: formData.razao_social_nome,
         cpf_cnpj: formData.cpf_cnpj,
         tipo_chave_pix: formData.tipo_chave_pix || null,
@@ -91,7 +91,7 @@ export default function FornecedoresPage() {
 
   async function handleDelete(id: string) {
     try {
-      await moriaService.deleteFornecedor(id)
+      await mroscService.deleteFornecedor(id)
       toast.success("Fornecedor excluído com sucesso.")
       loadData()
     } catch (e: unknown) {

@@ -1,7 +1,7 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { calcularTodosAlertas } from "@/lib/alertas"
 import { recalcularStatus } from "@/lib/parcelas"
 import type { Alerta } from "@/lib/types"
@@ -14,8 +14,8 @@ export function useAlertas() {
     setLoading(true)
     try {
       const [parcelasRaw, projetos] = await Promise.all([
-        moriaService.getParcelas(),
-        moriaService.getProjetos(),
+        mroscService.getParcelas(),
+        mroscService.getProjetos(),
       ])
       const parcelas = recalcularStatus(parcelasRaw)
       const result = calcularTodosAlertas(parcelas, projetos)

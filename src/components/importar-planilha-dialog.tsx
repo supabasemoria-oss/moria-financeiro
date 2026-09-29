@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import {
   extrairLinhasXLS,
   sugerirMapeamentoXLS,
@@ -193,7 +193,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
           (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
         )
 
-        await moriaService.createRubrica({
+        await mroscService.createRubrica({
           projeto_id: projetoId!,
           descricao,
           codigo_natureza_despesa:

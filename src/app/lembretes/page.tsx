@@ -23,7 +23,7 @@ import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { toast } from "sonner"
 import {
   BellIcon, AlertTriangleIcon, CalendarClockIcon,
@@ -135,18 +135,18 @@ export default function LembretesPage() {
   // Projetos para filtro
   const [projetos, setProjetos] = useState<Projeto[]>([])
   useEffect(() => {
-    moriaService.getProjetos().then(setProjetos).catch(() => {})
+    mroscService.getProjetos().then(setProjetos).catch(() => {})
   }, [])
 
   // Executar parcela
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
-  const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof moriaService.getFornecedores>>>([])
+  const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof mroscService.getFornecedores>>>([])
   const [formExec, setFormExec] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
   const [salvando, setSalvando] = useState(false)
   const [openFornecedor, setOpenFornecedor] = useState(false)
 
   async function abrirModal(p: ParcelaComRelacoes) {
-    const forns = await moriaService.getFornecedores()
+    const forns = await mroscService.getFornecedores()
     setFornecedores(forns)
     setFormExec({ fornecedor_id: "", data_pagamento_real: getTodaySaoPaulo(), numero_documento_fiscal: "" })
     setParcelaSelecionada(p)
@@ -156,7 +156,7 @@ export default function LembretesPage() {
     if (!parcelaSelecionada || !formExec.fornecedor_id || !formExec.data_pagamento_real) return
     setSalvando(true)
     try {
-      await moriaService.executarParcela(parcelaSelecionada.id, {
+      await mroscService.executarParcela(parcelaSelecionada.id, {
         fornecedor_id: formExec.fornecedor_id,
         data_pagamento_real: formExec.data_pagamento_real,
         numero_documento_fiscal: formExec.numero_documento_fiscal || undefined,
@@ -202,7 +202,7 @@ export default function LembretesPage() {
   const carregarLembretes = useCallback(async () => {
     setLoadingLembretes(true)
     try {
-      const data = await moriaService.getLembretesAvulsos(filtroProjeto || undefined)
+      const data = await mroscService.getLembretesAvulsos(filtroProjeto || undefined)
       setLembretes(data)
     } catch {
       // tabela pode não existir ainda — silencioso
@@ -220,7 +220,7 @@ export default function LembretesPage() {
     }
     setSavingLembrete(true)
     try {
-      await moriaService.createLembreteAvulso({
+      await mroscService.createLembreteAvulso({
         titulo: formLembrete.titulo,
         descricao: formLembrete.descricao || null,
         data_vencimento: formLembrete.data_vencimento,
@@ -242,7 +242,7 @@ export default function LembretesPage() {
 
   async function concluirLembrete(id: string) {
     try {
-      await moriaService.updateLembreteAvulso(id, { status: "CONCLUIDO" })
+      await mroscService.updateLembreteAvulso(id, { status: "CONCLUIDO" })
       setLembretes(prev => prev.map(l => l.id === id ? { ...l, status: "CONCLUIDO" } : l))
       toast.success("Lembrete concluído!")
     } catch (e) {
@@ -252,7 +252,7 @@ export default function LembretesPage() {
 
   async function excluirLembrete(id: string) {
     try {
-      await moriaService.deleteLembreteAvulso(id)
+      await mroscService.deleteLembreteAvulso(id)
       setLembretes(prev => prev.filter(l => l.id !== id))
       toast.success("Lembrete excluído.")
     } catch (e) {

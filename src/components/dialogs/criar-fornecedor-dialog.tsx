@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { maskCpfCnpj } from "@/lib/masks"
 import type { Fornecedor } from "@/lib/types"
 import { toast } from "sonner"
@@ -27,7 +27,7 @@ export function CriarFornecedorDialog({ open, onOpenChange, onCriado }: Props) {
     if (!form.razao_social_nome || !form.cpf_cnpj) { toast.error("Preencha Nome e CPF/CNPJ."); return }
     setSaving(true)
     try {
-      const novo = await moriaService.createFornecedor({
+      const novo = await mroscService.createFornecedor({
         razao_social_nome: form.razao_social_nome,
         cpf_cnpj: form.cpf_cnpj,
         tipo_chave_pix: form.tipo_chave_pix || null,

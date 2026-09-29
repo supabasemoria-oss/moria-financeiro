@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircleIcon } from "lucide-react"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
 import type { Projeto, Instituicao } from "@/lib/types"
 import { toast } from "sonner"
@@ -27,7 +27,7 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
   const [openInst, setOpenInst] = React.useState(false)
 
   React.useEffect(() => {
-    if (open) moriaService.getInstituicoes().then(setInstituicoes).catch(() => {})
+    if (open) mroscService.getInstituicoes().then(setInstituicoes).catch(() => {})
   }, [open])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -37,7 +37,7 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
     }
     setSaving(true)
     try {
-      const novo = await moriaService.createProjeto({
+      const novo = await mroscService.createProjeto({
         nome: form.nome, instituicao_id: form.instituicao_id,
         numero_termo: form.numero_termo || null,
         data_inicio: form.data_inicio, data_fim: form.data_fim,

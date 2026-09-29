@@ -25,7 +25,7 @@ import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import type { Projeto, Rubrica, Despesa } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
@@ -63,12 +63,12 @@ function OrcamentoContent() {
     async function loadInitial() {
       try {
         setLoading(true)
-        const projData = await moriaService.getProjetos()
+        const projData = await mroscService.getProjetos()
         setProjetos(projData)
         const projId = initialProjetoId || (projData.length > 0 ? projData[0].id : "")
         setSelectedProjetoId(projId)
         if (projId) {
-          const rubData = await moriaService.getRubricas(projId)
+          const rubData = await mroscService.getRubricas(projId)
           setRubricas(rubData)
         }
       } catch (e: unknown) {
@@ -85,7 +85,7 @@ function OrcamentoContent() {
   async function loadRubricas(projId: string) {
     try {
       setLoading(true)
-      const data = await moriaService.getRubricas(projId)
+      const data = await mroscService.getRubricas(projId)
       setRubricas(data)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro desconhecido"
@@ -150,7 +150,7 @@ function OrcamentoContent() {
 
     try {
       setSaving(true)
-      await moriaService.createRubrica({
+      await mroscService.createRubrica({
         projeto_id: selectedProjetoId,
         tipo: formData.tipo,
         descricao: formData.descricao,
@@ -188,7 +188,7 @@ function OrcamentoContent() {
 
   async function handleDelete(id: string) {
     try {
-      await moriaService.deleteRubrica(id)
+      await mroscService.deleteRubrica(id)
       toast.success("Rubrica removida.")
       handleProjectChange(selectedProjetoId)
     } catch (e: unknown) {

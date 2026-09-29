@@ -29,8 +29,8 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
-import { moriaService } from "@/lib/api/moria-service"
-import { useMoriaQuery } from "@/hooks/use-moria-query"
+import { mroscService } from "@/lib/api/mrosc-service"
+import { useMroscQuery } from "@/hooks/use-mrosc-query"
 import type { DespesaComRelacoes } from "@/lib/types"
 
 export const description =
@@ -90,10 +90,10 @@ export function ChartAreaInteractive() {
   const [timeRange, setTimeRange] = React.useState("90d")
 
   const fetchDespesas = React.useCallback(
-    () => moriaService.getDespesas(),
+    () => mroscService.getDespesas(),
     []
   )
-  const { data: despesas } = useMoriaQuery<DespesaComRelacoes[]>(
+  const { data: despesas } = useMroscQuery<DespesaComRelacoes[]>(
     fetchDespesas,
     []
   )

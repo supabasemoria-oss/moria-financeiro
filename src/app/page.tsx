@@ -6,8 +6,8 @@ import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
 import { SectionCards } from "@/components/section-cards"
 import { ImportarPlanilhaDialog } from "@/components/importar-planilha-dialog"
-import { moriaService } from "@/lib/api/moria-service"
-import { useMoriaQuery } from "@/hooks/use-moria-query"
+import { mroscService } from "@/lib/api/mrosc-service"
+import { useMroscQuery } from "@/hooks/use-mrosc-query"
 import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { UploadIcon } from "lucide-react"
@@ -16,19 +16,19 @@ import type { RubricaComDespesas, ProjetoComInstituicao } from "@/lib/types"
 
 function DashboardContent() {
   const fetchRubricas = useCallback(
-    () => moriaService.getRubricas(""),
+    () => mroscService.getRubricas(""),
     []
   )
   const fetchProjetos = useCallback(
-    () => moriaService.getProjetos(),
+    () => mroscService.getProjetos(),
     []
   )
 
-  const { data: rubricas } = useMoriaQuery<RubricaComDespesas[]>(
+  const { data: rubricas } = useMroscQuery<RubricaComDespesas[]>(
     fetchRubricas,
     []
   )
-  const { data: projetos } = useMoriaQuery<ProjetoComInstituicao[]>(
+  const { data: projetos } = useMroscQuery<ProjetoComInstituicao[]>(
     fetchProjetos,
     []
   )

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { moriaService } from "@/lib/api/moria-service"
+import { mroscService } from "@/lib/api/mrosc-service"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
 import type { Rubrica } from "@/lib/types"
 import { toast } from "sonner"
@@ -33,7 +33,7 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
     if (!form.descricao || !form.codigo_natureza_despesa || qtd <= 0) { toast.error("Preencha os campos obrigatorios."); return }
     setSaving(true)
     try {
-      const nova = await moriaService.createRubrica({
+      const nova = await mroscService.createRubrica({
         projeto_id: projetoId, tipo: form.tipo, descricao: form.descricao,
         codigo_natureza_despesa: form.codigo_natureza_despesa, unidade: form.unidade || "UN",
         quantidade: qtd, valor_unitario: vlUnit, tipo_pagamento: form.tipo_pagamento,
