@@ -53,22 +53,20 @@ function DashboardContent() {
 
   return (
     <>
-      {projetos.length > 0 && (
-        <div className="flex items-center justify-between px-4 lg:px-6 -mb-2">
-          <p className="text-sm text-muted-foreground">
-            {projetos.length} projeto(s) ativo(s)
-          </p>
-          <ImportarPlanilhaDialog
-            projetoId={projetos[0].id}
-            trigger={
-              <Button variant="outline" size="sm" className="gap-2 h-8">
-                <UploadIcon className="size-3.5" />
-                Importar Planilha
-              </Button>
-            }
-          />
-        </div>
-      )}
+      <div className="flex items-center justify-between px-4 lg:px-6 -mb-2">
+        <p className="text-sm text-muted-foreground">
+          {projetos.length > 0 ? `${projetos.length} projeto(s) ativo(s)` : "Nenhum projeto cadastrado"}
+        </p>
+        <ImportarPlanilhaDialog
+          projetoId={projetos[0]?.id}
+          trigger={
+            <Button variant="outline" size="sm" className="gap-2 h-8 cursor-pointer">
+              <UploadIcon className="size-3.5" />
+              Importar Planilha
+            </Button>
+          }
+        />
+      </div>
       <SectionCards />
       <div className="px-4 lg:px-6">
         <ChartAreaInteractive />

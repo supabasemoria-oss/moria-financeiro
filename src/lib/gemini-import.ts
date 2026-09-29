@@ -1,10 +1,14 @@
 import * as XLSX from "xlsx"
 import { getSettingsAsync } from "@/lib/settings"
+import { supabase } from "@/lib/supabase"
+import { mroscService } from "@/lib/api/mrosc-service"
 
 export interface MapeamentoColuna {
   coluna_original: string
   campo_sistema: string | null
   indice: number
+  sugestao_ia?: string | null
+  motivo_ia?: string | null
 }
 
 export interface MetadadosPlanilha {
@@ -136,7 +140,7 @@ export async function extrairLinhasXLS(file: File): Promise<string[][]> {
 export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null {
   if (!rows || rows.length < 5) return null
 
-  // 1. Extrair Metadados do Cabeçalho Institucional
+  // 1. Extrair Metadados do Cabeçalho Institucional (Zero Alucinação: somente o que estiver grafado)
   let proposta_numero: string | null = null
   let cnpj_osc: string | null = null
   let osc_nome: string | null = null
@@ -208,14 +212,46 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
     const colVlUnitFinal = header.length - 2
     const colVlTotalFinal = header.length - 1
 
-    // Mapeamento compatível com o dialog
-    mapeamento.push(
-      { coluna_original: header[colItem] || "ITEM", campo_sistema: "descricao", indice: colItem },
-      { coluna_original: header[colTipo] || "TIPO", campo_sistema: "tipo", indice: colTipo },
-      { coluna_original: header[colTotalQtd] || "TOTAL", campo_sistema: "quantidade", indice: colTotalQtd },
-      { coluna_original: header[colUnidade] || "UNIDADE", campo_sistema: "unidade", indice: colUnidade },
-      { coluna_original: header[colVlUnitFinal] || "VALOR UNITÁRIO", campo_sistema: "valor_unitario", indice: colVlUnitFinal }
-    )
+    // Propor mapeamento completo para todas as colunas
+    for (let j = 0; j < header.length; j++) {
+      const colName = rows[headerIndex][j] || `Coluna ${j}`
+      let campo: string | null = null
+      let motivo: string | null = null
+
+      if (j === colItem) {
+        campo = "descricao"
+        motivo = "Nome da rubrica / cargo"
+      } else if (j === colTipo) {
+        campo = "tipo"
+        motivo = "Classificação de recurso"
+      } else if (j === colTotalQtd) {
+        campo = "quantidade"
+        motivo = "Quantidade total de diárias/meses"
+      } else if (j === colUnidade) {
+        campo = "unidade"
+        motivo = "Unidade de medida"
+      } else if (j === colVlUnitFinal) {
+        campo = "valor_unitario"
+        motivo = "Menor valor unitário cotado"
+      } else if (colName.toUpperCase().includes("CNPJ") || colName.toUpperCase().includes("RAZÃO") || colName.toUpperCase().includes("RAZAO")) {
+        campo = null
+        motivo = "Fornecedor da cotação tripla (auto-processado)"
+      } else if (colName.toUpperCase().includes("GND") || colName.toUpperCase().includes("AQUISICAO") || colName.toUpperCase().includes("DESPESA")) {
+        campo = null
+        motivo = "Classificação orçamentária complementar"
+      } else {
+        campo = null
+        motivo = "Coluna acessória"
+      }
+
+      mapeamento.push({
+        coluna_original: colName,
+        campo_sistema: campo,
+        indice: j,
+        sugestao_ia: campo,
+        motivo_ia: motivo,
+      })
+    }
 
     for (let i = headerIndex + 1; i < rows.length; i++) {
       const row = rows[i]
@@ -268,14 +304,39 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
     }
   } else if (modelo === "MODELO_B_DESCRITIVO") {
     const startRow = headerIndex + 2
-    // Linha intermediária de subcabeçalho
     linhasIgnorar.push(headerIndex + 1)
 
-    mapeamento.push(
-      { coluna_original: "Especificação do Item/Serviço", campo_sistema: "descricao", indice: 1 },
-      { coluna_original: "TOTAL", campo_sistema: "quantidade", indice: 8 },
-      { coluna_original: "MENOR VALOR COTADO", campo_sistema: "valor_unitario", indice: rows[headerIndex].length - 2 }
-    )
+    const headerRow = rows[headerIndex]
+    for (let j = 0; j < headerRow.length; j++) {
+      const colName = String(headerRow[j] || `Coluna ${j}`).trim()
+      let campo: string | null = null
+      let motivo: string | null = null
+
+      if (j === 1) {
+        campo = "descricao"
+        motivo = "Cargo e atribuições do profissional"
+      } else if (j === 8 || colName.toUpperCase() === "TOTAL") {
+        campo = "quantidade"
+        motivo = "Total de meses/diárias calculados"
+      } else if (colName.toUpperCase().includes("MENOR VALOR") || j === headerRow.length - 2) {
+        campo = "valor_unitario"
+        motivo = "Menor cotação selecionada"
+      } else if (colName.toUpperCase().includes("EMPRESA")) {
+        campo = null
+        motivo = "Fornecedor cotado (extraído automaticamente)"
+      } else {
+        campo = null
+        motivo = "Coluna acessória"
+      }
+
+      mapeamento.push({
+        coluna_original: colName || `Coluna ${j}`,
+        campo_sistema: campo,
+        indice: j,
+        sugestao_ia: campo,
+        motivo_ia: motivo,
+      })
+    }
 
     for (let i = startRow; i < rows.length; i++) {
       const row = rows[i]
@@ -290,7 +351,6 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
 
       const qtd = parseMoedaBR(row[8]) || parseMoedaBR(row[6]) || 1
 
-      // Achar últimas colunas numéricas para valor unitário e total
       const numericCols: number[] = []
       for (let c = row.length - 1; c >= 0; c--) {
         const v = row[c]
@@ -303,7 +363,6 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
       const vlUnit = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[0]]) : parseMoedaBR(row[row.length - 2])
       const vlTotal = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[1]]) : qtd * vlUnit
 
-      // Empresas nas colunas de cotação
       ;[9, 12, 15].forEach((col) => {
         const f = extrairFornecedorDeTexto(row[col])
         if (f && sanitizarCnpj(f.cpf_cnpj).length === 14) {
@@ -341,6 +400,8 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
     valor_unitario: r.valor_unitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
   }))
 
+  const valorTotalSoma = rubricas.reduce((acc, r) => acc + r.valor_total, 0)
+
   return {
     linha_cabecalho: headerIndex,
     linhas_secao: linhasSecao,
@@ -351,6 +412,7 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
       proposta_numero,
       cnpj_osc,
       osc_nome,
+      valor_total_estimado: valorTotalSoma,
       modelo_identificado: modelo,
     },
     fornecedores_detectados: Array.from(fornecedoresMap.values()),
@@ -358,20 +420,106 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
   }
 }
 
+/**
+ * Localiza ou cria a Instituição e o Projeto no banco a partir dos dados reais da planilha (Sem alucinação).
+ */
+export async function vincularOuCriarInstituicaoEProjeto(
+  metadados: MetadadosPlanilha,
+  valorTotalAprovado: number
+): Promise<{ instituicaoId: string; projetoId: string; instituicaoNome: string; projetoNome: string; criadoNovo: boolean }> {
+  let instituicaoId = ""
+  let instituicaoNome = metadados.osc_nome?.trim() || "OSC Proponente"
+  const cnpjLimpo = sanitizarCnpj(metadados.cnpj_osc)
+  let criadoNovo = false
+
+  // 1. Instituição
+  if (cnpjLimpo && cnpjLimpo.length === 14) {
+    const { data: instExistente } = await supabase
+      .from("instituicoes")
+      .select("id, razao_social, cnpj")
+      .eq("cnpj", formatarCnpj(cnpjLimpo))
+      .maybeSingle()
+
+    if (instExistente) {
+      instituicaoId = instExistente.id
+      instituicaoNome = instExistente.razao_social
+    } else {
+      const novaInst = await mroscService.createInstituicao({
+        razao_social: instituicaoNome,
+        cnpj: formatarCnpj(cnpjLimpo),
+      })
+      instituicaoId = novaInst.id
+      criadoNovo = true
+    }
+  } else {
+    const { data: instPorNome } = await supabase
+      .from("instituicoes")
+      .select("id, razao_social")
+      .ilike("razao_social", instituicaoNome)
+      .maybeSingle()
+
+    if (instPorNome) {
+      instituicaoId = instPorNome.id
+      instituicaoNome = instPorNome.razao_social
+    } else {
+      const novaInst = await mroscService.createInstituicao({
+        razao_social: instituicaoNome,
+        cnpj: "00.000.000/0000-00",
+      })
+      instituicaoId = novaInst.id
+      criadoNovo = true
+    }
+  }
+
+  // 2. Projeto
+  const termo = metadados.proposta_numero ? `Proposta ${metadados.proposta_numero}` : `Parceria ${instituicaoNome}`
+  const nomeProjeto = metadados.proposta_numero ? `Projeto Proposta ${metadados.proposta_numero}` : `Projeto ${instituicaoNome}`
+
+  let projetoId = ""
+  if (metadados.proposta_numero) {
+    const { data: projExistente } = await supabase
+      .from("projetos")
+      .select("id, nome")
+      .eq("numero_termo", termo)
+      .maybeSingle()
+
+    if (projExistente) {
+      projetoId = projExistente.id
+    }
+  }
+
+  if (!projetoId) {
+    const hoje = new Date()
+    const anoQueVem = new Date(hoje)
+    anoQueVem.setFullYear(hoje.getFullYear() + 1)
+
+    const novoProjeto = await mroscService.createProjeto({
+      nome: nomeProjeto,
+      instituicao_id: instituicaoId,
+      numero_termo: termo,
+      data_inicio: hoje.toISOString().split("T")[0],
+      data_fim: anoQueVem.toISOString().split("T")[0],
+      valor_total_aprovado: valorTotalAprovado > 0 ? valorTotalAprovado : 0,
+      status: "EM_ANDAMENTO",
+    })
+    projetoId = novoProjeto.id
+    criadoNovo = true
+  }
+
+  return { instituicaoId, projetoId, instituicaoNome, projetoNome: nomeProjeto, criadoNovo }
+}
+
 export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoMapeamento> {
-  // 1. Tentar primeiro análise via Skill MROSC de alta precisão
   const skillResult = executarSkillMrosc(rows)
   if (skillResult && skillResult.rubricas_detectadas && skillResult.rubricas_detectadas.length > 0) {
     return skillResult
   }
 
-  // 2. Tentar mapeamento automático genérico sem IA
   const autoResult = tentarMapeamentoAutomatico(rows)
   if (autoResult && autoResult.mapeamento.length > 0 && autoResult.preview.length > 0) {
     return autoResult
   }
 
-  // 3. Fallback: usar Gemini com Prompt da Skill MROSC
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
     throw new Error("Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la.")
@@ -405,7 +553,7 @@ Retorne APENAS JSON válido com esta estrutura:
   "linhas_secao": [<numeros>],
   "linhas_ignorar": [<numeros>],
   "mapeamento": [
-    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>}
+    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>, "sugestao_ia": "<campo ou null>", "motivo_ia": "<motivo>"}
   ],
   "metadados": {
     "proposta_numero": "<numero ou null>",
@@ -440,6 +588,11 @@ Retorne APENAS JSON válido com esta estrutura:
   let resultado: ResultadoMapeamento
   try {
     resultado = JSON.parse(jsonMatch[0])
+    resultado.mapeamento = resultado.mapeamento.map((m) => ({
+      ...m,
+      sugestao_ia: m.sugestao_ia ?? m.campo_sistema,
+      motivo_ia: m.motivo_ia ?? "Sugerido pelo modelo Gemini",
+    }))
   } catch {
     throw new Error("JSON inválido retornado pelo Gemini.")
   }
@@ -491,11 +644,21 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
 
   if (linhaCabecalho === -1 || !("descricao" in melhoresColIndex)) return null
 
-  const mapeamento: MapeamentoColuna[] = Object.entries(melhoresColIndex).map(([campo, indice]) => ({
-    coluna_original: rows[linhaCabecalho][indice] || `Coluna ${indice}`,
-    campo_sistema: campo,
-    indice,
-  }))
+  const rowCabecalho = rows[linhaCabecalho]
+  const mapeamento: MapeamentoColuna[] = []
+
+  for (let j = 0; j < rowCabecalho.length; j++) {
+    const colName = rowCabecalho[j] || `Coluna ${j}`
+    const matchedEntry = Object.entries(melhoresColIndex).find(([, idx]) => idx === j)
+    const campo = matchedEntry ? matchedEntry[0] : null
+    mapeamento.push({
+      coluna_original: colName,
+      campo_sistema: campo,
+      indice: j,
+      sugestao_ia: campo,
+      motivo_ia: campo ? `Padrão identificado como ${campo}` : "Coluna acessória",
+    })
+  }
 
   const linhasSecao: number[] = []
   const linhasIgnorar: number[] = []
@@ -567,7 +730,7 @@ Retorne APENAS JSON válido com esta estrutura:
   "linhas_secao": [],
   "linhas_ignorar": [],
   "mapeamento": [
-    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>}
+    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>, "sugestao_ia": "<campo ou null>", "motivo_ia": "<motivo>"}
   ],
   "preview": [
     {"descricao": "...", "quantidade": "...", "valor_unitario": "...", "tipo": "..."}
@@ -602,7 +765,15 @@ Retorne APENAS JSON válido com esta estrutura:
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
-  return JSON.parse(jsonMatch[0])
+  const resultado = JSON.parse(jsonMatch[0])
+  if (resultado.mapeamento) {
+    resultado.mapeamento = resultado.mapeamento.map((m: any) => ({
+      ...m,
+      sugestao_ia: m.sugestao_ia ?? m.campo_sistema,
+      motivo_ia: m.motivo_ia ?? "Extraído via visão de documento",
+    }))
+  }
+  return resultado
 }
 
 async function fileToBase64(file: File): Promise<string> {
