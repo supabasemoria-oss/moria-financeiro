@@ -194,7 +194,13 @@ export default function ConfiguracoesPage() {
             ) : (
               <Select value={model} onValueChange={(v) => { if (v) setModel(v) }}>
                 <SelectTrigger id="model" className="w-full max-w-sm">
-                  <SelectValue placeholder="Selecione um modelo" />
+                  <SelectValue placeholder="Selecione um modelo">
+                    {(val) => {
+                      if (!val) return "Selecione um modelo"
+                      const m = models.find((item) => item.name === val)
+                      return m?.displayName ?? val
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {models.map((m) => (

@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import * as React from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -62,7 +62,20 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
               <div className="grid gap-2">
                 <Label>Tipo de Despesa *</Label>
                 <Select value={form.tipo} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                  <SelectValue>
+                    {(val) => {
+                      const labels: Record<string, string> = {
+                        SERVICO: "SERVIÇO (PF / PJ)",
+                        MATERIAL: "MATERIAL DE CONSUMO",
+                        LOCACAO: "LOCAÇÃO DE BENS",
+                        RH: "RECURSOS HUMANOS",
+                        OUTROS: "OUTROS",
+                      }
+                      return (val && labels[val]) ? labels[val] : val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SERVICO">SERVICO (PF / PJ)</SelectItem>
                     <SelectItem value="MATERIAL">MATERIAL DE CONSUMO</SelectItem>
@@ -90,7 +103,18 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
             <div className="grid gap-2">
               <Label>Tipo de Pagamento</Label>
               <Select value={form.tipo_pagamento} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo_pagamento: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue>
+                    {(val) => {
+                      const labels: Record<string, string> = {
+                        UNICO: "Pagamento Único",
+                        RECORRENTE: "Recorrente (ex: mensal)",
+                        PARCELADO: "Parcelado (ex: 3x)",
+                      }
+                      return (val && labels[val]) ? labels[val] : val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="UNICO">Pagamento Unico</SelectItem>
                   <SelectItem value="RECORRENTE">Recorrente (ex: mensal)</SelectItem>

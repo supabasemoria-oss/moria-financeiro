@@ -160,7 +160,18 @@ export default function FornecedoresPage() {
                       }}
                     >
                       <SelectTrigger id="tipo_chave_pix">
-                        <SelectValue />
+                        <SelectValue>
+                          {(val) => {
+                            const labels: Record<string, string> = {
+                              CNPJ: "CNPJ",
+                              CPF: "CPF",
+                              EMAIL: "E-mail",
+                              TELEFONE: "Telefone",
+                              ALEATORIA: "Aleatória",
+                            }
+                            return (val && labels[val]) ? labels[val] : val
+                          }}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="CNPJ">CNPJ</SelectItem>

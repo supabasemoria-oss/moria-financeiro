@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import * as React from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,11 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
               <div className="grid gap-2">
                 <Label htmlFor="pj-inst">Instituicao Proponente (OSC) *</Label>
                 <Select value={form.instituicao_id} onValueChange={v => v && setForm(p => ({ ...p, instituicao_id: v }))}>
-                  <SelectTrigger id="pj-inst"><SelectValue placeholder="Selecione a OSC..." /></SelectTrigger>
+                  <SelectTrigger id="pj-inst">
+                    <SelectValue placeholder="Selecione a OSC...">
+                      {(val: string | null) => (val ? instituicoes.find(i => i.id === val)?.razao_social : null) || "Selecione a OSC..."}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {instituicoes.map(i => <SelectItem key={i.id} value={i.id}>{i.razao_social} ({i.cnpj})</SelectItem>)}
                   </SelectContent>
@@ -90,7 +94,19 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
               <div className="grid gap-2">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v: any) => v && setForm(p => ({ ...p, status: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                  <SelectValue>
+                    {(val) => {
+                      const labels: Record<string, string> = {
+                        EM_ANDAMENTO: "Em Andamento",
+                        CONCLUIDO: "Concluído",
+                        SUSPENSO: "Suspenso",
+                        CANCELADO: "Cancelado",
+                      }
+                      return (val && labels[val]) ? labels[val] : val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
                     <SelectItem value="CONCLUIDO">Concluido</SelectItem>

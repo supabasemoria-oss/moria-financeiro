@@ -638,7 +638,13 @@ function ExecucaoContent() {
                 <div className="w-56">
                   <Select value={filterProjeto} onValueChange={(val) => setFilterProjeto(val ?? "ALL")}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Projeto" />
+                      <SelectValue placeholder="Projeto">
+                        {(val) => {
+                          if (!val || val === "ALL") return "Todos os Projetos"
+                          const p = projetos.find((item) => item.id === val)
+                          return p?.nome ?? val
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todos os Projetos</SelectItem>
@@ -655,7 +661,13 @@ function ExecucaoContent() {
                 <div className="w-52">
                   <Select value={filterFornecedor} onValueChange={(val) => setFilterFornecedor(val ?? "ALL")}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Fornecedor" />
+                      <SelectValue placeholder="Fornecedor">
+                        {(val) => {
+                          if (!val || val === "ALL") return "Todos os Fornecedores"
+                          const f = fornecedores.find((item) => item.id === val)
+                          return f?.razao_social_nome ?? val
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todos os Fornecedores</SelectItem>
@@ -672,7 +684,15 @@ function ExecucaoContent() {
                 <div className="w-36">
                   <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val ?? "ALL")}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Status" />
+                      <SelectValue placeholder="Status">
+                        {(val) => {
+                          if (!val || val === "ALL") return "Todos os Status"
+                          if (val === "PENDENTE") return "Pendentes"
+                          if (val === "PAGO") return "Pagos"
+                          if (val === "ATRASADO") return "Atrasados"
+                          return val
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todos os Status</SelectItem>
@@ -1412,7 +1432,13 @@ function ExecucaoContent() {
                   }}
                 >
                   <SelectTrigger id="desp_status">
-                    <SelectValue />
+                    <SelectValue>
+                      {(val) => {
+                        if (val === "PENDENTE") return "Pendente (Aguardando Pagamento)"
+                        if (val === "PAGO") return "Pago (Efetivado na Conta)"
+                        return val
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PENDENTE">Pendente (Aguardando Pagamento)</SelectItem>

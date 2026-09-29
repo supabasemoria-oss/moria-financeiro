@@ -147,7 +147,13 @@ export default function PrestacaoContasPage() {
             }}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Selecione o Projeto..." />
+              <SelectValue placeholder="Selecione o Projeto...">
+                {(val) => {
+                  if (!val) return "Selecione o Projeto..."
+                  const p = projetos.find((item) => item.id === val)
+                  return p?.nome ?? val
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {projetos.map((p) => (

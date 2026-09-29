@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import * as React from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircleIcon } from "lucide-react"
@@ -21,7 +21,9 @@ export function SelectComCriar({ value, onValueChange, opcoes, placeholder, labe
     <div className="grid gap-1">
       <Select value={value} onValueChange={v => v && onValueChange(v)} disabled={disabled}>
         <SelectTrigger id={id}>
-          <SelectValue placeholder={placeholder ?? "Selecione..."} />
+          <SelectValue placeholder={placeholder ?? "Selecione..."}>
+            {(val: string | null) => (val ? opcoes.find(o => o.id === val)?.label : null) || placeholder || "Selecione..."}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {opcoes.map(o => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}

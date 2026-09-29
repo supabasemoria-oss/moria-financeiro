@@ -264,7 +264,18 @@ function OrcamentoContent() {
                           }}
                         >
                           <SelectTrigger id="tipo">
-                            <SelectValue />
+                            <SelectValue>
+                              {(val) => {
+                                const labels: Record<string, string> = {
+                                  SERVICO: "SERVIÇO (PF / PJ)",
+                                  MATERIAL: "MATERIAL DE CONSUMO",
+                                  LOCACAO: "LOCAÇÃO DE BENS/ESPAÇOS",
+                                  RH: "RECURSOS HUMANOS (CLT/BOLSA)",
+                                  OUTROS: "OUTROS",
+                                }
+                                return (val && labels[val]) ? labels[val] : val
+                              }}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="SERVICO">SERVIÇO (PF / PJ)</SelectItem>
@@ -346,7 +357,16 @@ function OrcamentoContent() {
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue>
+                            {(val) => {
+                              const labels: Record<string, string> = {
+                                UNICO: "Pagamento Único",
+                                RECORRENTE: "Recorrente (ex: mensal)",
+                                PARCELADO: "Parcelado (ex: 3x)",
+                              }
+                              return (val && labels[val]) ? labels[val] : val
+                            }}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="UNICO">Pagamento Único</SelectItem>

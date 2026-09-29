@@ -135,7 +135,13 @@ function ComprovantesContent() {
                     }}
                   >
                     <SelectTrigger id="despesa">
-                      <SelectValue placeholder="Selecione a despesa..." />
+                      <SelectValue placeholder="Selecione a despesa...">
+                        {(val) => {
+                          if (!val) return "Selecione a despesa..."
+                          const d = despesas.find((item) => item.id === val)
+                          return d ? `${formatDate(d.data_despesa)} - ${d.descricao} (${formatCurrency(d.valor)})` : val
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {despesas.map((d) => (
@@ -156,7 +162,21 @@ function ComprovantesContent() {
                     }}
                   >
                     <SelectTrigger id="tipo">
-                      <SelectValue />
+                      <SelectValue>
+                        {(val) => {
+                          const labels: Record<string, string> = {
+                            NOTA_FISCAL: "Nota Fiscal (DANFE)",
+                            RECIBO: "Recibo de Pagamento (RPA)",
+                            COMPROVANTE_PIX: "Comprovante Pix / TED Bancário",
+                            FOLHA_PAGAMENTO: "Folha de Pagamento / Holerite",
+                            GUIA_IMPOSTO: "Guia de Imposto (GPS / DARF / FGTS)",
+                            CONTRATO: "Contrato / Termo de Referência",
+                            COTACAO: "Cotação de Preços (Pesquisa Mercadológica)",
+                            OUTRO: "Outro Comprovante",
+                          }
+                          return (val && labels[val]) ? labels[val] : val
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NOTA_FISCAL">Nota Fiscal (DANFE)</SelectItem>

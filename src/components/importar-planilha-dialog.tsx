@@ -347,7 +347,12 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
                           }
                         >
                           <SelectTrigger className="h-7 text-xs w-52">
-                            <SelectValue />
+                            <SelectValue>
+                              {(val) => {
+                                if (!val || val === "__ignorar__") return "— ignorar —"
+                                return CAMPO_LABELS[val as any] ?? val
+                              }}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__ignorar__">

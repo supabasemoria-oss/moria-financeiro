@@ -318,7 +318,15 @@ export default function LembretesPage() {
             <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
             <div className="w-72">
               <Select value={filtroProjeto} onValueChange={(v: string | null) => setFiltroProjeto(v === "todos" || !v ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Todos os projetos" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os projetos">
+                    {(val) => {
+                      if (!val || val === "todos") return "Todos os projetos"
+                      const p = projetos.find((item) => item.id === val)
+                      return p?.nome ?? val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os projetos</SelectItem>
                   {projetos.map(p => (
@@ -567,7 +575,15 @@ export default function LembretesPage() {
               <div className="space-y-2">
                 <Label>Projeto (opcional)</Label>
                 <Select value={formLembrete.projeto_id} onValueChange={(v: string | null) => setFormLembrete(f => ({ ...f, projeto_id: v === "nenhum" || !v ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Nenhum">
+                      {(val) => {
+                        if (!val || val === "nenhum") return "Nenhum"
+                        const p = projetos.find((item) => item.id === val)
+                        return p?.nome ?? val
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nenhum">Nenhum</SelectItem>
                     {projetos.map(p => (

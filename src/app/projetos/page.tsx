@@ -353,7 +353,12 @@ export default function ProjetosPage() {
                     }}
                   >
                     <SelectTrigger id="instituicao_id">
-                      <SelectValue placeholder="Selecione a OSC vinculada..." />
+                      <SelectValue placeholder="Selecione a OSC vinculada...">
+                        {(val: string | null) => {
+                          const found = instituicoes.find((i) => i.id === val)
+                          return found ? `${found.razao_social} (${found.cnpj})` : "Selecione a OSC vinculada..."
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {instituicoes.map((i) => (
@@ -511,7 +516,9 @@ export default function ProjetosPage() {
                     }}
                   >
                     <SelectTrigger id="status">
-                      <SelectValue />
+                      <SelectValue placeholder="Selecione o status...">
+                        {(val: StatusProjeto | null) => (val ? STATUS_LABELS[val]?.label : "Selecione o status...")}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="PLANEJAMENTO">Planejamento</SelectItem>
@@ -606,7 +613,15 @@ export default function ProjetosPage() {
 
           <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val || "TODOS")}>
             <SelectTrigger className="h-9 w-full sm:w-44 text-xs">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder="Status">
+                {(val: string | null) =>
+                  val === "TODOS"
+                    ? "Todos os Status"
+                    : val
+                    ? STATUS_LABELS[val as StatusProjeto]?.label || val
+                    : "Status"
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="TODOS">Todos os Status</SelectItem>
@@ -815,7 +830,12 @@ export default function ProjetosPage() {
                   }}
                 >
                   <SelectTrigger id="edit_instituicao_id">
-                    <SelectValue placeholder="Selecione a OSC vinculada..." />
+                    <SelectValue placeholder="Selecione a OSC vinculada...">
+                      {(val: string | null) => {
+                        const found = instituicoes.find((i) => i.id === val)
+                        return found ? `${found.razao_social} (${found.cnpj})` : "Selecione a OSC vinculada..."
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {instituicoes.map((i) => (
@@ -896,7 +916,9 @@ export default function ProjetosPage() {
                   }}
                 >
                   <SelectTrigger id="edit_status">
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione o status...">
+                      {(val: StatusProjeto | null) => (val ? STATUS_LABELS[val]?.label : "Selecione o status...")}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PLANEJAMENTO">Planejamento</SelectItem>

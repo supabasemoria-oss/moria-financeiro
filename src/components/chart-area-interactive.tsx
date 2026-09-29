@@ -138,7 +138,16 @@ export function ChartAreaInteractive() {
                 className="w-40"
                 aria-label="Selecionar período"
               >
-                <SelectValue />
+                <SelectValue>
+                  {(val) => {
+                    const labels: Record<string, string> = {
+                      "90d": "Últimos 3 meses",
+                      "30d": "Últimos 30 dias",
+                      "7d": "Últimos 7 dias",
+                    }
+                    return (val && labels[val]) ? labels[val] : val
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="rounded-xl">
                 <SelectItem value="90d" className="rounded-lg">

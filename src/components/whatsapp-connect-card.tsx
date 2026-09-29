@@ -380,7 +380,16 @@ export function WhatsAppConnectCard() {
                 onValueChange={(val: any) => setSummaryMode(val)}
               >
                 <SelectTrigger className="text-xs h-9">
-                  <SelectValue placeholder="Selecione o modo" />
+                  <SelectValue placeholder="Selecione o modo">
+                    {(val) => {
+                      const labels: Record<string, string> = {
+                        hoje: "Dia Presente (Vencem Hoje)",
+                        amanha: "Dia Seguinte (Antecipado)",
+                        ambos: "Ambos (Hoje + Amanhã)",
+                      }
+                      return (val && labels[val]) ? labels[val] : (val || "Selecione o modo")
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hoje">Dia Presente (Vencem Hoje)</SelectItem>

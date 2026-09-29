@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 import * as React from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,20 @@ export function CriarFornecedorDialog({ open, onOpenChange, onCriado }: Props) {
               <div className="grid gap-2">
                 <Label>Tipo Chave Pix</Label>
                 <Select value={form.tipo_chave_pix} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo_chave_pix: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                  <SelectValue>
+                    {(val) => {
+                      const labels: Record<string, string> = {
+                        CNPJ: "CNPJ",
+                        CPF: "CPF",
+                        EMAIL: "E-mail",
+                        TELEFONE: "Telefone",
+                        ALEATORIA: "Aleatória",
+                      }
+                      return (val && labels[val]) ? labels[val] : val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="CNPJ">CNPJ</SelectItem>
                     <SelectItem value="CPF">CPF</SelectItem>
