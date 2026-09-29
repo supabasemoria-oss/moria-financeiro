@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import { diffDias } from "@/lib/parcelas"
 import type { Projeto, Instituicao, TermoAditivo, StatusProjeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -43,6 +44,7 @@ const STATUS_LABELS: Record<StatusProjeto, { label: string; variant: "default" |
 }
 
 export default function ProjetosPage() {
+  const { instituicaoId, projetoId } = useFiltroGlobal()
   const [projetos, setProjetos] = useState<(Projeto & { instituicoes?: Instituicao | null })[]>([])
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
   const [loading, setLoading] = useState(true)
@@ -120,23 +122,34 @@ export default function ProjetosPage() {
     loadData()
   }, [])
 
+  // Projetos filtrados pelo contexto global do topo
+  const projetosBase = useMemo(() => {
+    if (projetoId !== "ALL") {
+      return projetos.filter((p) => p.id === projetoId)
+    }
+    if (instituicaoId !== "ALL") {
+      return projetos.filter((p) => p.instituicao_id === instituicaoId)
+    }
+    return projetos
+  }, [projetos, instituicaoId, projetoId])
+
   // KPIs
   const kpis = useMemo(() => {
-    const total = projetos.length
-    const emAndamento = projetos.filter((p) => p.status === "EM_ANDAMENTO").length
-    const orcamentoTotal = projetos.reduce((acc, p) => acc + (p.valor_total_aprovado || 0), 0)
-    const vencendo30d = projetos.filter((p) => {
+    const total = projetosBase.length
+    const emAndamento = projetosBase.filter((p) => p.status === "EM_ANDAMENTO").length
+    const orcamentoTotal = projetosBase.reduce((acc, p) => acc + (p.valor_total_aprovado || 0), 0)
+    const vencendo30d = projetosBase.filter((p) => {
       if (p.status === "CONCLUIDO" || p.status === "CANCELADO") return false
       const dias = diffDias(p.data_fim)
       return dias <= 30
     }).length
 
     return { total, emAndamento, orcamentoTotal, vencendo30d }
-  }, [projetos])
+  }, [projetosBase])
 
   // Filtragem
   const filteredProjetos = useMemo(() => {
-    return projetos.filter((proj) => {
+    return projetosBase.filter((proj) => {
       const matchesStatus = filterStatus === "TODOS" || proj.status === filterStatus
       if (!matchesStatus) return false
 
@@ -147,7 +160,7 @@ export default function ProjetosPage() {
       const matchOsc = proj.instituicoes?.razao_social?.toLowerCase().includes(term)
       return Boolean(matchNome || matchTermo || matchOsc)
     })
-  }, [projetos, searchTerm, filterStatus])
+  }, [projetosBase, searchTerm, filterStatus])
 
   // Criar Projeto
   async function handleCreate(e: React.FormEvent) {

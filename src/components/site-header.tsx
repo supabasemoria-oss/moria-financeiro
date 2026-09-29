@@ -8,6 +8,7 @@ import { ShieldCheckIcon } from "lucide-react"
 
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
+import { FiltroGlobalHeader } from "@/components/filtro-global-header"
 
 const titleMap: Record<string, string> = {
   "/": "Painel de Controle e Auditoria",
@@ -28,23 +29,32 @@ export function SiteHeader() {
   const pageTitle = titleMap[pathname] || "Moriá Consultoria"
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center justify-between border-b px-4 lg:px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) bg-background/95 backdrop-blur-sm sticky top-0 z-10">
-      <div className="flex items-center gap-3">
+    <header className="flex h-(--header-height) shrink-0 items-center justify-between border-b px-3 sm:px-4 lg:px-6 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) bg-background/95 backdrop-blur-sm sticky top-0 z-10 gap-2">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="h-4" />
         <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold text-foreground md:text-base">{pageTitle}</h1>
+          <h1 className="text-sm font-semibold text-foreground md:text-base hidden sm:inline-block">
+            {pageTitle}
+          </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Filtro Global do Topo: Instituição & Projeto */}
+      <div className="flex items-center">
+        <FiltroGlobalHeader />
+      </div>
+
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Relógio digital no fuso de São Paulo */}
-        <RelogioHeader />
+        <div className="hidden lg:block">
+          <RelogioHeader />
+        </div>
 
         {/* Sininho com popover de lembretes ativos */}
         <LembretesPopover />
 
-        <Badge variant="outline" className="hidden md:flex items-center gap-1.5 text-xs font-normal border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
+        <Badge variant="outline" className="hidden xl:flex items-center gap-1.5 text-xs font-normal border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40">
           <ShieldCheckIcon className="size-3.5 text-emerald-600" />
           MROSC Ativo
         </Badge>

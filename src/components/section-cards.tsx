@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -21,9 +21,12 @@ import { mroscService } from "@/lib/api/mrosc-service"
 import { formatCurrency } from "@/lib/utils"
 import { calcularTotalPago, calcularTotalPendente } from "@/lib/calculos"
 import { useMroscQuery } from "@/hooks/use-mrosc-query"
+import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Despesa } from "@/lib/types"
 
 export function SectionCards() {
+  const { instituicaoId, projetoId } = useFiltroGlobal()
+
   const fetchProjetos = useCallback(
     () => mroscService.getProjetos(),
     []
@@ -42,12 +45,26 @@ export function SectionCards() {
     []
   )
 
-  const tetoTotal = projetos.reduce(
+  const projetosFiltrados = useMemo(() => {
+    if (projetoId !== "ALL") {
+      return projetos.filter((p) => p.id === projetoId)
+    }
+    if (instituicaoId !== "ALL") {
+      return projetos.filter((p) => p.instituicao_id === instituicaoId)
+    }
+    return projetos
+  }, [projetos, instituicaoId, projetoId])
+
+  const despesasFiltradas = useMemo(() => {
+    return despesas.filter((d) => projetosFiltrados.some((p) => p.id === d.projeto_id))
+  }, [despesas, projetosFiltrados])
+
+  const tetoTotal = projetosFiltrados.reduce(
     (acc, p) => acc + Number(p.valor_total_aprovado || 0),
     0
   )
-  const totalPago = calcularTotalPago(despesas)
-  const totalPendente = calcularTotalPendente(despesas)
+  const totalPago = calcularTotalPago(despesasFiltradas)
+  const totalPendente = calcularTotalPendente(despesasFiltradas)
   const saldoRemanescente = tetoTotal - totalPago
   const percentExecutado =
     tetoTotal > 0 ? ((totalPago / tetoTotal) * 100).toFixed(1) : "0.0"
