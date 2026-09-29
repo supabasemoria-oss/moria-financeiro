@@ -293,29 +293,52 @@ function ExecucaoContent() {
     }
   }, [projetos, despesas, parcelas, filterProjeto])
 
-  // Filtragem por busca textual
+  // Filtragem por status e busca textual
   const parcelasFiltradas = useMemo(() => {
-    if (!searchTerm.trim()) return parcelas
+    let list = parcelas
+
+    // Por padrão (ALL), Contas a Pagar exibe apenas obrigações a liquidar (pendentes e atrasadas)
+    if (filterStatus === "ALL") {
+      list = list.filter(
+        (p) => (p.status !== "PAGO" && p.status !== "CANCELADO") || p.id === initialParcelaId
+      )
+    } else if (filterStatus === "PENDENTE") {
+      list = list.filter((p) => p.status === "PENDENTE" || p.id === initialParcelaId)
+    } else if (filterStatus === "ATRASADO") {
+      list = list.filter((p) => p.status === "ATRASADO" || p.id === initialParcelaId)
+    } else if (filterStatus === "PAGO") {
+      list = list.filter((p) => p.status === "PAGO")
+    }
+
+    if (!searchTerm.trim()) return list
     const term = searchTerm.toLowerCase()
-    return parcelas.filter(
+    return list.filter(
       (p) =>
         p.descricao.toLowerCase().includes(term) ||
         (p.projetos?.nome && p.projetos.nome.toLowerCase().includes(term)) ||
         (p.rubricas_orcamentarias?.descricao && p.rubricas_orcamentarias.descricao.toLowerCase().includes(term))
     )
-  }, [parcelas, searchTerm])
+  }, [parcelas, filterStatus, searchTerm, initialParcelaId])
 
   const despesasFiltradas = useMemo(() => {
-    if (!searchTerm.trim()) return despesas
+    let list = despesas
+
+    if (filterStatus === "PENDENTE") {
+      list = list.filter((d) => d.status === "PENDENTE")
+    } else if (filterStatus === "PAGO") {
+      list = list.filter((d) => d.status === "PAGO")
+    }
+
+    if (!searchTerm.trim()) return list
     const term = searchTerm.toLowerCase()
-    return despesas.filter(
+    return list.filter(
       (d) =>
         d.descricao.toLowerCase().includes(term) ||
         (d.numero_documento_fiscal && d.numero_documento_fiscal.toLowerCase().includes(term)) ||
         (d.fornecedores?.razao_social_nome && d.fornecedores.razao_social_nome.toLowerCase().includes(term)) ||
         (d.rubricas_orcamentarias?.descricao && d.rubricas_orcamentarias.descricao.toLowerCase().includes(term))
     )
-  }, [despesas, searchTerm])
+  }, [despesas, filterStatus, searchTerm])
 
   // Contagens para as abas
   const parcelasPendentesCount = useMemo(
@@ -574,6 +597,30 @@ function ExecucaoContent() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao excluir despesa"
       toast.error(msg)
+    }
+  }
+
+  // Reverter Liquidação de Parcela
+  async function handleReverterParcela(parcela: ParcelaComRelacoes) {
+    try {
+      setSaving(true)
+      if (parcela.despesa_id) {
+        await mroscService.updateDespesa(parcela.despesa_id, {
+          status: "PENDENTE",
+          data_pagamento: null,
+        })
+      }
+      await mroscService.updateParcela(parcela.id, {
+        status: "PENDENTE",
+        data_pagamento_real: null,
+      })
+      toast.success("Parcela revertida para Pendente com sucesso!")
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao reverter parcela"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -893,24 +940,26 @@ function ExecucaoContent() {
                 </div>
 
                 {/* Filtro Status */}
-                <div className="w-36">
+                <div className="w-44">
                   <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val ?? "ALL")}>
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Status">
                         {(val) => {
-                          if (!val || val === "ALL") return "Todos os Status"
-                          if (val === "PENDENTE") return "Pendentes"
-                          if (val === "PAGO") return "Pagos"
-                          if (val === "ATRASADO") return "Atrasados"
+                          if (!val || val === "ALL") return "A Pagar (Pendentes)"
+                          if (val === "PENDENTE") return "Apenas Pendentes"
+                          if (val === "ATRASADO") return "Apenas Atrasados"
+                          if (val === "PAGO") return "Já Pagos / Quitados"
+                          if (val === "TODOS") return "Todos os Status"
                           return val
                         }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">Todos os Status</SelectItem>
-                      <SelectItem value="PENDENTE">Pendentes</SelectItem>
-                      <SelectItem value="PAGO">Pagos</SelectItem>
-                      <SelectItem value="ATRASADO">Atrasados</SelectItem>
+                      <SelectItem value="ALL">A Pagar (Pendentes)</SelectItem>
+                      <SelectItem value="PENDENTE">Apenas Pendentes</SelectItem>
+                      <SelectItem value="ATRASADO">Apenas Atrasados</SelectItem>
+                      <SelectItem value="PAGO">Já Pagos / Quitados</SelectItem>
+                      <SelectItem value="TODOS">Todos os Status</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1097,7 +1146,7 @@ function ExecucaoContent() {
 
                             <TableCell className="text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
-                                {parcela.status !== "PAGO" && (
+                                {parcela.status !== "PAGO" ? (
                                   <Button
                                     size="sm"
                                     onClick={() => handleAbrirQuitar(parcela)}
@@ -1106,6 +1155,40 @@ function ExecucaoContent() {
                                     <CheckCircle2Icon className="size-3.5" />
                                     Quitar
                                   </Button>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setActiveTab("despesas")
+                                        setSearchTerm(parcela.descricao)
+                                      }}
+                                      className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 gap-1"
+                                      title="Ver despesa no Livro Caixa"
+                                    >
+                                      <ReceiptIcon className="size-3" />
+                                      No Caixa
+                                    </Button>
+
+                                    <ConfirmDialog
+                                      title="Reverter quitação?"
+                                      description={`A parcela "${parcela.descricao}" voltará ao status Pendente no cronograma.`}
+                                      confirmLabel="Reverter"
+                                      onConfirm={() => handleReverterParcela(parcela)}
+                                      trigger={
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs text-amber-600 hover:bg-amber-500/10 gap-1"
+                                          title="Reverter para Pendente"
+                                        >
+                                          <ClockIcon className="size-3" />
+                                          Reverter
+                                        </Button>
+                                      }
+                                    />
+                                  </>
                                 )}
 
                                 <ConfirmDialog
