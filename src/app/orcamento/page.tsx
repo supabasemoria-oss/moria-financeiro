@@ -389,7 +389,7 @@ function OrcamentoContent() {
 
   const opcoesSelectProjeto = useMemo(
     () => [
-      { id: "ALL", label: "🏢 Todos os Projetos (Consolidado)" },
+      { id: "ALL", label: "Todos os Projetos (Consolidado)" },
       ...projetosDisponiveis.map((p) => ({ id: p.id, label: p.nome })),
     ],
     [projetosDisponiveis]
