@@ -19,12 +19,11 @@ import {
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -585,223 +584,215 @@ export default function ProjetosPage() {
         </Card>
       </div>
 
-      {/* Tabela de Projetos com Busca e Filtros */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold">Termos e Projetos</CardTitle>
-              <CardDescription className="text-xs">
-                Lista de parcerias com teto orçamentário aprovado, vigência e navegação modular.
-              </CardDescription>
-            </div>
+      {/* Barra de Filtros e Busca */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-card p-4 rounded-xl border">
+        <div>
+          <h3 className="text-base font-semibold">Projetos Cadastrados</h3>
+          <p className="text-xs text-muted-foreground">
+            {filteredProjetos.length} de {projetos.length} termos de parceria exibidos
+          </p>
+        </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative w-full sm:w-64">
-                <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar projeto, termo ou OSC..."
-                  className="pl-8 h-9 text-xs"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val || "TODOS")}>
-                <SelectTrigger className="h-9 w-full sm:w-44 text-xs">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODOS">Todos os Status</SelectItem>
-                  <SelectItem value="PLANEJAMENTO">Planejamento</SelectItem>
-                  <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
-                  <SelectItem value="PRESTACAO_CONTAS">Prestação de Contas</SelectItem>
-                  <SelectItem value="CONCLUIDO">Concluído</SelectItem>
-                  <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-64">
+            <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar projeto, termo ou OSC..."
+              className="pl-8 h-9 text-xs"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        </CardHeader>
 
-        <CardContent>
-          {loading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Carregando projetos...</div>
-          ) : filteredProjetos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <FolderKanbanIcon className="size-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm font-medium">
-                {searchTerm || filterStatus !== "TODOS"
-                  ? "Nenhum projeto encontrado com os filtros aplicados"
-                  : "Nenhum projeto cadastrado"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">
-                {searchTerm || filterStatus !== "TODOS"
-                  ? "Tente ajustar os critérios de busca."
-                  : "Cadastre um projeto para estruturar o plano de trabalho e lançar rubricas."}
-              </p>
-              {(searchTerm || filterStatus !== "TODOS") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchTerm("")
-                    setFilterStatus("TODOS")
-                  }}
-                >
-                  Limpar filtros
-                </Button>
-              )}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Projeto & Termo</TableHead>
-                  <TableHead>OSC / Instituição</TableHead>
-                  <TableHead>Vigência</TableHead>
-                  <TableHead className="text-right">Teto Aprovado</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Módulos</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjetos.map((proj) => {
-                  const statusInfo = STATUS_LABELS[proj.status as StatusProjeto] || {
-                    label: proj.status,
-                    variant: "outline",
-                  }
+          <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val || "TODOS")}>
+            <SelectTrigger className="h-9 w-full sm:w-44 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TODOS">Todos os Status</SelectItem>
+              <SelectItem value="PLANEJAMENTO">Planejamento</SelectItem>
+              <SelectItem value="EM_ANDAMENTO">Em Andamento</SelectItem>
+              <SelectItem value="PRESTACAO_CONTAS">Prestação de Contas</SelectItem>
+              <SelectItem value="CONCLUIDO">Concluído</SelectItem>
+              <SelectItem value="CANCELADO">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-                  return (
-                    <TableRow key={proj.id}>
-                      <TableCell className="font-medium">
-                        <div className="font-semibold text-foreground">{proj.nome}</div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {proj.numero_termo || "Sem número de termo"}
-                        </div>
-                      </TableCell>
+      {/* Grid de Cards de Projetos */}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">Carregando projetos...</div>
+      ) : filteredProjetos.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center py-12 text-center">
+          <FolderKanbanIcon className="size-10 text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium">
+            {searchTerm || filterStatus !== "TODOS"
+              ? "Nenhum projeto encontrado com os filtros aplicados"
+              : "Nenhum projeto cadastrado"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 mb-4">
+            {searchTerm || filterStatus !== "TODOS"
+              ? "Tente ajustar os critérios de busca."
+              : "Cadastre um projeto para estruturar o plano de trabalho e lançar rubricas."}
+          </p>
+          {(searchTerm || filterStatus !== "TODOS") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchTerm("")
+                setFilterStatus("TODOS")
+              }}
+            >
+              Limpar filtros
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredProjetos.map((proj) => {
+            const statusInfo = STATUS_LABELS[proj.status as StatusProjeto] || {
+              label: proj.status,
+              variant: "outline",
+            }
+            const dias = diffDias(proj.data_fim)
+            const alerta = dias <= 30 && proj.status !== "CONCLUIDO" && proj.status !== "CANCELADO"
+            const aditivosCount = termosMap[proj.id]?.length ?? 0
 
-                      <TableCell className="text-xs">
-                        <div className="flex items-center gap-1.5 font-medium">
-                          <Building2Icon className="size-3 text-emerald-600 shrink-0" />
-                          <span>{proj.instituicoes?.razao_social || "Instituição não vinculada"}</span>
-                        </div>
-                      </TableCell>
+            return (
+              <Card
+                key={proj.id}
+                className="flex flex-col justify-between hover:border-emerald-500/50 transition-colors shadow-xs"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant={statusInfo.variant} className="text-xs font-normal">
+                      {statusInfo.label}
+                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+                        aria-label={`Editar ${proj.nome}`}
+                        onClick={() => handleOpenEdit(proj)}
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </Button>
 
-                      <TableCell className="text-xs text-muted-foreground">
-                        {(() => {
-                          const dias = diffDias(proj.data_fim)
-                          const alerta =
-                            dias <= 30 && proj.status !== "CONCLUIDO" && proj.status !== "CANCELADO"
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <CalendarIcon className="size-3 shrink-0" />
-                                <span>
-                                  {formatDate(proj.data_inicio)} até {formatDate(proj.data_fim)}
-                                </span>
-                              </div>
-                              {alerta && (
-                                <Badge variant="destructive" className="text-xs w-fit gap-1">
-                                  <AlertTriangleIcon className="size-3" />
-                                  {dias <= 0 ? "Expirado" : `${dias}d restantes`}
-                                </Badge>
-                              )}
-                              {(termosMap[proj.id]?.length ?? 0) > 0 && (
-                                <span className="text-xs text-muted-foreground">
-                                  {termosMap[proj.id].length} aditivo(s)
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </TableCell>
-
-                      <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(proj.valor_total_aprovado)}
-                      </TableCell>
-
-                      <TableCell className="text-center">
-                        <Badge variant={statusInfo.variant} className="text-xs font-normal">
-                          {statusInfo.label}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            render={<Link href={`/orcamento?projetoId=${proj.id}`} />}
-                            className="h-7 text-xs gap-1"
-                          >
-                            <CalculatorIcon className="size-3" />
-                            Orçamento
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            render={<Link href={`/execucao?projetoId=${proj.id}`} />}
-                            className="h-7 text-xs gap-1"
-                          >
-                            <ReceiptIcon className="size-3" />
-                            Execução
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs gap-1"
-                            onClick={() => {
-                              setAditivoProjeto(proj)
-                              setAditivoForm({ data_fim_nova: "", motivo: "" })
-                              setAditivoOpen(true)
-                            }}
-                          >
-                            <PlusCircleIcon className="size-3" />
-                            Aditivo
-                          </Button>
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <ConfirmDialog
+                        title="Excluir projeto?"
+                        description="Todas as rubricas, despesas e comprovantes vinculados serão removidos. Esta ação não pode ser desfeita."
+                        confirmLabel="Excluir"
+                        onConfirm={() => handleDelete(proj.id)}
+                        trigger={
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground hover:text-foreground hover:bg-muted"
-                            aria-label={`Editar ${proj.nome}`}
-                            onClick={() => handleOpenEdit(proj)}
+                            className="size-7 text-destructive hover:bg-destructive/10"
+                            aria-label="Excluir"
                           >
-                            <PencilIcon className="size-4" />
+                            <Trash2Icon className="size-3.5" />
                           </Button>
+                        }
+                      />
+                    </div>
+                  </div>
 
-                          <ConfirmDialog
-                            title="Excluir projeto?"
-                            description="Todas as rubricas, despesas e comprovantes vinculados serão removidos. Esta ação não pode ser desfeita."
-                            confirmLabel="Excluir"
-                            onConfirm={() => handleDelete(proj.id)}
-                            trigger={
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:bg-destructive/10"
-                                aria-label="Excluir"
-                              >
-                                <Trash2Icon className="size-4" />
-                              </Button>
-                            }
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                  <CardTitle className="text-base font-semibold leading-snug mt-1.5 line-clamp-2">
+                    {proj.nome}
+                  </CardTitle>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                    <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">
+                      {proj.numero_termo || "Sem número de termo"}
+                    </span>
+                    {aditivosCount > 0 && (
+                      <span className="text-muted-foreground font-medium text-[11px]">
+                        {aditivosCount} {aditivosCount === 1 ? "aditivo" : "aditivos"}
+                      </span>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3 pb-3 text-xs">
+                  {/* OSC */}
+                  <div className="flex items-start gap-2 text-muted-foreground">
+                    <Building2Icon className="size-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                    <span className="line-clamp-1 font-medium text-foreground">
+                      {proj.instituicoes?.razao_social || "Instituição não vinculada"}
+                    </span>
+                  </div>
+
+                  {/* Teto Orçamentário */}
+                  <div className="rounded-lg bg-muted/40 p-2.5 flex items-center justify-between">
+                    <span className="text-muted-foreground">Teto Aprovado:</span>
+                    <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(proj.valor_total_aprovado)}
+                    </span>
+                  </div>
+
+                  {/* Vigência */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <CalendarIcon className="size-3 shrink-0" />
+                        <span>Vigência:</span>
+                      </div>
+                      <span>
+                        {formatDate(proj.data_inicio)} — {formatDate(proj.data_fim)}
+                      </span>
+                    </div>
+
+                    {alerta && (
+                      <Badge variant="destructive" className="text-xs w-full justify-center gap-1 py-0.5">
+                        <AlertTriangleIcon className="size-3" />
+                        {dias <= 0 ? "Vigência expirada" : `${dias} dias restantes para o término`}
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+
+                <CardFooter className="pt-2 border-t flex items-center justify-between gap-1.5 bg-muted/20">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={<Link href={`/orcamento?projetoId=${proj.id}`} />}
+                    className="h-7 text-xs gap-1 flex-1"
+                  >
+                    <CalculatorIcon className="size-3" />
+                    Orçamento
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={<Link href={`/execucao?projetoId=${proj.id}`} />}
+                    className="h-7 text-xs gap-1 flex-1"
+                  >
+                    <ReceiptIcon className="size-3" />
+                    Execução
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => {
+                      setAditivoProjeto(proj)
+                      setAditivoForm({ data_fim_nova: "", motivo: "" })
+                      setAditivoOpen(true)
+                    }}
+                    title="Registrar Termo Aditivo"
+                  >
+                    <PlusCircleIcon className="size-3" />
+                    Aditivo
+                  </Button>
+                </CardFooter>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       {/* Modal Editar Projeto */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
