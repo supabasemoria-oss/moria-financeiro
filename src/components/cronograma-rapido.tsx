@@ -4,25 +4,49 @@ import * as React from "react"
 import Link from "next/link"
 import {
   CalendarDaysIcon,
-  ClockIcon,
   CheckCircle2Icon,
   AlertTriangleIcon,
   ArrowRightIcon,
-  TrendingDownIcon,
   ReceiptIcon,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { SelectComCriar } from "@/components/select-com-criar"
+import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { useFiltroGlobal } from "@/contexts/filtro-global-context"
-import type { ParcelaComRelacoes } from "@/lib/types"
-import { formatCurrency } from "@/lib/utils"
+import type { ParcelaComRelacoes, Fornecedor } from "@/lib/types"
+import { formatCurrency, formatDate, getTodaySaoPaulo } from "@/lib/utils"
+import { toast } from "sonner"
 
 export function CronogramaRapido() {
   const { instituicaoId, projetoId, projetosDisponiveis } = useFiltroGlobal()
   const [parcelas, setParcelas] = React.useState<ParcelaComRelacoes[]>([])
   const [loading, setLoading] = React.useState(true)
+
+  // Estados do Modal de Quitação Rápida
+  const [openQuitar, setOpenQuitar] = React.useState(false)
+  const [parcelaParaQuitar, setParcelaParaQuitar] = React.useState<ParcelaComRelacoes | null>(null)
+  const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([])
+  const [openFornecedor, setOpenFornecedor] = React.useState(false)
+  const [savingQuitacao, setSavingQuitacao] = React.useState(false)
+  const [quitarForm, setQuitarForm] = React.useState({
+    fornecedor_id: "",
+    data_pagamento_real: getTodaySaoPaulo(),
+    numero_documento_fiscal: "",
+    observacoes: "",
+  })
 
   // 1. Carregar parcelas
   const loadParcelas = React.useCallback(async () => {
@@ -40,6 +64,53 @@ export function CronogramaRapido() {
   React.useEffect(() => {
     loadParcelas()
   }, [loadParcelas])
+
+  // Abrir Modal de Quitar
+  const handleAbrirQuitar = React.useCallback(async (parcela: ParcelaComRelacoes) => {
+    setParcelaParaQuitar(parcela)
+    try {
+      const forns = await mroscService.getFornecedores()
+      setFornecedores(forns)
+      setQuitarForm({
+        fornecedor_id: forns[0]?.id || "",
+        data_pagamento_real: getTodaySaoPaulo(),
+        numero_documento_fiscal: "",
+        observacoes: "",
+      })
+    } catch (e) {
+      console.error("Erro ao carregar fornecedores:", e)
+    }
+    setOpenQuitar(true)
+  }, [])
+
+  // Confirmar Quitação
+  async function handleConfirmarQuitacao(e: React.FormEvent) {
+    e.preventDefault()
+    if (!parcelaParaQuitar) return
+    if (!quitarForm.fornecedor_id) {
+      toast.error("Selecione o credor / fornecedor do pagamento.")
+      return
+    }
+
+    try {
+      setSavingQuitacao(true)
+      await mroscService.executarParcela(parcelaParaQuitar.id, {
+        fornecedor_id: quitarForm.fornecedor_id,
+        data_pagamento_real: quitarForm.data_pagamento_real,
+        numero_documento_fiscal: quitarForm.numero_documento_fiscal || undefined,
+        observacoes: quitarForm.observacoes || undefined,
+      })
+      toast.success("Parcela quitada com sucesso! Despesa registrada no livro caixa.")
+      setOpenQuitar(false)
+      setParcelaParaQuitar(null)
+      loadParcelas()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao quitar parcela"
+      toast.error(msg)
+    } finally {
+      setSavingQuitacao(false)
+    }
+  }
 
   // 2. Calcular os próximos 3 meses a partir do momento atual
   const mesesTres = React.useMemo(() => {
@@ -224,16 +295,36 @@ export function CronogramaRapido() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="font-mono font-semibold text-[11px] text-foreground">
                                 {formatCurrency(p.valor_previsto)}
                               </span>
                               {isPago ? (
-                                <CheckCircle2Icon className="size-3 text-emerald-600 dark:text-emerald-400" />
-                              ) : isAtrasado ? (
-                                <AlertTriangleIcon className="size-3 text-destructive" />
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 gap-1 font-medium border-emerald-500/20"
+                                >
+                                  <CheckCircle2Icon className="size-3" />
+                                  Pago
+                                </Badge>
                               ) : (
-                                <ClockIcon className="size-3 text-muted-foreground" />
+                                <div className="flex items-center gap-1">
+                                  {isAtrasado && (
+                                    <span title="Vencido">
+                                      <AlertTriangleIcon className="size-3 text-destructive shrink-0" />
+                                    </span>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleAbrirQuitar(p)}
+                                    className="h-6 text-[10px] px-2 gap-1 font-medium text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-950/60 shadow-none cursor-pointer"
+                                  >
+                                    <ReceiptIcon className="size-3" />
+                                    Executar
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -263,8 +354,8 @@ export function CronogramaRapido() {
                     }
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2"
                   >
-                    <ReceiptIcon className="size-3" />
-                    Executar
+                    Ver execuções
+                    <ArrowRightIcon className="size-3" />
                   </Button>
                 </CardFooter>
               </Card>
@@ -272,6 +363,132 @@ export function CronogramaRapido() {
           })}
         </div>
       )}
+
+      {/* ==================================================== */}
+      {/* DIALOG: EXECUTAR / QUITAR PARCELA                    */}
+      {/* ==================================================== */}
+      <Dialog open={openQuitar} onOpenChange={setOpenQuitar}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleConfirmarQuitacao}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ReceiptIcon className="size-5 text-emerald-600" />
+                Executar / Quitar Parcela
+              </DialogTitle>
+              <DialogDescription>
+                Registrar pagamento da obrigação e gerar lançamento de despesa no Livro Caixa MROSC.
+              </DialogDescription>
+            </DialogHeader>
+
+            {parcelaParaQuitar && (
+              <div className="bg-muted/40 p-3 rounded-lg text-xs space-y-1 my-3 border">
+                <div className="flex justify-between font-medium">
+                  <span className="text-muted-foreground">Obrigação:</span>
+                  <span className="text-foreground">
+                    {parcelaParaQuitar.descricao || "Parcela de Desembolso"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor Previsto:</span>
+                  <strong className="text-emerald-600 font-mono text-sm">
+                    {formatCurrency(parcelaParaQuitar.valor_previsto)}
+                  </strong>
+                </div>
+                {parcelaParaQuitar.projetos && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Projeto:</span>
+                    <span>{parcelaParaQuitar.projetos.nome}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Vencimento Original:</span>
+                  <span>{formatDate(parcelaParaQuitar.data_vencimento)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-3 py-1">
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_fornecedor" className="text-xs">
+                  Fornecedor / Credor Beneficiário *
+                </Label>
+                <SelectComCriar
+                  id="quitar_fornecedor"
+                  value={quitarForm.fornecedor_id}
+                  onValueChange={(val) => setQuitarForm((prev) => ({ ...prev, fornecedor_id: val }))}
+                  opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
+                  placeholder="Selecione o credor..."
+                  labelCriar="Cadastrar novo fornecedor"
+                  onClickCriar={() => setOpenFornecedor(true)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="quitar_data" className="text-xs">
+                    Data do Pagamento *
+                  </Label>
+                  <Input
+                    id="quitar_data"
+                    type="date"
+                    required
+                    value={quitarForm.data_pagamento_real}
+                    onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label htmlFor="quitar_doc" className="text-xs">
+                    Nº NF / Comprovante
+                  </Label>
+                  <Input
+                    id="quitar_doc"
+                    placeholder="Ex: NF 10423"
+                    value={quitarForm.numero_documento_fiscal}
+                    onChange={(e) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_obs" className="text-xs">
+                  Observações / Forma de Pagamento
+                </Label>
+                <Input
+                  id="quitar_obs"
+                  placeholder="Ex: TED / Pix efetuado na conta bancária vinculada"
+                  value={quitarForm.observacoes}
+                  onChange={(e) => setQuitarForm((prev) => ({ ...prev, observacoes: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setOpenQuitar(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingQuitacao}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                {savingQuitacao ? "Registrando..." : "Confirmar Quitação"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para cadastrar novo fornecedor caso não exista */}
+      <CriarFornecedorDialog
+        open={openFornecedor}
+        onOpenChange={setOpenFornecedor}
+        onCriado={(novo) => {
+          setFornecedores((prev) => [...prev, novo])
+          setQuitarForm((prev) => ({ ...prev, fornecedor_id: novo.id }))
+        }}
+      />
     </div>
   )
 }
+
