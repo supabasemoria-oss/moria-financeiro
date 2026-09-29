@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -47,12 +48,20 @@ function formatBRL(v: number) {
 const diasRestantes = diasRestantesSaoPaulo
 
 // ---------------------------------------------------------------------------
-// GrupoSection — lista parcelas por grupo
+// GrupoSection — lista parcelas por grupo com suporte a seleção múltipla
 // ---------------------------------------------------------------------------
-function GrupoSection({ titulo, parcelas, onExecutar }: {
+function GrupoSection({
+  titulo,
+  parcelas,
+  onExecutar,
+  selectedParcelas,
+  onToggleSelect,
+}: {
   titulo: string
   parcelas: ParcelaComRelacoes[]
   onExecutar: (p: ParcelaComRelacoes) => void
+  selectedParcelas?: Set<string>
+  onToggleSelect?: (id: string) => void
 }) {
   if (parcelas.length === 0) return null
   return (
@@ -61,16 +70,35 @@ function GrupoSection({ titulo, parcelas, onExecutar }: {
       {parcelas.map((p) => {
         const dias = diasRestantes(p.data_vencimento)
         const atrasado = p.status === "ATRASADO"
+        const isSelected = selectedParcelas?.has(p.id) || false
         return (
-          <div key={p.id} className={`flex items-center justify-between rounded-lg border p-3 ${atrasado ? "border-red-200 bg-red-50" : "border-border bg-card"}`}>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="font-medium text-sm truncate">{p.descricao}</span>
-              <span className="text-xs text-muted-foreground">{p.projetos?.nome ?? "—"}</span>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
-                  {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
-                </Badge>
-                <span className="text-xs font-semibold">{formatBRL(p.valor_previsto)}</span>
+          <div
+            key={p.id}
+            className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+              isSelected
+                ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30"
+                : atrasado
+                ? "border-red-200 bg-red-50 dark:bg-red-950/20"
+                : "border-border bg-card"
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {onToggleSelect && (
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => onToggleSelect(p.id)}
+                  aria-label={`Selecionar ${p.descricao}`}
+                />
+              )}
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-medium text-sm truncate">{p.descricao}</span>
+                <span className="text-xs text-muted-foreground">{p.projetos?.nome ?? "—"}</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
+                    {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
+                  </Badge>
+                  <span className="text-xs font-semibold">{formatBRL(p.valor_previsto)}</span>
+                </div>
               </div>
             </div>
             <Button size="sm" onClick={() => onExecutar(p)} className="ml-3 shrink-0">
@@ -139,13 +167,64 @@ export default function LembretesPage() {
     mroscService.getProjetos().then(setProjetos).catch(() => {})
   }, [])
 
-  // Executar parcela
+  // Executar parcela individual
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
   const [fornecedores, setFornecedores] = useState<Awaited<ReturnType<typeof mroscService.getFornecedores>>>([])
   const [formExec, setFormExec] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
   const [arquivoNf, setArquivoNf] = useState<File | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [openFornecedor, setOpenFornecedor] = useState(false)
+
+  // Seleção e Execução em Lote (Batch)
+  const [selectedParcelas, setSelectedParcelas] = useState<Set<string>>(new Set())
+  const [openExecLote, setOpenExecLote] = useState(false)
+  const [formExecLote, setFormExecLote] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
+  const [arquivoNfLote, setArquivoNfLote] = useState<File | null>(null)
+  const [salvandoLote, setSalvandoLote] = useState(false)
+
+  const toggleSelectParcela = (id: string) => {
+    setSelectedParcelas((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
+  const totalValorLote = selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
+
+  async function abrirModalLote() {
+    const forns = await mroscService.getFornecedores()
+    setFornecedores(forns)
+    setFormExecLote({ fornecedor_id: forns[0]?.id || "", data_pagamento_real: getTodaySaoPaulo(), numero_documento_fiscal: "" })
+    setArquivoNfLote(null)
+    setOpenExecLote(true)
+  }
+
+  async function executarLote() {
+    if (selectedParcelasObjs.length === 0 || !formExecLote.fornecedor_id || !formExecLote.data_pagamento_real) return
+    setSalvandoLote(true)
+    try {
+      for (const p of selectedParcelasObjs) {
+        await mroscService.executarParcela(p.id, {
+          fornecedor_id: formExecLote.fornecedor_id,
+          data_pagamento_real: formExecLote.data_pagamento_real,
+          numero_documento_fiscal: formExecLote.numero_documento_fiscal || undefined,
+          arquivo_nota_fiscal: arquivoNfLote,
+        })
+      }
+      toast.success(`${selectedParcelasObjs.length} pagamento(s) registrado(s) com sucesso em lote!`)
+      setOpenExecLote(false)
+      setSelectedParcelas(new Set())
+      setArquivoNfLote(null)
+      refetch()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar em lote")
+    } finally {
+      setSalvandoLote(false)
+    }
+  }
 
   async function abrirModal(p: ParcelaComRelacoes) {
     const forns = await mroscService.getFornecedores()
@@ -432,15 +511,72 @@ export default function LembretesPage() {
             </div>
 
             {/* Tab Parcelas */}
-            <TabsContent value="parcelas" className="mt-4">
+            <TabsContent value="parcelas" className="mt-4 space-y-4">
+              {/* Barra de Ações em Lote */}
+              {selectedParcelas.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2.5">
+                    <Badge className="bg-emerald-600 text-white font-mono text-xs">
+                      {selectedParcelas.size} selecionada(s)
+                    </Badge>
+                    <span className="text-xs font-semibold text-foreground font-mono">
+                      Total: {formatBRL(totalValorLote)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={abrirModalLote}
+                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
+                    >
+                      <CheckCircleIcon className="size-3.5" />
+                      Executar / Quitar Selecionadas ({selectedParcelas.size})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedParcelas(new Set())}
+                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Desmarcar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {loading && <p className="text-muted-foreground text-sm">Carregando...</p>}
               {!loading && (
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="space-y-6">
-                    <GrupoSection titulo="⚠️ Atrasados" parcelas={atrasadas} onExecutar={abrirModal} />
-                    <GrupoSection titulo="📅 Vencem hoje" parcelas={deHoje} onExecutar={abrirModal} />
-                    <GrupoSection titulo="📆 Próximos 7 dias" parcelas={proximos7} onExecutar={abrirModal} />
-                    <GrupoSection titulo="🗓️ Próximos 30 dias" parcelas={proximos30} onExecutar={abrirModal} />
+                    <GrupoSection
+                      titulo="⚠️ Atrasados"
+                      parcelas={atrasadas}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="📅 Vencem hoje"
+                      parcelas={deHoje}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="📆 Próximos 7 dias"
+                      parcelas={proximos7}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="🗓️ Próximos 30 dias"
+                      parcelas={proximos30}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
                     {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
                       <p className="text-muted-foreground text-sm">Nenhum pagamento pendente nos próximos 30 dias.</p>
                     )}
@@ -555,6 +691,73 @@ export default function LembretesPage() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal executar em lote */}
+        <Dialog open={openExecLote} onOpenChange={setOpenExecLote}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircleIcon className="size-5 text-emerald-600" />
+                Registrar Pagamento em Lote ({selectedParcelasObjs.length})
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Parcelas Selecionadas:</span>
+                  <span className="font-semibold text-foreground font-mono">{selectedParcelasObjs.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor Total Previsto:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">{formatBRL(totalValorLote)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Fornecedor / Prestador *</Label>
+                <SelectComCriar
+                  value={formExecLote.fornecedor_id}
+                  onValueChange={v => setFormExecLote(f => ({ ...f, fornecedor_id: v }))}
+                  opcoes={fornecedores.map(f => ({ id: f.id, label: f.razao_social_nome }))}
+                  placeholder="Selecionar..."
+                  labelCriar="Criar novo fornecedor"
+                  onClickCriar={() => setOpenFornecedor(true)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data de Pagamento *</Label>
+                <Input
+                  type="date"
+                  value={formExecLote.data_pagamento_real}
+                  onChange={e => setFormExecLote(f => ({ ...f, data_pagamento_real: e.target.value }))}
+                />
+              </div>
+
+              <CampoNotaFiscal
+                numero={formExecLote.numero_documento_fiscal}
+                onNumeroChange={v => setFormExecLote(f => ({ ...f, numero_documento_fiscal: v }))}
+                arquivo={arquivoNfLote}
+                onArquivoChange={setArquivoNfLote}
+                labelNumero="Nº Documento Fiscal / Recibo em Lote (Opcional)"
+                placeholderNumero="NF / RPA / Recibo..."
+                idInput="lembrete_lote_nf_file"
+              />
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setOpenExecLote(false)}>Cancelar</Button>
+                <Button
+                  onClick={executarLote}
+                  disabled={salvandoLote || !formExecLote.fornecedor_id || !formExecLote.data_pagamento_real}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                >
+                  {salvandoLote ? "Salvando Lote..." : "Confirmar Pagamento em Lote"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

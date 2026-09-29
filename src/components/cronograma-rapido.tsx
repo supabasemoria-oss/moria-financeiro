@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,7 @@ export function CronogramaRapido() {
   const [parcelas, setParcelas] = React.useState<ParcelaComRelacoes[]>([])
   const [loading, setLoading] = React.useState(true)
 
-  // Estados do Modal de Quitação Rápida
+  // Estados do Modal de Quitação Rápida Individual
   const [openQuitar, setOpenQuitar] = React.useState(false)
   const [parcelaParaQuitar, setParcelaParaQuitar] = React.useState<ParcelaComRelacoes | null>(null)
   const [fornecedores, setFornecedores] = React.useState<Fornecedor[]>([])
@@ -49,6 +50,18 @@ export function CronogramaRapido() {
     numero_documento_fiscal: "",
     observacoes: "",
   })
+
+  // Estados de Seleção e Ações em Lote (Batch)
+  const [selectedParcelas, setSelectedParcelas] = React.useState<Set<string>>(new Set())
+  const [openQuitarLote, setOpenQuitarLote] = React.useState(false)
+  const [quitarLoteForm, setQuitarLoteForm] = React.useState({
+    fornecedor_id: "",
+    data_pagamento_real: getTodaySaoPaulo(),
+    numero_documento_fiscal: "",
+    observacoes: "",
+  })
+  const [arquivoNfLote, setArquivoNfLote] = React.useState<File | null>(null)
+  const [savingQuitacaoLote, setSavingQuitacaoLote] = React.useState(false)
 
   // 1. Carregar parcelas
   const loadParcelas = React.useCallback(async () => {
@@ -151,6 +164,76 @@ export function CronogramaRapido() {
     })
   }, [parcelas, projetoId, instituicaoId, projetosDisponiveis])
 
+  // Ações de Seleção Múltipla (Batch)
+  const handleToggleSelect = React.useCallback((id: string) => {
+    setSelectedParcelas((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectedParcelasObjs = React.useMemo(() => {
+    return parcelasFiltradas.filter((p) => selectedParcelas.has(p.id))
+  }, [parcelasFiltradas, selectedParcelas])
+
+  const selectedTotalValor = React.useMemo(() => {
+    return selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
+  }, [selectedParcelasObjs])
+
+  const handleAbrirQuitarLote = React.useCallback(async () => {
+    const pendentes = selectedParcelasObjs.filter((p) => p.status !== "PAGO")
+    if (pendentes.length === 0) return
+    setArquivoNfLote(null)
+    try {
+      const forns = await mroscService.getFornecedores()
+      setFornecedores(forns)
+      setQuitarLoteForm({
+        fornecedor_id: forns[0]?.id || "",
+        data_pagamento_real: getTodaySaoPaulo(),
+        numero_documento_fiscal: "",
+        observacoes: "",
+      })
+    } catch (e) {
+      console.error("Erro ao carregar fornecedores:", e)
+    }
+    setOpenQuitarLote(true)
+  }, [selectedParcelasObjs])
+
+  async function handleConfirmarQuitacaoLote(e: React.FormEvent) {
+    e.preventDefault()
+    const pendentes = selectedParcelasObjs.filter((p) => p.status !== "PAGO")
+    if (pendentes.length === 0) return
+    if (!quitarLoteForm.fornecedor_id) {
+      toast.error("Selecione o credor / fornecedor do pagamento.")
+      return
+    }
+
+    try {
+      setSavingQuitacaoLote(true)
+      for (const parcela of pendentes) {
+        await mroscService.executarParcela(parcela.id, {
+          fornecedor_id: quitarLoteForm.fornecedor_id,
+          data_pagamento_real: quitarLoteForm.data_pagamento_real,
+          numero_documento_fiscal: quitarLoteForm.numero_documento_fiscal || undefined,
+          observacoes: quitarLoteForm.observacoes || undefined,
+          arquivo_nota_fiscal: arquivoNfLote,
+        })
+      }
+      toast.success(`${pendentes.length} parcela(s) quitada(s) com sucesso em lote!`)
+      setOpenQuitarLote(false)
+      setSelectedParcelas(new Set())
+      setArquivoNfLote(null)
+      loadParcelas()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao quitar parcelas em lote"
+      toast.error(msg)
+    } finally {
+      setSavingQuitacaoLote(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3 px-4 lg:px-6">
       {/* Título da Seção */}
@@ -179,6 +262,39 @@ export function CronogramaRapido() {
           <ArrowRightIcon className="size-3.5" />
         </Button>
       </div>
+
+      {/* Barra de Ações em Lote (Batch) */}
+      {selectedParcelas.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <Badge className="bg-emerald-600 text-white font-mono text-xs">
+              {selectedParcelas.size} selecionada(s)
+            </Badge>
+            <span className="text-xs font-semibold text-foreground font-mono">
+              Total: {formatCurrency(selectedTotalValor)}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleAbrirQuitarLote}
+              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
+            >
+              <CheckCircle2Icon className="size-3.5" />
+              Quitar Selecionadas ({selectedParcelasObjs.filter((p) => p.status !== "PAGO").length})
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedParcelas(new Set())}
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Desmarcar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Grid de 3 Cards Mensais */}
       {loading ? (
@@ -213,16 +329,70 @@ export function CronogramaRapido() {
                       {mes.label}
                     </CardTitle>
                     {mes.isAtual ? (
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium"
-                      >
-                        Mês Vigente
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {parcelasMes.filter((p) => p.status !== "PAGO").length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const pendentes = parcelasMes.filter((p) => p.status !== "PAGO")
+                              const allSelected = pendentes.every((p) => selectedParcelas.has(p.id))
+                              setSelectedParcelas((prev) => {
+                                const next = new Set(prev)
+                                if (allSelected) {
+                                  pendentes.forEach((p) => next.delete(p.id))
+                                } else {
+                                  pendentes.forEach((p) => next.add(p.id))
+                                }
+                                return next
+                              })
+                            }}
+                            className="h-6 text-[10px] px-1.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                          >
+                            {parcelasMes.filter((p) => p.status !== "PAGO").every((p) => selectedParcelas.has(p.id))
+                              ? "Desmarcar mês"
+                              : "Selecionar mês"}
+                          </Button>
+                        )}
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium"
+                        >
+                          Mês Vigente
+                        </Badge>
+                      </div>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono">
-                        {parcelasMes.length} parc.
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {parcelasMes.filter((p) => p.status !== "PAGO").length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const pendentes = parcelasMes.filter((p) => p.status !== "PAGO")
+                              const allSelected = pendentes.every((p) => selectedParcelas.has(p.id))
+                              setSelectedParcelas((prev) => {
+                                const next = new Set(prev)
+                                if (allSelected) {
+                                  pendentes.forEach((p) => next.delete(p.id))
+                                } else {
+                                  pendentes.forEach((p) => next.add(p.id))
+                                }
+                                return next
+                              })
+                            }}
+                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                          >
+                            {parcelasMes.filter((p) => p.status !== "PAGO").every((p) => selectedParcelas.has(p.id))
+                              ? "Desmarcar mês"
+                              : "Selecionar mês"}
+                          </Button>
+                        )}
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono">
+                          {parcelasMes.length} parc.
+                        </Badge>
+                      </div>
                     )}
                   </div>
                   <CardDescription className="text-xs">
@@ -278,13 +448,26 @@ export function CronogramaRapido() {
                         const dia = p.data_vencimento ? p.data_vencimento.split("-")[2] : "--"
                         const isPago = p.status === "PAGO"
                         const isAtrasado = p.status === "ATRASADO"
+                        const isSelected = selectedParcelas.has(p.id)
 
                         return (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-muted/30 text-xs border border-transparent hover:border-muted transition-colors"
+                            className={`flex items-center justify-between gap-2 p-1.5 rounded-md text-xs border transition-colors ${
+                              isSelected
+                                ? "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-950/30"
+                                : "hover:bg-muted/30 border-transparent hover:border-muted"
+                            }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
+                              {!isPago && (
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => handleToggleSelect(p.id)}
+                                  aria-label={`Selecionar ${p.descricao}`}
+                                  className="size-3.5 shrink-0"
+                                />
+                              )}
                               <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                                 Dia {dia}
                               </span>
@@ -473,6 +656,114 @@ export function CronogramaRapido() {
                 className="bg-emerald-600 hover:bg-emerald-500 text-white"
               >
                 {savingQuitacao ? "Registrando..." : "Confirmar Quitação"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* DIALOG: QUITAR EM LOTE (CRONOGRAMA RÁPIDO)          */}
+      {/* ==================================================== */}
+      <Dialog open={openQuitarLote} onOpenChange={setOpenQuitarLote}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleConfirmarQuitacaoLote}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2Icon className="size-5 text-emerald-600" />
+                Quitar {selectedParcelasObjs.filter((p) => p.status !== "PAGO").length} Parcela(s) em Lote
+              </DialogTitle>
+              <DialogDescription>
+                Informe o credor e o comprovante para liquidar os desembolsos selecionados conjuntamente.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/50 text-xs space-y-1 my-2">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Parcelas Selecionadas:</span>
+                <span className="font-semibold text-foreground font-mono">
+                  {selectedParcelasObjs.filter((p) => p.status !== "PAGO").length} pendente(s)
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Valor Total Previsto:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                  {formatCurrency(
+                    selectedParcelasObjs
+                      .filter((p) => p.status !== "PAGO")
+                      .reduce((acc, curr) => acc + (curr.valor_previsto || 0), 0)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 py-1">
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_lote_cr_fornecedor" className="text-xs">
+                  Fornecedor / Credor Beneficiário *
+                </Label>
+                <SelectComCriar
+                  id="quitar_lote_cr_fornecedor"
+                  value={quitarLoteForm.fornecedor_id}
+                  onValueChange={(val) => setQuitarLoteForm((prev) => ({ ...prev, fornecedor_id: val }))}
+                  opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
+                  placeholder="Selecione o credor..."
+                  labelCriar="Cadastrar novo fornecedor"
+                  onClickCriar={() => setOpenFornecedor(true)}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_lote_cr_data" className="text-xs">
+                  Data do Pagamento Efetivado *
+                </Label>
+                <Input
+                  id="quitar_lote_cr_data"
+                  type="date"
+                  required
+                  value={quitarLoteForm.data_pagamento_real}
+                  onChange={(e) =>
+                    setQuitarLoteForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))
+                  }
+                />
+              </div>
+
+              <CampoNotaFiscal
+                numero={quitarLoteForm.numero_documento_fiscal}
+                onNumeroChange={(val) =>
+                  setQuitarLoteForm((prev) => ({ ...prev, numero_documento_fiscal: val }))
+                }
+                arquivo={arquivoNfLote}
+                onArquivoChange={setArquivoNfLote}
+                labelNumero="Nº Nota Fiscal / Documento em Lote (Opcional)"
+                placeholderNumero="Ex: NF 10423"
+              />
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="quitar_lote_cr_obs" className="text-xs">
+                  Observações / Forma de Pagamento
+                </Label>
+                <Input
+                  id="quitar_lote_cr_obs"
+                  placeholder="Ex: TED / Pix efetuado na conta bancária vinculada"
+                  value={quitarLoteForm.observacoes}
+                  onChange={(e) =>
+                    setQuitarLoteForm((prev) => ({ ...prev, observacoes: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setOpenQuitarLote(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingQuitacaoLote}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                {savingQuitacaoLote ? "Registrando Lote..." : "Confirmar Quitação em Lote"}
               </Button>
             </DialogFooter>
           </form>

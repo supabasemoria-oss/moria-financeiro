@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Checkbox } from "@/components/ui/checkbox"
 import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
@@ -114,6 +115,17 @@ function ExecucaoContent() {
   const [arquivoNfQuitar, setArquivoNfQuitar] = useState<File | null>(null)
   const [parcelaParaQuitar, setParcelaParaQuitar] = useState<ParcelaComRelacoes | null>(null)
   const [quitarForm, setQuitarForm] = useState({
+    fornecedor_id: "",
+    data_pagamento_real: getTodaySaoPaulo(),
+    numero_documento_fiscal: "",
+    observacoes: "",
+  })
+
+  // Ações em Lote (Batch) de Parcelas
+  const [selectedParcelas, setSelectedParcelas] = useState<Set<string>>(new Set())
+  const [openQuitarLote, setOpenQuitarLote] = useState(false)
+  const [arquivoNfQuitarLote, setArquivoNfQuitarLote] = useState<File | null>(null)
+  const [quitarLoteForm, setQuitarLoteForm] = useState({
     fornecedor_id: "",
     data_pagamento_real: getTodaySaoPaulo(),
     numero_documento_fiscal: "",
@@ -344,6 +356,54 @@ function ExecucaoContent() {
     [parcelas]
   )
 
+  // Auxiliares de Seleção em Lote
+  const isAllSelected = useMemo(
+    () => parcelasFiltradas.length > 0 && parcelasFiltradas.every((p) => selectedParcelas.has(p.id)),
+    [parcelasFiltradas, selectedParcelas]
+  )
+
+  const isSomeSelected = useMemo(
+    () => parcelasFiltradas.some((p) => selectedParcelas.has(p.id)) && !isAllSelected,
+    [parcelasFiltradas, selectedParcelas, isAllSelected]
+  )
+
+  function handleToggleSelectAll() {
+    if (isAllSelected) {
+      setSelectedParcelas(new Set())
+    } else {
+      setSelectedParcelas(new Set(parcelasFiltradas.map((p) => p.id)))
+    }
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelectedParcelas((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedParcelasObjs = useMemo(
+    () => parcelas.filter((p) => selectedParcelas.has(p.id)),
+    [parcelas, selectedParcelas]
+  )
+
+  const selectedTotalValor = useMemo(
+    () => selectedParcelasObjs.reduce((acc, p) => acc + Number(p.valor_previsto || 0), 0),
+    [selectedParcelasObjs]
+  )
+
+  const hasPagasSelected = useMemo(
+    () => selectedParcelasObjs.some((p) => p.status === "PAGO"),
+    [selectedParcelasObjs]
+  )
+
+  const hasPendentesSelected = useMemo(
+    () => selectedParcelasObjs.some((p) => p.status !== "PAGO"),
+    [selectedParcelasObjs]
+  )
+
   // ==========================================
   // Handlers de Ações
   // ==========================================
@@ -486,6 +546,89 @@ function ExecucaoContent() {
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao quitar parcela"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Confirmar Quitação em Lote
+  async function handleConfirmarQuitacaoLote() {
+    const pendentes = selectedParcelasObjs.filter((p) => p.status !== "PAGO")
+    if (pendentes.length === 0) return
+    if (!quitarLoteForm.fornecedor_id) {
+      toast.error("Selecione o credor / fornecedor do pagamento.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      for (const parcela of pendentes) {
+        await mroscService.executarParcela(parcela.id, {
+          fornecedor_id: quitarLoteForm.fornecedor_id,
+          data_pagamento_real: quitarLoteForm.data_pagamento_real,
+          numero_documento_fiscal: quitarLoteForm.numero_documento_fiscal || undefined,
+          observacoes: quitarLoteForm.observacoes || undefined,
+          arquivo_nota_fiscal: arquivoNfQuitarLote,
+        })
+      }
+      toast.success(`${pendentes.length} parcela(s) quitada(s) com sucesso em lote!`)
+      setOpenQuitarLote(false)
+      setSelectedParcelas(new Set())
+      setArquivoNfQuitarLote(null)
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao quitar parcelas em lote"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Confirmar Reversão em Lote
+  async function handleConfirmarReversaoLote() {
+    const pagas = selectedParcelasObjs.filter((p) => p.status === "PAGO")
+    if (pagas.length === 0) return
+
+    try {
+      setSaving(true)
+      for (const parcela of pagas) {
+        if (parcela.despesa_id) {
+          await mroscService.updateDespesa(parcela.despesa_id, {
+            status: "PENDENTE",
+            data_pagamento: null,
+          })
+        }
+        await mroscService.updateParcela(parcela.id, {
+          status: "PENDENTE",
+          data_pagamento_real: null,
+        })
+      }
+      toast.success(`${pagas.length} parcela(s) revertida(s) para Pendente em lote!`)
+      setSelectedParcelas(new Set())
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao reverter parcelas em lote"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Confirmar Exclusão em Lote
+  async function handleConfirmarExclusaoLote() {
+    if (selectedParcelas.size === 0) return
+
+    try {
+      setSaving(true)
+      for (const id of Array.from(selectedParcelas)) {
+        await mroscService.deleteParcela(id)
+      }
+      toast.success(`${selectedParcelas.size} parcela(s) removida(s) em lote.`)
+      setSelectedParcelas(new Set())
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao remover parcelas em lote"
       toast.error(msg)
     } finally {
       setSaving(false)
@@ -1049,36 +1192,138 @@ function ExecucaoContent() {
                     </Button>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-20">Parc.</TableHead>
-                        <TableHead>Vencimento</TableHead>
-                        <TableHead>Descrição da Obrigação</TableHead>
-                        <TableHead>Rubrica Orçamentária</TableHead>
-                        <TableHead className="text-right">Valor Previsto</TableHead>
-                        <TableHead className="text-center">Status</TableHead>
-                        <TableHead className="text-right">Ação de Liquidação</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {parcelasFiltradas.map((parcela) => {
-                        const dias = diasRestantesSaoPaulo(parcela.data_vencimento)
-                        const atrasado = parcela.status === "ATRASADO" || (parcela.status !== "PAGO" && dias < 0)
-                        const venceHoje = dias === 0 && parcela.status !== "PAGO"
+                  <>
+                    {/* Barra de Ações em Lote (Batch) */}
+                    {selectedParcelas.size > 0 && (
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2.5">
+                          <Badge className="bg-emerald-600 text-white font-mono text-xs">
+                            {selectedParcelas.size} selecionada(s)
+                          </Badge>
+                          <span className="text-xs font-semibold text-foreground font-mono">
+                            Total: {formatCurrency(selectedTotalValor)}
+                          </span>
+                        </div>
 
-                        return (
-                          <TableRow
-                            key={parcela.id}
-                            className={
-                              parcela.id === initialParcelaId && parcela.status !== "PAGO"
-                                ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-l-4 border-l-emerald-500"
-                                : ""
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {hasPendentesSelected && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setQuitarLoteForm({
+                                  fornecedor_id: fornecedores[0]?.id || "",
+                                  data_pagamento_real: getTodaySaoPaulo(),
+                                  numero_documento_fiscal: "",
+                                  observacoes: "",
+                                })
+                                setArquivoNfQuitarLote(null)
+                                setOpenQuitarLote(true)
+                              }}
+                              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
+                            >
+                              <CheckCircle2Icon className="size-3.5" />
+                              Quitar Selecionadas ({selectedParcelasObjs.filter((p) => p.status !== "PAGO").length})
+                            </Button>
+                          )}
+
+                          {hasPagasSelected && (
+                            <ConfirmDialog
+                              title="Reverter liquidação em lote?"
+                              description={`Deseja reverter ${
+                                selectedParcelasObjs.filter((p) => p.status === "PAGO").length
+                              } parcela(s) quitada(s) para o status Pendente?`}
+                              confirmLabel="Reverter em Lote"
+                              onConfirm={handleConfirmarReversaoLote}
+                              trigger={
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 gap-1.5"
+                                >
+                                  <ClockIcon className="size-3.5" />
+                                  Reverter ({selectedParcelasObjs.filter((p) => p.status === "PAGO").length})
+                                </Button>
+                              }
+                            />
+                          )}
+
+                          <ConfirmDialog
+                            title="Excluir parcelas selecionadas?"
+                            description={`Esta ação excluirá permanentemente ${selectedParcelas.size} parcela(s) do cronograma.`}
+                            confirmLabel="Excluir em Lote"
+                            onConfirm={handleConfirmarExclusaoLote}
+                            trigger={
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+                              >
+                                <Trash2Icon className="size-3.5" />
+                                Excluir ({selectedParcelas.size})
+                              </Button>
                             }
+                          />
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedParcelas(new Set())}
+                            className="h-8 text-xs text-muted-foreground hover:text-foreground"
                           >
-                            <TableCell className="font-mono text-xs text-muted-foreground">
-                              {parcela.numero_parcela}/{parcela.total_parcelas}
-                            </TableCell>
+                            Desmarcar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-10">
+                            <Checkbox
+                              checked={isAllSelected}
+                              indeterminate={isSomeSelected}
+                              onCheckedChange={handleToggleSelectAll}
+                              aria-label="Selecionar todas as parcelas"
+                            />
+                          </TableHead>
+                          <TableHead className="w-20">Parc.</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Descrição da Obrigação</TableHead>
+                          <TableHead>Rubrica Orçamentária</TableHead>
+                          <TableHead className="text-right">Valor Previsto</TableHead>
+                          <TableHead className="text-center">Status</TableHead>
+                          <TableHead className="text-right">Ação de Liquidação</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {parcelasFiltradas.map((parcela) => {
+                          const dias = diasRestantesSaoPaulo(parcela.data_vencimento)
+                          const atrasado = parcela.status === "ATRASADO" || (parcela.status !== "PAGO" && dias < 0)
+                          const venceHoje = dias === 0 && parcela.status !== "PAGO"
+                          const isSelected = selectedParcelas.has(parcela.id)
+
+                          return (
+                            <TableRow
+                              key={parcela.id}
+                              className={
+                                isSelected
+                                  ? "bg-emerald-500/10 dark:bg-emerald-950/20"
+                                  : parcela.id === initialParcelaId && parcela.status !== "PAGO"
+                                  ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-l-4 border-l-emerald-500"
+                                  : ""
+                              }
+                            >
+                              <TableCell className="w-10">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => handleToggleSelect(parcela.id)}
+                                  aria-label={`Selecionar parcela ${parcela.numero_parcela}`}
+                                />
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {parcela.numero_parcela}/{parcela.total_parcelas}
+                              </TableCell>
 
                             <TableCell className="text-xs whitespace-nowrap">
                               <div className="font-medium">
@@ -1207,7 +1452,8 @@ function ExecucaoContent() {
                       })}
                     </TableBody>
                   </Table>
-                )}
+                </>
+              )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1483,6 +1729,120 @@ function ExecucaoContent() {
               className="bg-emerald-600 hover:bg-emerald-500 text-white"
             >
               {saving ? "Registrando..." : "Confirmar Quitação"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* DIALOG 1.5: QUITAR PARCELAS EM LOTE (BATCH)         */}
+      {/* ==================================================== */}
+      <Dialog open={openQuitarLote} onOpenChange={setOpenQuitarLote}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2Icon className="size-5 text-emerald-600" />
+              Quitar {selectedParcelasObjs.filter((p) => p.status !== "PAGO").length} Parcela(s) em Lote
+            </DialogTitle>
+            <DialogDescription>
+              Informe o credor e o documento de liquidação para dar baixa em todas as parcelas selecionadas simultaneamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/50 text-xs space-y-1.5 my-2">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Parcelas Selecionadas:</span>
+              <span className="font-semibold text-foreground font-mono">
+                {selectedParcelasObjs.filter((p) => p.status !== "PAGO").length} pendente(s)
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Valor Total Previsto:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                {formatCurrency(
+                  selectedParcelasObjs
+                    .filter((p) => p.status !== "PAGO")
+                    .reduce((acc, curr) => acc + (curr.valor_previsto || 0), 0)
+                )}
+              </span>
+            </div>
+            <div className="max-h-24 overflow-y-auto pt-1 space-y-1 border-t border-emerald-200/60 dark:border-emerald-800/40 text-[11px] text-muted-foreground">
+              {selectedParcelasObjs
+                .filter((p) => p.status !== "PAGO")
+                .map((p) => (
+                  <div key={p.id} className="flex justify-between">
+                    <span className="truncate max-w-[280px]">
+                      {p.numero_parcela}/{p.total_parcelas} - {p.descricao}
+                    </span>
+                    <span className="font-mono font-medium text-foreground">
+                      {formatCurrency(p.valor_previsto)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="quitar_lote_fornecedor">Fornecedor / Credor Beneficiário *</Label>
+              <SelectComCriar
+                id="quitar_lote_fornecedor"
+                value={quitarLoteForm.fornecedor_id}
+                onValueChange={(val) => setQuitarLoteForm((prev) => ({ ...prev, fornecedor_id: val }))}
+                opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
+                placeholder="Selecione o credor..."
+                labelCriar="Cadastrar novo fornecedor"
+                onClickCriar={() => setOpenFornecedor(true)}
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="quitar_lote_data">Data do Pagamento Efetivado *</Label>
+              <Input
+                id="quitar_lote_data"
+                type="date"
+                value={quitarLoteForm.data_pagamento_real}
+                onChange={(e) =>
+                  setQuitarLoteForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))
+                }
+              />
+            </div>
+
+            <CampoNotaFiscal
+              numero={quitarLoteForm.numero_documento_fiscal}
+              onNumeroChange={(val) =>
+                setQuitarLoteForm((prev) => ({ ...prev, numero_documento_fiscal: val }))
+              }
+              arquivo={arquivoNfQuitarLote}
+              onArquivoChange={setArquivoNfQuitarLote}
+              labelNumero="Nº Nota Fiscal / Documento Fiscal em Lote (Opcional)"
+              placeholderNumero="Ex: NF 10423"
+              idInput="quitar_lote_nf_file"
+            />
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="quitar_lote_obs">Observações / Comentários</Label>
+              <Input
+                id="quitar_lote_obs"
+                placeholder="Ex: Liquidação conjunta autorizada via TED bancária"
+                value={quitarLoteForm.observacoes}
+                onChange={(e) =>
+                  setQuitarLoteForm((prev) => ({ ...prev, observacoes: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenQuitarLote(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarQuitacaoLote}
+              disabled={saving}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              {saving ? "Processando Lote..." : "Confirmar Quitação em Lote"}
             </Button>
           </DialogFooter>
         </DialogContent>
