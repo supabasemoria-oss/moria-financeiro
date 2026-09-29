@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircleIcon } from "lucide-react"
 import { moriaService } from "@/lib/api/moria-service"
+import { maskCurrency, parseCurrency } from "@/lib/masks"
 import type { Projeto, Instituicao } from "@/lib/types"
 import { toast } from "sonner"
 import { CriarInstituicaoDialog } from "./criar-instituicao-dialog"
@@ -40,7 +41,7 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
         nome: form.nome, instituicao_id: form.instituicao_id,
         numero_termo: form.numero_termo || null,
         data_inicio: form.data_inicio, data_fim: form.data_fim,
-        valor_total_aprovado: parseFloat(form.valor_total_aprovado.replace(",", ".")),
+        valor_total_aprovado: parseCurrency(form.valor_total_aprovado),
         status: form.status,
       })
       toast.success("Projeto cadastrado!")
@@ -85,7 +86,7 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2"><Label>No Termo / Convenio</Label><Input placeholder="TF no 012/2026" value={form.numero_termo} onChange={e => setForm(p => ({ ...p, numero_termo: e.target.value }))} /></div>
-                <div className="grid gap-2"><Label>Valor Total Aprovado (R$) *</Label><Input required type="number" step="0.01" placeholder="0,00" value={form.valor_total_aprovado} onChange={e => setForm(p => ({ ...p, valor_total_aprovado: e.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Valor Total Aprovado (R$) *</Label><Input required type="text" inputMode="numeric" placeholder="0,00" value={form.valor_total_aprovado} onChange={e => setForm(p => ({ ...p, valor_total_aprovado: maskCurrency(e.target.value) }))} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2"><Label>Data Inicio *</Label><Input required type="date" value={form.data_inicio} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>

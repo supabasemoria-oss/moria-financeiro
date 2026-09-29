@@ -38,6 +38,7 @@ import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { moriaService } from "@/lib/api/moria-service"
 import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
+import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { toast } from "sonner"
 
 function ExecucaoContent() {
@@ -197,7 +198,7 @@ function ExecucaoContent() {
     return Number(selectedRubrica.valor_total) - gasto
   }, [selectedRubrica])
 
-  const valorDigitadoDespesa = parseFloat(despesaForm.valor.replace(",", ".")) || 0
+  const valorDigitadoDespesa = parseCurrency(despesaForm.valor)
   const ultrapassaSaldoRubrica = selectedRubrica && valorDigitadoDespesa > saldoDisponivelRubrica
 
   // ==========================================
@@ -321,7 +322,7 @@ function ExecucaoContent() {
   // Criar Nova Parcela
   async function handleSubmitParcela(e: React.FormEvent) {
     e.preventDefault()
-    const valor = parseFloat(parcelaForm.valor_previsto.replace(",", ".")) || 0
+    const valor = parseCurrency(parcelaForm.valor_previsto)
     if (!parcelaForm.projeto_id || !parcelaForm.rubrica_id || !parcelaForm.descricao || valor <= 0) {
       toast.error("Preencha os campos obrigatórios da parcela.")
       return
@@ -1243,12 +1244,12 @@ function ExecucaoContent() {
                   <Label htmlFor="parc_valor">Valor Previsto (R$) *</Label>
                   <Input
                     id="parc_valor"
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="numeric"
                     required
                     placeholder="0,00"
                     value={parcelaForm.valor_previsto}
-                    onChange={(e) => setParcelaForm({ ...parcelaForm, valor_previsto: e.target.value })}
+                    onChange={(e) => setParcelaForm({ ...parcelaForm, valor_previsto: maskCurrency(e.target.value) })}
                   />
                 </div>
 
@@ -1394,12 +1395,12 @@ function ExecucaoContent() {
                   <Label htmlFor="desp_valor">Valor (R$) *</Label>
                   <Input
                     id="desp_valor"
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="numeric"
                     required
                     placeholder="0,00"
                     value={despesaForm.valor}
-                    onChange={(e) => setDespesaForm({ ...despesaForm, valor: e.target.value })}
+                    onChange={(e) => setDespesaForm({ ...despesaForm, valor: maskCurrency(e.target.value) })}
                   />
                 </div>
                 <div className="grid gap-2">

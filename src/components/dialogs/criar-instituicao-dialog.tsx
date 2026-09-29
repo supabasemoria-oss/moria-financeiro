@@ -1,10 +1,11 @@
-﻿"use client"
+"use client"
 import * as React from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { moriaService } from "@/lib/api/moria-service"
+import { maskCnpj, maskTelefone } from "@/lib/masks"
 import type { Instituicao } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -53,11 +54,11 @@ export function CriarInstituicaoDialog({ open, onOpenChange, onCriado }: Props) 
             </div>
             <div className="grid gap-2">
               <Label htmlFor="in-cnpj">CNPJ *</Label>
-              <Input id="in-cnpj" required placeholder="00.000.000/0001-00" value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} />
+              <Input id="in-cnpj" required placeholder="00.000.000/0000-00" value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: maskCnpj(e.target.value) }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2"><Label>E-mail</Label><Input placeholder="contato@osc.org.br" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>Telefone</Label><Input placeholder="(11) 99999-9999" value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: e.target.value }))} /></div>
+              <div className="grid gap-2"><Label>Telefone</Label><Input placeholder="(11) 99999-9999" value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: maskTelefone(e.target.value) }))} /></div>
             </div>
             <div className="grid gap-2">
               <Label>Endereco</Label>

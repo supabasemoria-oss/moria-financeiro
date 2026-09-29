@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge"
 import { moriaService } from "@/lib/api/moria-service"
 import type { Instituicao, ProjetoComInstituicao } from "@/lib/types"
 import { formatCpfCnpj, formatCurrency } from "@/lib/utils"
+import { maskCnpj, maskTelefone } from "@/lib/masks"
 import { toast } from "sonner"
 
 export default function InstituicoesPage() {
@@ -133,9 +134,9 @@ export default function InstituicoesPage() {
     setEditingId(inst.id)
     setEditFormData({
       razao_social: inst.razao_social || "",
-      cnpj: inst.cnpj || "",
+      cnpj: inst.cnpj ? maskCnpj(inst.cnpj) : "",
       email: inst.email || "",
-      telefone: inst.telefone || "",
+      telefone: inst.telefone ? maskTelefone(inst.telefone) : "",
       endereco: inst.endereco || "",
     })
     setOpenEdit(true)
@@ -230,7 +231,7 @@ export default function InstituicoesPage() {
                     required
                     placeholder="00.000.000/0000-00"
                     value={createFormData.cnpj}
-                    onChange={(e) => setCreateFormData({ ...createFormData, cnpj: e.target.value })}
+                    onChange={(e) => setCreateFormData({ ...createFormData, cnpj: maskCnpj(e.target.value) })}
                   />
                 </div>
 
@@ -251,7 +252,7 @@ export default function InstituicoesPage() {
                       id="create_telefone"
                       placeholder="(11) 99999-9999"
                       value={createFormData.telefone}
-                      onChange={(e) => setCreateFormData({ ...createFormData, telefone: e.target.value })}
+                      onChange={(e) => setCreateFormData({ ...createFormData, telefone: maskTelefone(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -493,7 +494,7 @@ export default function InstituicoesPage() {
                   required
                   placeholder="00.000.000/0000-00"
                   value={editFormData.cnpj}
-                  onChange={(e) => setEditFormData({ ...editFormData, cnpj: e.target.value })}
+                  onChange={(e) => setEditFormData({ ...editFormData, cnpj: maskCnpj(e.target.value) })}
                 />
               </div>
 
@@ -514,7 +515,7 @@ export default function InstituicoesPage() {
                     id="edit_telefone"
                     placeholder="(11) 99999-9999"
                     value={editFormData.telefone}
-                    onChange={(e) => setEditFormData({ ...editFormData, telefone: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, telefone: maskTelefone(e.target.value) })}
                   />
                 </div>
               </div>

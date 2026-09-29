@@ -31,6 +31,7 @@ import { moriaService } from "@/lib/api/moria-service"
 import { diffDias } from "@/lib/parcelas"
 import type { Projeto, Instituicao, TermoAditivo, StatusProjeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { maskCurrency, parseCurrency, maskCnpj, maskTelefone } from "@/lib/masks"
 import { toast } from "sonner"
 
 const STATUS_LABELS: Record<StatusProjeto, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -170,7 +171,7 @@ export default function ProjetosPage() {
         numero_termo: createFormData.numero_termo.trim() || null,
         data_inicio: createFormData.data_inicio,
         data_fim: createFormData.data_fim,
-        valor_total_aprovado: parseFloat(createFormData.valor_total_aprovado.replace(",", ".")),
+        valor_total_aprovado: parseCurrency(createFormData.valor_total_aprovado),
         status: createFormData.status,
       })
       toast.success("Projeto / Termo cadastrado com sucesso!")
@@ -232,7 +233,7 @@ export default function ProjetosPage() {
       numero_termo: proj.numero_termo || "",
       data_inicio: proj.data_inicio || "",
       data_fim: proj.data_fim || "",
-      valor_total_aprovado: proj.valor_total_aprovado ? String(proj.valor_total_aprovado) : "",
+      valor_total_aprovado: proj.valor_total_aprovado ? maskCurrency(proj.valor_total_aprovado) : "",
       status: (proj.status as StatusProjeto) || "EM_ANDAMENTO",
     })
     setOpenEdit(true)
@@ -262,7 +263,7 @@ export default function ProjetosPage() {
         numero_termo: editFormData.numero_termo.trim() || null,
         data_inicio: editFormData.data_inicio,
         data_fim: editFormData.data_fim,
-        valor_total_aprovado: parseFloat(editFormData.valor_total_aprovado.replace(",", ".")),
+        valor_total_aprovado: parseCurrency(editFormData.valor_total_aprovado),
         status: editFormData.status,
       })
       toast.success("Projeto atualizado com sucesso!")
@@ -405,7 +406,7 @@ export default function ProjetosPage() {
                           <Input
                             placeholder="00.000.000/0000-00"
                             value={formInst.cnpj}
-                            onChange={(e) => setFormInst((f) => ({ ...f, cnpj: e.target.value }))}
+                            onChange={(e) => setFormInst((f) => ({ ...f, cnpj: maskCnpj(e.target.value) }))}
                           />
                         </div>
                         <div className="grid gap-1">
@@ -413,7 +414,7 @@ export default function ProjetosPage() {
                           <Input
                             placeholder="(11) 99999-9999"
                             value={formInst.telefone}
-                            onChange={(e) => setFormInst((f) => ({ ...f, telefone: e.target.value }))}
+                            onChange={(e) => setFormInst((f) => ({ ...f, telefone: maskTelefone(e.target.value) }))}
                           />
                         </div>
                         <div className="col-span-2 grid gap-1">
@@ -475,11 +476,11 @@ export default function ProjetosPage() {
                     <Input
                       id="valor_total_aprovado"
                       required
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="0,00"
                       value={createFormData.valor_total_aprovado}
-                      onChange={(e) => setCreateFormData({ ...createFormData, valor_total_aprovado: e.target.value })}
+                      onChange={(e) => setCreateFormData({ ...createFormData, valor_total_aprovado: maskCurrency(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -873,12 +874,12 @@ export default function ProjetosPage() {
                   <Input
                     id="edit_valor_total_aprovado"
                     required
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="0,00"
                     value={editFormData.valor_total_aprovado}
                     onChange={(e) =>
-                      setEditFormData({ ...editFormData, valor_total_aprovado: e.target.value })
+                      setEditFormData({ ...editFormData, valor_total_aprovado: maskCurrency(e.target.value) })
                     }
                   />
                 </div>

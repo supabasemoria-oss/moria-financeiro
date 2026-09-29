@@ -33,6 +33,7 @@ import {
 import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
+import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
 
@@ -224,7 +225,7 @@ export default function LembretesPage() {
         descricao: formLembrete.descricao || null,
         data_vencimento: formLembrete.data_vencimento,
         projeto_id: formLembrete.projeto_id || null,
-        valor: formLembrete.valor ? Number(formLembrete.valor) : null,
+        valor: formLembrete.valor ? parseCurrency(formLembrete.valor) : null,
         notificar_email: formLembrete.notificar_email,
         email_destino: formLembrete.email_destino || null,
       })
@@ -569,7 +570,7 @@ export default function LembretesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Valor (opcional)</Label>
-                  <Input type="number" placeholder="0,00" value={formLembrete.valor} onChange={e => setFormLembrete(f => ({ ...f, valor: e.target.value }))} />
+                  <Input type="text" inputMode="numeric" placeholder="0,00" value={formLembrete.valor} onChange={e => setFormLembrete(f => ({ ...f, valor: maskCurrency(e.target.value) }))} />
                 </div>
               </div>
               <div className="space-y-2">

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { moriaService } from "@/lib/api/moria-service"
+import { maskCurrency, parseCurrency } from "@/lib/masks"
 import type { Rubrica } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -16,14 +17,14 @@ interface Props {
   onCriado?: (r: Rubrica) => void
 }
 
-const VAZIO = { tipo: "SERVICO" as const, descricao: "", codigo_natureza_despesa: "33903501", unidade: "UN", quantidade: "1", valor_unitario: "0", tipo_pagamento: "UNICO" as "UNICO"|"RECORRENTE"|"PARCELADO", frequencia_meses: "1", num_parcelas: "1", dia_vencimento: "" }
+const VAZIO = { tipo: "SERVICO" as const, descricao: "", codigo_natureza_despesa: "33903501", unidade: "UN", quantidade: "1", valor_unitario: "0,00", tipo_pagamento: "UNICO" as "UNICO"|"RECORRENTE"|"PARCELADO", frequencia_meses: "1", num_parcelas: "1", dia_vencimento: "" }
 
 export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: Props) {
   const [saving, setSaving] = React.useState(false)
   const [form, setForm] = React.useState(VAZIO)
 
-  const qtd = parseFloat(form.quantidade) || 0
-  const vlUnit = parseFloat(form.valor_unitario) || 0
+  const qtd = parseFloat(form.quantidade.replace(",", ".")) || 0
+  const vlUnit = parseCurrency(form.valor_unitario)
   const total = qtd * vlUnit
 
   async function handleSubmit(e: React.FormEvent) {
@@ -97,7 +98,7 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-2"><Label>Unidade</Label><Input placeholder="UN, MES, HORA" value={form.unidade} onChange={e => setForm(p => ({ ...p, unidade: e.target.value }))} /></div>
               <div className="grid gap-2"><Label>Quantidade *</Label><Input type="number" step="0.01" required value={form.quantidade} onChange={e => setForm(p => ({ ...p, quantidade: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>Valor Unitario (R$) *</Label><Input type="number" step="0.01" required value={form.valor_unitario} onChange={e => setForm(p => ({ ...p, valor_unitario: e.target.value }))} /></div>
+              <div className="grid gap-2"><Label>Valor Unitario (R$) *</Label><Input type="text" inputMode="numeric" placeholder="0,00" required value={form.valor_unitario} onChange={e => setForm(p => ({ ...p, valor_unitario: maskCurrency(e.target.value) }))} /></div>
             </div>
             {total > 0 && <p className="text-xs text-muted-foreground">Total previsto: <strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
             <div className="grid gap-2">

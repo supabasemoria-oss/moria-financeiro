@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { moriaService } from "@/lib/api/moria-service"
 import type { Projeto, Rubrica, Despesa } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
+import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { toast } from "sonner"
 
 function OrcamentoContent() {
@@ -106,7 +107,7 @@ function OrcamentoContent() {
 
   // Cálculos automáticos do formulário
   const formQtd = parseFloat(formData.quantidade.replace(",", ".")) || 0
-  const formVlUnit = parseFloat(formData.valor_unitario.replace(",", ".")) || 0
+  const formVlUnit = parseCurrency(formData.valor_unitario)
   const formTotalPrevisto = formQtd * formVlUnit
 
   // Cálculos consolidados da planilha
@@ -335,11 +336,12 @@ function OrcamentoContent() {
                         <Label htmlFor="valor_unitario">Valor Unitário (R$) *</Label>
                         <Input
                           id="valor_unitario"
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
                           required
                           value={formData.valor_unitario}
-                          onChange={(e) => setFormData({ ...formData, valor_unitario: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, valor_unitario: maskCurrency(e.target.value) })}
                         />
                       </div>
                     </div>

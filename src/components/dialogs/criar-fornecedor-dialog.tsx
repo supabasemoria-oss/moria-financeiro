@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { moriaService } from "@/lib/api/moria-service"
+import { maskCpfCnpj } from "@/lib/masks"
 import type { Fornecedor } from "@/lib/types"
 import { toast } from "sonner"
 
@@ -59,7 +60,7 @@ export function CriarFornecedorDialog({ open, onOpenChange, onCriado }: Props) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="fn-cpf">CPF ou CNPJ *</Label>
-              <Input id="fn-cpf" required placeholder="00.000.000/0000-00" value={form.cpf_cnpj} onChange={e => setForm(p => ({ ...p, cpf_cnpj: e.target.value }))} />
+              <Input id="fn-cpf" required placeholder="00.000.000/0000-00" value={form.cpf_cnpj} onChange={e => setForm(p => ({ ...p, cpf_cnpj: maskCpfCnpj(e.target.value) }))} />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-2">

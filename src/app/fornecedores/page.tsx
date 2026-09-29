@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { moriaService } from "@/lib/api/moria-service"
 import type { Fornecedor } from "@/lib/types"
 import { formatCpfCnpj } from "@/lib/utils"
+import { maskCpfCnpj } from "@/lib/masks"
 import { toast } from "sonner"
 
 export default function FornecedoresPage() {
@@ -146,7 +147,7 @@ export default function FornecedoresPage() {
                     required
                     placeholder="00.000.000/0000-00 ou 000.000.000-00"
                     value={formData.cpf_cnpj}
-                    onChange={(e) => setFormData({ ...formData, cpf_cnpj: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
                   />
                 </div>
 
