@@ -7,36 +7,111 @@ export interface MapeamentoColuna {
   indice: number
 }
 
+export interface MetadadosPlanilha {
+  modelo_identificado?: string
+  proposta_numero?: string | null
+  osc_nome?: string | null
+  cnpj_osc?: string | null
+  valor_total_estimado?: number | null
+}
+
+export interface FornecedorIdentificado {
+  razao_social_nome: string
+  cpf_cnpj: string
+  telefone?: string | null
+}
+
+export interface RubricaSkillExtraida {
+  descricao: string
+  especificacao?: string
+  tipo: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS"
+  quantidade: number
+  unidade: string
+  valor_unitario: number
+  valor_total: number
+  codigo_natureza_despesa: string
+}
+
 export interface ResultadoMapeamento {
   linha_cabecalho: number
   linhas_secao: number[]
   linhas_ignorar: number[]
   mapeamento: MapeamentoColuna[]
   preview: Record<string, string>[]
+  metadados?: MetadadosPlanilha
+  fornecedores_detectados?: FornecedorIdentificado[]
+  rubricas_detectadas?: RubricaSkillExtraida[]
 }
 
 export const CAMPOS_SISTEMA = [
-  { campo: "descricao", descricao: "Nome / especificacao do item ou rubrica" },
-  { campo: "codigo_natureza_despesa", descricao: "Codigo de natureza de despesa (ex: 33903501)" },
+  { campo: "descricao", descricao: "Nome / especificação do item ou rubrica" },
+  { campo: "codigo_natureza_despesa", descricao: "Código de natureza de despesa (ex: 33903501)" },
   { campo: "tipo", descricao: "Tipo: RH, SERVICO, MATERIAL, LOCACAO, OUTROS" },
-  { campo: "quantidade", descricao: "Quantidade numerica" },
+  { campo: "quantidade", descricao: "Quantidade numérica" },
   { campo: "unidade", descricao: "Unidade de medida (UN, MES, HR, etc)" },
-  { campo: "valor_unitario", descricao: "Valor unitario em reais" },
+  { campo: "valor_unitario", descricao: "Valor unitário em reais" },
 ]
 
+export function parseMoedaBR(val: unknown): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val
+  if (!val) return 0
+  const s = String(val).trim()
+  if (!s) return 0
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0
+  }
+  return parseFloat(s) || 0
+}
+
+export function sanitizarCnpj(val: string | null | undefined): string {
+  if (!val) return ""
+  return String(val).replace(/\D/g, "")
+}
+
+export function formatarCnpj(cnpj: string | null | undefined): string {
+  const digits = sanitizarCnpj(cnpj)
+  if (digits.length !== 14) return cnpj ? String(cnpj).trim() : ""
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+}
+
+export function extrairFornecedorDeTexto(texto: unknown): FornecedorIdentificado | null {
+  if (!texto) return null
+  const str = String(texto).trim()
+  const cnpjMatch = str.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/)
+  if (!cnpjMatch) return null
+
+  const cnpj = cnpjMatch[1]
+  const parts = str.split(cnpj)
+  let razao = parts[0].replace(/[,;/-]+$/, "").trim()
+  if (!razao && parts[1]) {
+    razao = parts[1].replace(/^[,;/\s-]+/, "").replace(/tel.*$/i, "").trim()
+  }
+
+  const telMatch = str.match(/(?:\(?\d{2}\)?\s*)?\d{4,5}-?\d{4}/)
+  const tel = telMatch ? telMatch[0] : null
+
+  return {
+    razao_social_nome: razao || "Fornecedor Cotado",
+    cpf_cnpj: cnpj,
+    telefone: tel,
+  }
+}
+
 function escolherMelhorAba(wb: XLSX.WorkBook): string {
-  // Prefere a aba com mais linhas nao-vazias e colunas relevantes
+  if (wb.SheetNames.includes("Planilha de Custo")) return "Planilha de Custo"
   let best = wb.SheetNames[0]
   let bestScore = -1
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name]
     const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false })
-    const nonEmpty = rows.filter(r => r.some(c => String(c).trim())).length
-    // Bonus se tiver palavras-chave de rubrica
+    const nonEmpty = rows.filter((r) => r.some((c) => String(c).trim())).length
     const text = rows.flat().join(" ").toLowerCase()
-    const bonus = ["especificacao", "descricao", "item", "valor", "quantidade", "unidade"].filter(k => text.includes(k)).length * 3
+    const bonus = ["especificacao", "descricao", "item", "valor", "quantidade", "unidade"].filter((k) => text.includes(k)).length * 3
     const score = nonEmpty + bonus
-    if (score > bestScore) { bestScore = score; best = name }
+    if (score > bestScore) {
+      bestScore = score
+      best = name
+    }
   }
   return best
 }
@@ -54,74 +129,302 @@ export async function extrairLinhasXLS(file: File): Promise<string[][]> {
   return rows.map((row) => row.map((cell) => String(cell ?? "").trim()))
 }
 
-export async function sugerirMapeamentoXLS(
-  rows: string[][]
-): Promise<ResultadoMapeamento> {
-  const { gemini_api_key, gemini_model } = await getSettingsAsync()
-  if (!gemini_api_key) {
-    throw new Error(
-      "Chave de API do Gemini nao configurada. Acesse Configuracoes para cadastra-la."
-    )
+/**
+ * Motor de análise baseado na Skill MROSC (.agents/skills/mrosc-planilhas/SKILL.md).
+ * Reconhece modelos estruturados de planilhas do governo e terceiro setor.
+ */
+export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null {
+  if (!rows || rows.length < 5) return null
+
+  // 1. Extrair Metadados do Cabeçalho Institucional
+  let proposta_numero: string | null = null
+  let cnpj_osc: string | null = null
+  let osc_nome: string | null = null
+
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const lineText = rows[i].map((c) => String(c).trim()).join(" ")
+
+    const propMatch = lineText.match(/PROPOSTA\s*(?:N[°º]|:)?\s*([0-9/\-.]+)/i)
+    if (propMatch && !proposta_numero) proposta_numero = propMatch[1].trim()
+
+    const cnpjMatch = lineText.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/)
+    if (cnpjMatch && !cnpj_osc) cnpj_osc = formatarCnpj(cnpjMatch[1])
+
+    const oscMatch = lineText.match(/(?:NOME|INSTITUTO|ASSOCIACAO|ORGANIZACAO)\s*:\s*([^,;]+)/i)
+    if (oscMatch && !osc_nome) osc_nome = oscMatch[1].trim()
   }
 
-  // Tentar primeiro mapeamento automatico sem IA
+  // 2. Identificar Modelo Normativo
+  let headerIndex = -1
+  let modelo: "MODELO_A_TRANSFEREGOV" | "MODELO_B_DESCRITIVO" | null = null
+
+  for (let i = 0; i < Math.min(15, rows.length); i++) {
+    const rowStr = rows[i].map((c) => String(c).toLowerCase()).join(" ")
+    if (rowStr.includes("gnd") || (rowStr.includes("item") && rowStr.includes("aquisicao"))) {
+      headerIndex = i
+      modelo = "MODELO_A_TRANSFEREGOV"
+      break
+    }
+    if (rowStr.includes("empresa 1") || rowStr.includes("especificação do item/serviço") || rowStr.includes("especificacao do item/servico")) {
+      headerIndex = i
+      modelo = "MODELO_B_DESCRITIVO"
+      break
+    }
+  }
+
+  if (headerIndex === -1 || !modelo) return null
+
+  const fornecedoresMap = new Map<string, FornecedorIdentificado>()
+  const rubricas: RubricaSkillExtraida[] = []
+  const mapeamento: MapeamentoColuna[] = []
+  const linhasSecao: number[] = []
+  const linhasIgnorar: number[] = []
+
+  // Preencher linhas de cabeçalho e pré-cabeçalho como ignorar
+  for (let k = 0; k <= headerIndex; k++) {
+    linhasIgnorar.push(k)
+  }
+
+  if (modelo === "MODELO_A_TRANSFEREGOV") {
+    const header = rows[headerIndex].map((c) => String(c).trim().toUpperCase())
+    const colItem = header.findIndex((h) => h === "ITEM")
+    const colEspec = header.findIndex((h) => h.includes("ESPECIFICAÇÃO") || h.includes("ESPECIFICACAO"))
+    const colTipo = header.findIndex((h) => h === "TIPO")
+    const colTotalQtd = header.findIndex((h) => h === "TOTAL")
+    const colUnidade = header.findIndex((h) => h.includes("UNIDADE"))
+
+    const cotacaoIndices: { razao: number; cnpj: number; vlUnit: number; vlTotal: number }[] = []
+    for (let j = 0; j < header.length; j++) {
+      if (header[j].includes("RAZÃO") || header[j].includes("RAZAO")) {
+        cotacaoIndices.push({
+          razao: j,
+          cnpj: j + 1,
+          vlUnit: j + 2,
+          vlTotal: j + 3,
+        })
+      }
+    }
+
+    const colVlUnitFinal = header.length - 2
+    const colVlTotalFinal = header.length - 1
+
+    // Mapeamento compatível com o dialog
+    mapeamento.push(
+      { coluna_original: header[colItem] || "ITEM", campo_sistema: "descricao", indice: colItem },
+      { coluna_original: header[colTipo] || "TIPO", campo_sistema: "tipo", indice: colTipo },
+      { coluna_original: header[colTotalQtd] || "TOTAL", campo_sistema: "quantidade", indice: colTotalQtd },
+      { coluna_original: header[colUnidade] || "UNIDADE", campo_sistema: "unidade", indice: colUnidade },
+      { coluna_original: header[colVlUnitFinal] || "VALOR UNITÁRIO", campo_sistema: "valor_unitario", indice: colVlUnitFinal }
+    )
+
+    for (let i = headerIndex + 1; i < rows.length; i++) {
+      const row = rows[i]
+      const itemNome = String(row[colItem] || "").trim()
+      if (!itemNome || itemNome.toUpperCase().includes("TOTAL")) {
+        linhasIgnorar.push(i)
+        continue
+      }
+
+      const tipoStr = String(row[colTipo] || "").trim()
+      const especStr = String(row[colEspec] || "").trim()
+      const qtd = parseMoedaBR(row[colTotalQtd]) || 1
+      const unidade = String(row[colUnidade] || "UN").trim()
+      const vlUnit = parseMoedaBR(row[colVlUnitFinal])
+      const vlTotal = parseMoedaBR(row[colVlTotalFinal]) || qtd * vlUnit
+
+      let tipo: RubricaSkillExtraida["tipo"] = "SERVICO"
+      let codNat = "33903900"
+      if (tipoStr.toLowerCase().includes("tributo") || itemNome.toLowerCase().includes("encargo")) {
+        tipo = "OUTROS"
+        codNat = "33904700"
+      } else if (tipoStr.toLowerCase().includes("humano") || tipoStr.toLowerCase().includes("rh")) {
+        tipo = "RH"
+        codNat = "33903600"
+      } else if (tipoStr.toLowerCase().includes("material")) {
+        tipo = "MATERIAL"
+        codNat = "33903000"
+      }
+
+      cotacaoIndices.forEach((cot) => {
+        const rz = String(row[cot.razao] || "").trim()
+        const doc = formatarCnpj(String(row[cot.cnpj] || "").trim())
+        if (rz && doc && sanitizarCnpj(doc).length === 14) {
+          if (!fornecedoresMap.has(doc)) {
+            fornecedoresMap.set(doc, { razao_social_nome: rz, cpf_cnpj: doc })
+          }
+        }
+      })
+
+      rubricas.push({
+        descricao: itemNome,
+        especificacao: especStr.slice(0, 300),
+        tipo,
+        quantidade: qtd,
+        unidade,
+        valor_unitario: vlUnit,
+        valor_total: vlTotal,
+        codigo_natureza_despesa: codNat,
+      })
+    }
+  } else if (modelo === "MODELO_B_DESCRITIVO") {
+    const startRow = headerIndex + 2
+    // Linha intermediária de subcabeçalho
+    linhasIgnorar.push(headerIndex + 1)
+
+    mapeamento.push(
+      { coluna_original: "Especificação do Item/Serviço", campo_sistema: "descricao", indice: 1 },
+      { coluna_original: "TOTAL", campo_sistema: "quantidade", indice: 8 },
+      { coluna_original: "MENOR VALOR COTADO", campo_sistema: "valor_unitario", indice: rows[headerIndex].length - 2 }
+    )
+
+    for (let i = startRow; i < rows.length; i++) {
+      const row = rows[i]
+      const celulaDesc = String(row[1] || "").trim()
+      if (!celulaDesc || celulaDesc.toUpperCase().includes("TOTAL")) {
+        linhasIgnorar.push(i)
+        continue
+      }
+
+      const linhasTexto = celulaDesc.split("\n").map((l) => l.trim()).filter(Boolean)
+      const cargoNome = linhasTexto[0].replace(/^[\d.\-\s]+/, "")
+
+      const qtd = parseMoedaBR(row[8]) || parseMoedaBR(row[6]) || 1
+
+      // Achar últimas colunas numéricas para valor unitário e total
+      const numericCols: number[] = []
+      for (let c = row.length - 1; c >= 0; c--) {
+        const v = row[c]
+        if (v && (typeof v === "number" || /^\d+([.,]\d+)?$/.test(String(v).trim()))) {
+          numericCols.unshift(c)
+          if (numericCols.length === 2) break
+        }
+      }
+
+      const vlUnit = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[0]]) : parseMoedaBR(row[row.length - 2])
+      const vlTotal = numericCols.length >= 2 ? parseMoedaBR(row[numericCols[1]]) : qtd * vlUnit
+
+      // Empresas nas colunas de cotação
+      ;[9, 12, 15].forEach((col) => {
+        const f = extrairFornecedorDeTexto(row[col])
+        if (f && sanitizarCnpj(f.cpf_cnpj).length === 14) {
+          if (!fornecedoresMap.has(f.cpf_cnpj)) {
+            fornecedoresMap.set(f.cpf_cnpj, f)
+          }
+        }
+      })
+
+      let tipo: RubricaSkillExtraida["tipo"] = "RH"
+      let codNat = "33903600"
+      if (cargoNome.toLowerCase().includes("serviço") || cargoNome.toLowerCase().includes("assessoria")) {
+        tipo = "SERVICO"
+        codNat = "33903900"
+      }
+
+      rubricas.push({
+        descricao: cargoNome,
+        especificacao: celulaDesc.slice(0, 300),
+        tipo,
+        quantidade: qtd,
+        unidade: "Meses",
+        valor_unitario: vlUnit,
+        valor_total: vlTotal,
+        codigo_natureza_despesa: codNat,
+      })
+    }
+  }
+
+  const preview = rubricas.slice(0, 5).map((r) => ({
+    descricao: r.descricao,
+    tipo: r.tipo,
+    quantidade: String(r.quantidade),
+    unidade: r.unidade,
+    valor_unitario: r.valor_unitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+  }))
+
+  return {
+    linha_cabecalho: headerIndex,
+    linhas_secao: linhasSecao,
+    linhas_ignorar: linhasIgnorar,
+    mapeamento,
+    preview,
+    metadados: {
+      proposta_numero,
+      cnpj_osc,
+      osc_nome,
+      modelo_identificado: modelo,
+    },
+    fornecedores_detectados: Array.from(fornecedoresMap.values()),
+    rubricas_detectadas: rubricas,
+  }
+}
+
+export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoMapeamento> {
+  // 1. Tentar primeiro análise via Skill MROSC de alta precisão
+  const skillResult = executarSkillMrosc(rows)
+  if (skillResult && skillResult.rubricas_detectadas && skillResult.rubricas_detectadas.length > 0) {
+    return skillResult
+  }
+
+  // 2. Tentar mapeamento automático genérico sem IA
   const autoResult = tentarMapeamentoAutomatico(rows)
   if (autoResult && autoResult.mapeamento.length > 0 && autoResult.preview.length > 0) {
     return autoResult
   }
 
-  // Fallback: usar Gemini
+  // 3. Fallback: usar Gemini com Prompt da Skill MROSC
+  const { gemini_api_key, gemini_model } = await getSettingsAsync()
+  if (!gemini_api_key) {
+    throw new Error("Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la.")
+  }
+
   const linhasParaEnviar = rows.slice(0, 60)
   const tabela = linhasParaEnviar
     .map((row, i) => {
-      const cellsNaoVazias = row.map((c, j) => c ? `[${j}]=${c}` : "").filter(Boolean)
+      const cellsNaoVazias = row.map((c, j) => (c ? `[${j}]=${c}` : "")).filter(Boolean)
       return `L${i}: ${cellsNaoVazias.join(" | ")}`
     })
-    .filter(l => l.length > 4)
+    .filter((l) => l.length > 4)
     .join("\n")
 
-  const prompt = `Voce e um especialista em planilhas orcamentarias do terceiro setor brasileiro (MROSC / Transferegov / Ministerio das Mulheres).
-
-Analise as linhas abaixo de uma planilha orcamentaria. Cada linha esta no formato Lnum: [col_index]=valor.
-A planilha pode ter cabecalhos mesclados em 2 linhas, linhas de secao, e linhas em branco.
+  const prompt = `Você é um especialista em planilhas orçamentárias do terceiro setor brasileiro (MROSC Lei 13.019/2014 / Transferegov).
+Analise as linhas abaixo de uma planilha orçamentária no formato Lnum: [col_index]=valor.
 
 CAMPOS DO SISTEMA QUE QUEREMOS MAPEAR:
-${CAMPOS_SISTEMA.map(c => `"${c.campo}": ${c.descricao}`).join("\n")}
+${CAMPOS_SISTEMA.map((c) => `"${c.campo}": ${c.descricao}`).join("\n")}
 
-REGRAS IMPORTANTES:
-- "descricao" e o campo mais importante. Sera a coluna com nomes de cargos, servicos ou materiais.
-- "valor_unitario" pode ser "Valor Unitario", "Valor/mes", "Valor mensal", ou a coluna de MENOR VALOR COTADO.
-- "quantidade" pode ser "Qtd", "Quant", "Meses", "Diarias/Meses".
-- Ignore colunas de fornecedores, CNPJ, telefone, cotacoes multiplas.
-- "linhas_secao" sao linhas com texto de cabecalho de grupo (ex: "RECURSOS HUMANOS", "MATERIAL").
-- "linhas_ignorar" sao totalizadores, rodapes, linhas com "TOTAL", "VALOR TOTAL", colunas de assinatura.
-- "linha_cabecalho" e o indice da linha que tem os nomes das colunas reais dos dados.
-- Identifique APENAS as colunas mais relevantes para importar rubricas orcamentarias.
+DIRETRIZES DA SKILL MROSC:
+- Identifique metadados institucionais (Proposta Nº, OSC proponente, CNPJ da entidade).
+- "descricao": coluna com nomes de cargos, serviços ou materiais.
+- "valor_unitario": coluna de MENOR VALOR COTADO ou cotação selecionada.
+- "quantidade": número de meses, diárias ou unidades.
+- "fornecedores": identifique fornecedores citados nas cotações (Razão Social, CNPJ).
 
-LINHAS DA PLANILHA:
-${tabela}
-
-Retorne APENAS JSON valido (sem markdown) com esta estrutura exata:
+Retorne APENAS JSON válido com esta estrutura:
 {
   "linha_cabecalho": <numero>,
   "linhas_secao": [<numeros>],
   "linhas_ignorar": [<numeros>],
   "mapeamento": [
     {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>}
+  ],
+  "metadados": {
+    "proposta_numero": "<numero ou null>",
+    "osc_nome": "<nome ou null>",
+    "cnpj_osc": "<cnpj ou null>"
+  },
+  "fornecedores": [
+    {"razao_social_nome": "<nome>", "cpf_cnpj": "<cnpj>", "telefone": "<tel ou null>"}
   ]
 }`
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 4096 },
-      }),
-    }
-  )
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+    }),
+  })
 
   if (!res.ok) {
     const err = await res.json()
@@ -132,32 +435,30 @@ Retorne APENAS JSON valido (sem markdown) com esta estrutura exata:
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
 
   const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini nao retornou JSON valido. Tente outro modelo ou verifique a chave.")
+  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
 
   let resultado: ResultadoMapeamento
   try {
     resultado = JSON.parse(jsonMatch[0])
   } catch {
-    throw new Error("JSON invalido retornado pelo Gemini.")
+    throw new Error("JSON inválido retornado pelo Gemini.")
   }
 
   if (!resultado.mapeamento || resultado.mapeamento.length === 0) {
-    // Fallback manual se Gemini falhou
     const auto = tentarMapeamentoAutomatico(rows)
     if (auto) return auto
-    throw new Error("Nao foi possivel identificar as colunas. Verifique se a planilha tem uma coluna de descricao/especificacao.")
+    throw new Error("Não foi possível identificar as colunas da planilha.")
   }
 
   resultado.preview = gerarPreview(rows, resultado)
   return resultado
 }
 
-
 function norm(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 }
+
 function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | null {
-  // Encontrar linha de cabecalho: primeira linha com >= 3 celulas nao vazias e texto relevante
   const keywords = {
     descricao: ["especificacao", "descricao", "item", "servico", "cargo", "nome", "especif"],
     quantidade: ["quant", "qtd", "quantidade", "meses", "diaria"],
@@ -176,7 +477,7 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
       const cell = norm(row[j])
       if (!cell) continue
       for (const [campo, kws] of Object.entries(keywords)) {
-        if (kws.some(kw => cell.includes(kw)) && !(campo in matches)) {
+        if (kws.some((kw) => cell.includes(kw)) && !(campo in matches)) {
           matches[campo] = j
         }
       }
@@ -196,7 +497,6 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
     indice,
   }))
 
-  // Linhas de secao e ignorar
   const linhasSecao: number[] = []
   const linhasIgnorar: number[] = []
   const descIdx = melhoresColIndex["descricao"]
@@ -204,7 +504,10 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
   for (let i = linhaCabecalho + 1; i < rows.length; i++) {
     const row = rows[i]
     const desc = row[descIdx]?.trim() ?? ""
-    if (!desc) { linhasIgnorar.push(i); continue }
+    if (!desc) {
+      linhasIgnorar.push(i)
+      continue
+    }
     const lower = desc.toLowerCase()
     if (lower.includes("total") || lower.includes("valor total") || lower.includes("repasse") || lower.includes("contrapartida") || lower.includes("assinatura")) {
       linhasIgnorar.push(i)
@@ -226,15 +529,11 @@ function tentarMapeamentoAutomatico(rows: string[][]): ResultadoMapeamento | nul
 }
 
 function gerarPreview(rows: string[][], resultado: ResultadoMapeamento): Record<string, string>[] {
-  const linhasIgnorar = new Set([
-    resultado.linha_cabecalho,
-    ...resultado.linhas_secao,
-    ...resultado.linhas_ignorar,
-  ])
+  const linhasIgnorar = new Set([resultado.linha_cabecalho, ...resultado.linhas_secao, ...resultado.linhas_ignorar])
   const linhasDado = rows
     .map((row, i) => ({ row, i }))
     .filter(({ i }) => !linhasIgnorar.has(i) && i > resultado.linha_cabecalho)
-    .filter(({ row }) => row.some(c => c.trim()))
+    .filter(({ row }) => row.some((c) => c.trim()))
     .slice(0, 5)
 
   return linhasDado.map(({ row }) => {
@@ -248,26 +547,21 @@ function gerarPreview(rows: string[][], resultado: ResultadoMapeamento): Record<
   })
 }
 
-export async function sugerirMapeamentoPDF(
-  file: File
-): Promise<ResultadoMapeamento> {
+export async function sugerirMapeamentoPDF(file: File): Promise<ResultadoMapeamento> {
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
   if (!gemini_api_key) {
-    throw new Error(
-      "Chave de API do Gemini nao configurada. Acesse Configuracoes para cadastra-la."
-    )
+    throw new Error("Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la.")
   }
 
   const base64 = await fileToBase64(file)
 
-  const prompt = `Voce e um especialista em planilhas orcamentarias do terceiro setor brasileiro (MROSC / Transferegov).
-
-Analise a tabela orcamentaria neste documento e extraia as rubricas.
+  const prompt = `Você é um especialista em planilhas orçamentárias do terceiro setor brasileiro (MROSC / Transferegov).
+Analise a tabela orçamentária neste documento e extraia as rubricas e dados da proposta.
 
 CAMPOS DO SISTEMA:
-${CAMPOS_SISTEMA.map(c => `"${c.campo}": ${c.descricao}`).join("\n")}
+${CAMPOS_SISTEMA.map((c) => `"${c.campo}": ${c.descricao}`).join("\n")}
 
-Retorne APENAS JSON valido (sem markdown) com esta estrutura:
+Retorne APENAS JSON válido com esta estrutura:
 {
   "linha_cabecalho": 0,
   "linhas_secao": [],
@@ -277,27 +571,27 @@ Retorne APENAS JSON valido (sem markdown) com esta estrutura:
   ],
   "preview": [
     {"descricao": "...", "quantidade": "...", "valor_unitario": "...", "tipo": "..."}
-  ]
+  ],
+  "metadados": {
+    "proposta_numero": "<numero ou null>",
+    "osc_nome": "<nome ou null>",
+    "cnpj_osc": "<cnpj ou null>"
+  },
+  "fornecedores": []
 }`
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: file.type, data: base64 } },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
-      }),
-    }
-  )
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: prompt }, { inline_data: { mime_type: file.type, data: base64 } }],
+        },
+      ],
+      generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+    }),
+  })
 
   if (!res.ok) {
     const err = await res.json()
@@ -307,7 +601,7 @@ Retorne APENAS JSON valido (sem markdown) com esta estrutura:
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini nao retornou JSON valido.")
+  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
   return JSON.parse(jsonMatch[0])
 }
 

@@ -75,6 +75,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
   const [resultado, setResultado] = React.useState<ResultadoMapeamento | null>(null)
   const [mapeamento, setMapeamento] = React.useState<MapeamentoColuna[]>([])
   const [erro, setErro] = React.useState<string | null>(null)
+  const [cadastrarFornecedores, setCadastrarFornecedores] = React.useState(true)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   function reset() {
@@ -84,6 +85,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
     setResultado(null)
     setMapeamento([])
     setErro(null)
+    setCadastrarFornecedores(true)
   }
 
   function handleClose(v: boolean) {
@@ -169,45 +171,98 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
             }))
 
       let criadas = 0
-      for (const item of linhasDado) {
-        const obj: Record<string, string> = {} as Record<string, string>
+
+      // 1. Se a skill detectou rubricas estruturadas de alta fidelidade
+      if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
+        for (const rub of resultado.rubricas_detectadas) {
+          await mroscService.createRubrica({
+            projeto_id: projetoId!,
+            descricao: rub.descricao,
+            codigo_natureza_despesa: rub.codigo_natureza_despesa || "33903900",
+            tipo: (rub.tipo as any) || "SERVICO",
+            quantidade: rub.quantidade,
+            unidade: rub.unidade || "UN",
+            valor_unitario: rub.valor_unitario,
+          })
+          criadas++
+        }
+      } else {
+        // Fallback para linhas mapeadas manualmente
+        for (const item of linhasDado) {
+          const obj: Record<string, string> = {} as Record<string, string>
           if ("previewObj" in item && item.previewObj) {
             Object.assign(obj, item.previewObj as Record<string, string>)
           }
 
-        if (rowsXLS.length > 0) {
-          for (const m of mapeamento) {
-            if (m.campo_sistema) {
-              obj[m.campo_sistema] = (item as any).row[m.indice] ?? ""
+          if (rowsXLS.length > 0) {
+            for (const m of mapeamento) {
+              if (m.campo_sistema) {
+                obj[m.campo_sistema] = (item as any).row[m.indice] ?? ""
+              }
             }
           }
+
+          const descricao = obj.descricao?.trim()
+          if (!descricao) continue
+
+          const quantidade = parseFloat(
+            (obj.quantidade ?? "1").replace(/\./g, "").replace(",", ".")
+          )
+          const valor_unitario = parseFloat(
+            (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
+          )
+
+          await mroscService.createRubrica({
+            projeto_id: projetoId!,
+            descricao,
+            codigo_natureza_despesa:
+              obj.codigo_natureza_despesa?.trim() || "33903900",
+            tipo: (obj.tipo?.toUpperCase() as any) || "SERVICO",
+            quantidade: isNaN(quantidade) ? 1 : quantidade,
+            unidade: obj.unidade?.trim() || "UN",
+            valor_unitario: isNaN(valor_unitario) ? 0 : valor_unitario,
+          })
+          criadas++
         }
+      }
 
-        const descricao = obj.descricao?.trim()
-        if (!descricao) continue
+      // 2. Auto-cadastro de fornecedores identificados nas cotações
+      let fornecedoresCriados = 0
+      if (
+        cadastrarFornecedores &&
+        resultado.fornecedores_detectados &&
+        resultado.fornecedores_detectados.length > 0
+      ) {
+        try {
+          const existentes = await mroscService.getFornecedores()
+          const cnpjsExistentes = new Set(
+            existentes.map((f) => f.cpf_cnpj.replace(/\D/g, ""))
+          )
 
-        const quantidade = parseFloat(
-          (obj.quantidade ?? "1").replace(/\./g, "").replace(",", ".")
-        )
-        const valor_unitario = parseFloat(
-          (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
-        )
-
-        await mroscService.createRubrica({
-          projeto_id: projetoId!,
-          descricao,
-          codigo_natureza_despesa:
-            obj.codigo_natureza_despesa?.trim() || "33903900",
-          tipo: (obj.tipo?.toUpperCase() as any) || "SERVICO",
-          quantidade: isNaN(quantidade) ? 1 : quantidade,
-          unidade: obj.unidade?.trim() || "UN",
-          valor_unitario: isNaN(valor_unitario) ? 0 : valor_unitario,
-        })
-        criadas++
+          for (const f of resultado.fornecedores_detectados) {
+            const rawCnpj = f.cpf_cnpj.replace(/\D/g, "")
+            if (!cnpjsExistentes.has(rawCnpj)) {
+              await mroscService.createFornecedor({
+                razao_social_nome: f.razao_social_nome,
+                cpf_cnpj: f.cpf_cnpj,
+              })
+              cnpjsExistentes.add(rawCnpj)
+              fornecedoresCriados++
+            }
+          }
+        } catch (errFornecedores) {
+          console.warn("Aviso ao auto-cadastrar fornecedores cotados:", errFornecedores)
+        }
       }
 
       setEtapa("concluido")
-      toast.success(`${criadas} rubrica(s) importada(s) com sucesso.`)
+      if (fornecedoresCriados > 0) {
+        toast.success(
+          `${criadas} rubrica(s) e ${fornecedoresCriados} fornecedor(es) cotados cadastrados com sucesso.`
+        )
+      } else {
+        toast.success(`${criadas} rubrica(s) importada(s) com sucesso.`)
+      }
       onImportado?.()
     } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : "Erro desconhecido"
@@ -317,8 +372,63 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
         {/* ETAPA: VALIDANDO */}
         {etapa === "validando" && resultado && (
           <div className="flex flex-col gap-4">
+            {/* Informações extraídas pela Skill MROSC */}
+            {resultado.metadados?.modelo_identificado && (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2Icon className="size-4 text-emerald-600" />
+                  Skill MROSC:{" "}
+                  {resultado.metadados.modelo_identificado === "MODELO_A_TRANSFEREGOV"
+                    ? "Padrão Transferegov (Cotação Tripla & Encargos)"
+                    : "Padrão Descritivo (Min. Mulheres)"}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                  {resultado.metadados.proposta_numero && (
+                    <span>
+                      <strong className="text-foreground">Proposta:</strong> {resultado.metadados.proposta_numero}
+                    </span>
+                  )}
+                  {resultado.metadados.osc_nome && (
+                    <span>
+                      <strong className="text-foreground">OSC:</strong> {resultado.metadados.osc_nome}
+                    </span>
+                  )}
+                  {resultado.metadados.cnpj_osc && (
+                    <span>
+                      <strong className="text-foreground">CNPJ:</strong> {resultado.metadados.cnpj_osc}
+                    </span>
+                  )}
+                  {resultado.rubricas_detectadas && (
+                    <span>
+                      <strong className="text-foreground">Rubricas identificadas:</strong> {resultado.rubricas_detectadas.length}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Checkbox para auto-cadastrar fornecedores das cotações */}
+            {resultado.fornecedores_detectados && resultado.fornecedores_detectados.length > 0 && (
+              <label className="flex items-center justify-between rounded-lg border bg-muted/40 p-2.5 text-xs cursor-pointer hover:bg-muted/60 transition-colors">
+                <div>
+                  <span className="font-medium text-foreground">
+                    Cadastrar {resultado.fornecedores_detectados.length} fornecedores identificados nas cotações
+                  </span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Insere automaticamente as empresas cotadas na base de fornecedores do sistema.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cadastrarFornecedores}
+                  onChange={(e) => setCadastrarFornecedores(e.target.checked)}
+                  className="size-4 accent-emerald-600 rounded cursor-pointer ml-3"
+                />
+              </label>
+            )}
+
             <p className="text-xs text-muted-foreground">
-              Confirme ou ajuste o mapeamento sugerido pelo Gemini. Colunas com{" "}
+              Confirme ou ajuste o mapeamento sugerido. Colunas com{" "}
               <span className="text-muted-foreground font-medium">— ignorar —</span>{" "}
               não serão importadas.
             </p>
