@@ -225,7 +225,8 @@ export function OnboardingModal() {
   if (checking || !open) return null
 
   return (
-    <Dialog open={open && !importarDialogOpen} onOpenChange={setOpen}>
+    <>
+      <Dialog open={open && !importarDialogOpen} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[620px] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Banner Superior de Boas-Vindas */}
         <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-6 shrink-0">
@@ -536,22 +537,15 @@ export function OnboardingModal() {
                   </div>
 
                   <div className="mt-4">
-                    <ImportarPlanilhaDialog
-                      open={importarDialogOpen}
-                      onOpenChange={setImportarDialogOpen}
-                      trigger={
-                        <Button
-                          type="button"
-                          onClick={() => setImportarDialogOpen(true)}
-                          className="w-full bg-teal-600 hover:bg-teal-500 text-white gap-1.5"
-                          size="sm"
-                        >
-                          <FileSpreadsheetIcon className="size-3.5" />
-                          Selecionar Planilha
-                        </Button>
-                      }
-                      onImportado={handlePlanilhaImportada}
-                    />
+                    <Button
+                      type="button"
+                      onClick={() => setImportarDialogOpen(true)}
+                      className="w-full bg-teal-600 hover:bg-teal-500 text-white gap-1.5 cursor-pointer"
+                      size="sm"
+                    >
+                      <FileSpreadsheetIcon className="size-3.5" />
+                      Selecionar Planilha
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -686,5 +680,12 @@ export function OnboardingModal() {
         </div>
       </DialogContent>
     </Dialog>
-  )
+
+    <ImportarPlanilhaDialog
+      open={importarDialogOpen}
+      onOpenChange={setImportarDialogOpen}
+      onImportado={handlePlanilhaImportada}
+    />
+  </>
+)
 }
