@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { useAlertas } from "@/hooks/use-alertas"
 import { useSystemSettings } from "@/contexts/system-context"
+import { usePermissoes } from "@/hooks/use-permissoes"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -84,24 +85,30 @@ const navDocumental = [
   },
 ]
 
-const navAdmin = [
-  {
-    title: "Usuários",
-    url: "/usuarios",
-    icon: <UsersIcon className="size-4" />,
-  },
-  {
-    title: "Configurações",
-    url: "/configuracoes",
-    icon: <SettingsIcon className="size-4" />,
-  },
-]
-
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { urgentes, atencao } = useAlertas()
   const { settings } = useSystemSettings()
+  const { pode, isAdmin } = usePermissoes()
   const badgeCount = urgentes + atencao
+
+  const navAdminFiltrado = React.useMemo(() => {
+    const itens = []
+    if (isAdmin) {
+      itens.push({
+        title: "Usuários",
+        url: "/usuarios",
+        icon: <UsersIcon className="size-4" />,
+      })
+    }
+    if (pode("configuracoes_acessar")) {
+      itens.push({
+        title: "Configurações",
+        url: "/configuracoes",
+        icon: <SettingsIcon className="size-4" />,
+      })
+    }
+    return itens
+  }, [isAdmin, pode])
 
   const nomeSistema = settings?.nome_sistema || "MROSC Gestão"
   const subtituloSistema = settings?.subtitulo_sistema || "MROSC • Lei 13.019"
@@ -164,7 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain label="Cadastros Base" items={navCadastros} />
         <NavMain label="Orçamento & Finanças" items={navOperacionalComBadge} />
         <NavMain label="Prestação de Contas" items={navDocumental} />
-        <NavMain label="Sistema" items={navAdmin} />
+        {navAdminFiltrado.length > 0 && <NavMain label="Sistema" items={navAdminFiltrado} />}
       </SidebarContent>
 
       <SidebarFooter>

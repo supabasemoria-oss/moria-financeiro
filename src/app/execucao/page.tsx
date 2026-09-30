@@ -39,12 +39,14 @@ import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { toast } from "sonner"
 
 function ExecucaoContent() {
+  const { pode } = usePermissoes()
   const searchParams = useSearchParams()
   const initialProjetoId = searchParams.get("projetoId") || ""
   const initialRubricaId = searchParams.get("rubricaId") || ""
@@ -827,34 +829,40 @@ function ExecucaoContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportarCSV}
-              className="gap-1.5 h-9 text-xs"
-            >
-              <DownloadIcon className="size-3.5" />
-              Exportar CSV
-            </Button>
+            {pode("relatorios_exportar") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportarCSV}
+                className="gap-1.5 h-9 text-xs"
+              >
+                <DownloadIcon className="size-3.5" />
+                Exportar CSV
+              </Button>
+            )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpenNovaParcela(true)}
-              className="gap-1.5 h-9 text-xs"
-            >
-              <CalendarDaysIcon className="size-3.5" />
-              Nova Parcela
-            </Button>
+            {pode("despesas_lancar") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setOpenNovaParcela(true)}
+                className="gap-1.5 h-9 text-xs"
+              >
+                <CalendarDaysIcon className="size-3.5" />
+                Nova Parcela
+              </Button>
+            )}
 
-            <Button
-              size="sm"
-              onClick={() => setOpenDespesa(true)}
-              className="gap-1.5 h-9 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
-            >
-              <PlusIcon className="size-3.5" />
-              Lançar Despesa
-            </Button>
+            {pode("despesas_lancar") && (
+              <Button
+                size="sm"
+                onClick={() => setOpenDespesa(true)}
+                className="gap-1.5 h-9 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
+              >
+                <PlusIcon className="size-3.5" />
+                Lançar Despesa
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1145,15 +1153,17 @@ function ExecucaoContent() {
                       Obrigações programadas para o projeto. Clique em "Quitar" para liquidar o pagamento e vincular o comprovante fiscal.
                     </CardDescription>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOpenNovaParcela(true)}
-                    className="gap-1 h-8 text-xs"
-                  >
-                    <PlusIcon className="size-3.5" />
-                    Nova Parcela
-                  </Button>
+                  {pode("despesas_lancar") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setOpenNovaParcela(true)}
+                      className="gap-1 h-8 text-xs"
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Nova Parcela
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1168,15 +1178,17 @@ function ExecucaoContent() {
                     <p className="text-xs text-muted-foreground mt-1 mb-4">
                       Cadastre uma nova parcela para planejar vencimentos ou altere os filtros.
                     </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setOpenNovaParcela(true)}
-                      className="gap-1.5 text-xs"
-                    >
-                      <PlusIcon className="size-3.5" />
-                      Cadastrar Primeira Parcela
-                    </Button>
+                    {pode("despesas_lancar") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setOpenNovaParcela(true)}
+                        className="gap-1.5 text-xs"
+                      >
+                        <PlusIcon className="size-3.5" />
+                        Cadastrar Primeira Parcela
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -1193,7 +1205,7 @@ function ExecucaoContent() {
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                          {hasPendentesSelected && (
+                          {pode("despesas_quitar") && hasPendentesSelected && (
                             <Button
                               size="sm"
                               onClick={() => {
@@ -1213,7 +1225,7 @@ function ExecucaoContent() {
                             </Button>
                           )}
 
-                          {hasPagasSelected && (
+                          {pode("despesas_quitar") && hasPagasSelected && (
                             <ConfirmDialog
                               title="Reverter liquidação em lote?"
                               description={`Deseja reverter ${
@@ -1234,22 +1246,24 @@ function ExecucaoContent() {
                             />
                           )}
 
-                          <ConfirmDialog
-                            title="Excluir parcelas selecionadas?"
-                            description={`Esta ação excluirá permanentemente ${selectedParcelas.size} parcela(s) do cronograma.`}
-                            confirmLabel="Excluir em Lote"
-                            onConfirm={handleConfirmarExclusaoLote}
-                            trigger={
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
-                              >
-                                <Trash2Icon className="size-3.5" />
-                                Excluir ({selectedParcelas.size})
-                              </Button>
-                            }
-                          />
+                          {pode("despesas_excluir") && (
+                            <ConfirmDialog
+                              title="Excluir parcelas selecionadas?"
+                              description={`Esta ação excluirá permanentemente ${selectedParcelas.size} parcela(s) do cronograma.`}
+                              confirmLabel="Excluir em Lote"
+                              onConfirm={handleConfirmarExclusaoLote}
+                              trigger={
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+                                >
+                                  <Trash2Icon className="size-3.5" />
+                                  Excluir ({selectedParcelas.size})
+                                </Button>
+                              }
+                            />
+                          )}
 
                           <Button
                             size="sm"
@@ -1372,14 +1386,16 @@ function ExecucaoContent() {
                             <TableCell className="text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
                                 {parcela.status !== "PAGO" ? (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleAbrirQuitar(parcela)}
-                                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1"
-                                  >
-                                    <CheckCircle2Icon className="size-3.5" />
-                                    Quitar
-                                  </Button>
+                                  pode("despesas_quitar") && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleAbrirQuitar(parcela)}
+                                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1"
+                                    >
+                                      <CheckCircle2Icon className="size-3.5" />
+                                      Quitar
+                                    </Button>
+                                  )
                                 ) : (
                                   <>
                                     <Button
@@ -1396,42 +1412,46 @@ function ExecucaoContent() {
                                       No Caixa
                                     </Button>
 
-                                    <ConfirmDialog
-                                      title="Reverter quitação?"
-                                      description={`A parcela "${parcela.descricao}" voltará ao status Pendente no cronograma.`}
-                                      confirmLabel="Reverter"
-                                      onConfirm={() => handleReverterParcela(parcela)}
-                                      trigger={
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 text-xs text-amber-600 hover:bg-amber-500/10 gap-1"
-                                          title="Reverter para Pendente"
-                                        >
-                                          <ClockIcon className="size-3" />
-                                          Reverter
-                                        </Button>
-                                      }
-                                    />
+                                    {pode("despesas_quitar") && (
+                                      <ConfirmDialog
+                                        title="Reverter quitação?"
+                                        description={`A parcela "${parcela.descricao}" voltará ao status Pendente no cronograma.`}
+                                        confirmLabel="Reverter"
+                                        onConfirm={() => handleReverterParcela(parcela)}
+                                        trigger={
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-amber-600 hover:bg-amber-500/10 gap-1"
+                                            title="Reverter para Pendente"
+                                          >
+                                            <ClockIcon className="size-3" />
+                                            Reverter
+                                          </Button>
+                                        }
+                                      />
+                                    )}
                                   </>
                                 )}
 
-                                <ConfirmDialog
-                                  title="Excluir parcela?"
-                                  description="Esta parcela será removida do cronograma de pagamentos. Esta ação não pode ser desfeita."
-                                  confirmLabel="Excluir"
-                                  onConfirm={() => handleDeleteParcela(parcela.id)}
-                                  trigger={
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="size-7 text-destructive hover:bg-destructive/10"
-                                      aria-label="Excluir parcela"
-                                    >
-                                      <Trash2Icon className="size-3.5" />
-                                    </Button>
-                                  }
-                                />
+                                {pode("despesas_excluir") && (
+                                  <ConfirmDialog
+                                    title="Excluir parcela?"
+                                    description="Esta parcela será removida do cronograma de pagamentos. Esta ação não pode ser desfeita."
+                                    confirmLabel="Excluir"
+                                    onConfirm={() => handleDeleteParcela(parcela.id)}
+                                    trigger={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-7 text-destructive hover:bg-destructive/10"
+                                        aria-label="Excluir parcela"
+                                      >
+                                        <Trash2Icon className="size-3.5" />
+                                      </Button>
+                                    }
+                                  />
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1460,14 +1480,16 @@ function ExecucaoContent() {
                       Gastos registrados com vinculação às rubricas, notas fiscais e prestação de contas.
                     </CardDescription>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setOpenDespesa(true)}
-                    className="gap-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
-                  >
-                    <PlusIcon className="size-3.5" />
-                    Lançar Despesa
-                  </Button>
+                  {pode("despesas_lancar") && (
+                    <Button
+                      size="sm"
+                      onClick={() => setOpenDespesa(true)}
+                      className="gap-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Lançar Despesa
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1482,14 +1504,16 @@ function ExecucaoContent() {
                     <p className="text-xs text-muted-foreground mt-1 mb-4">
                       Você pode lançar uma despesa direta ou quitar uma parcela do cronograma para registrá-la aqui.
                     </p>
-                    <Button
-                      size="sm"
-                      onClick={() => setOpenDespesa(true)}
-                      className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
-                    >
-                      <PlusIcon className="size-3.5" />
-                      Lançar Primeira Despesa
-                    </Button>
+                    {pode("despesas_lancar") && (
+                      <Button
+                        size="sm"
+                        onClick={() => setOpenDespesa(true)}
+                        className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        <PlusIcon className="size-3.5" />
+                        Lançar Primeira Despesa
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Table>
@@ -1591,32 +1615,36 @@ function ExecucaoContent() {
 
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleAbrirEditarDespesa(despesa)}
-                                className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
-                                title="Editar movimentação"
-                                aria-label="Editar"
-                              >
-                                <PencilIcon className="size-3.5" />
-                              </Button>
-                              <ConfirmDialog
-                                title="Excluir despesa?"
-                                description="A despesa será removida da execução financeira. Esta ação não pode ser desfeita."
-                                confirmLabel="Excluir"
-                                onConfirm={() => handleDeleteDespesa(despesa.id)}
-                                trigger={
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 text-destructive hover:bg-destructive/10 cursor-pointer"
-                                    aria-label="Excluir"
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </Button>
-                                }
-                              />
+                              {pode("despesas_lancar") && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleAbrirEditarDespesa(despesa)}
+                                  className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                                  title="Editar movimentação"
+                                  aria-label="Editar"
+                                >
+                                  <PencilIcon className="size-3.5" />
+                                </Button>
+                              )}
+                              {pode("despesas_excluir") && (
+                                <ConfirmDialog
+                                  title="Excluir despesa?"
+                                  description="A despesa será removida da execução financeira. Esta ação não pode ser desfeita."
+                                  confirmLabel="Excluir"
+                                  onConfirm={() => handleDeleteDespesa(despesa.id)}
+                                  trigger={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-7 text-destructive hover:bg-destructive/10 cursor-pointer"
+                                      aria-label="Excluir"
+                                    >
+                                      <Trash2Icon className="size-3.5" />
+                                    </Button>
+                                  }
+                                />
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

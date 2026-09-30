@@ -13,12 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { Fornecedor } from "@/lib/types"
 import { formatCpfCnpj } from "@/lib/utils"
 import { maskCpfCnpj } from "@/lib/masks"
 import { toast } from "sonner"
 
 export default function FornecedoresPage() {
+  const { pode } = usePermissoes()
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -110,15 +112,16 @@ export default function FornecedoresPage() {
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger
-            render={
-              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
-                <PlusIcon className="size-4" />
-                Novo Fornecedor / Prestador
-              </Button>
-            }
-          />
+        {pode("fornecedores_gerenciar") && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger
+              render={
+                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+                  <PlusIcon className="size-4" />
+                  Novo Fornecedor / Prestador
+                </Button>
+              }
+            />
           <DialogContent className="sm:max-w-[520px]">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -236,6 +239,7 @@ export default function FornecedoresPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <Card>
@@ -299,22 +303,24 @@ export default function FornecedoresPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <ConfirmDialog
-                        title="Excluir fornecedor?"
-                        description="Despesas vinculadas a este fornecedor impedem a exclusão. Esta ação não pode ser desfeita."
-                        confirmLabel="Excluir"
-                        onConfirm={() => handleDelete(forn.id)}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:bg-destructive/10"
-                            aria-label="Excluir"
-                          >
-                            <Trash2Icon className="size-4" />
-                          </Button>
-                        }
-                      />
+                      {pode("fornecedores_gerenciar") && (
+                        <ConfirmDialog
+                          title="Excluir fornecedor?"
+                          description="Despesas vinculadas a este fornecedor impedem a exclusão. Esta ação não pode ser desfeita."
+                          confirmLabel="Excluir"
+                          onConfirm={() => handleDelete(forn.id)}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:bg-destructive/10"
+                              aria-label="Excluir"
+                            >
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          }
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

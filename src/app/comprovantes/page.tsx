@@ -18,10 +18,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
 function ComprovantesContent() {
+  const { pode } = usePermissoes()
   const searchParams = useSearchParams()
   const initialDespesaId = searchParams.get("despesaId") || ""
 
@@ -107,15 +109,16 @@ function ComprovantesContent() {
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger
-            render={
-              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
-                <UploadCloudIcon className="size-4" />
-                Anexar Comprovante
-              </Button>
-            }
-          />
+        {pode("comprovantes_anexar") && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger
+              render={
+                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+                  <UploadCloudIcon className="size-4" />
+                  Anexar Comprovante
+                </Button>
+              }
+            />
           <DialogContent className="sm:max-w-[540px]">
             <form onSubmit={handleUpload}>
               <DialogHeader>
@@ -217,6 +220,7 @@ function ComprovantesContent() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <Card>

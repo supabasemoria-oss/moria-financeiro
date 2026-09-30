@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import { diffDias } from "@/lib/parcelas"
 import type { Projeto, Instituicao, TermoAditivo, StatusProjeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -43,6 +44,7 @@ const STATUS_LABELS: Record<StatusProjeto, { label: string; variant: "default" |
 }
 
 export default function ProjetosPage() {
+  const { pode } = usePermissoes()
   const [projetos, setProjetos] = useState<(Projeto & { instituicoes?: Instituicao | null })[]>([])
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
   const [loading, setLoading] = useState(true)
@@ -329,15 +331,16 @@ export default function ProjetosPage() {
           </p>
         </div>
 
-        <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-          <DialogTrigger
-            render={
-              <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
-                <PlusIcon className="size-4" />
-                Novo Projeto / Termo
-              </Button>
-            }
-          />
+        {pode("projetos_gerenciar") && (
+          <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+            <DialogTrigger
+              render={
+                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+                  <PlusIcon className="size-4" />
+                  Novo Projeto / Termo
+                </Button>
+              }
+            />
           <DialogContent className="sm:max-w-[550px]">
             <form onSubmit={handleCreate}>
               <DialogHeader>
@@ -546,6 +549,7 @@ export default function ProjetosPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Cards de KPI */}
@@ -689,34 +693,36 @@ export default function ProjetosPage() {
                     <Badge variant={statusInfo.variant} className="text-xs font-normal">
                       {statusInfo.label}
                     </Badge>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted"
-                        aria-label={`Editar ${proj.nome}`}
-                        onClick={() => handleOpenEdit(proj)}
-                      >
-                        <PencilIcon className="size-3.5" />
-                      </Button>
+                    {pode("projetos_gerenciar") && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+                          aria-label={`Editar ${proj.nome}`}
+                          onClick={() => handleOpenEdit(proj)}
+                        >
+                          <PencilIcon className="size-3.5" />
+                        </Button>
 
-                      <ConfirmDialog
-                        title="Excluir projeto?"
-                        description="Todas as rubricas, despesas e comprovantes vinculados serão removidos. Esta ação não pode ser desfeita."
-                        confirmLabel="Excluir"
-                        onConfirm={() => handleDelete(proj.id)}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:bg-destructive/10"
-                            aria-label="Excluir"
-                          >
-                            <Trash2Icon className="size-3.5" />
-                          </Button>
-                        }
-                      />
-                    </div>
+                        <ConfirmDialog
+                          title="Excluir projeto?"
+                          description="Todas as rubricas, despesas e comprovantes vinculados serão removidos. Esta ação não pode ser desfeita."
+                          confirmLabel="Excluir"
+                          onConfirm={() => handleDelete(proj.id)}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive hover:bg-destructive/10"
+                              aria-label="Excluir"
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <CardTitle className="text-base font-semibold leading-snug mt-1.5 line-clamp-2">
@@ -792,20 +798,22 @@ export default function ProjetosPage() {
                     <ReceiptIcon className="size-3" />
                     Execução
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => {
-                      setAditivoProjeto(proj)
-                      setAditivoForm({ data_fim_nova: "", motivo: "" })
-                      setAditivoOpen(true)
-                    }}
-                    title="Registrar Termo Aditivo"
-                  >
-                    <PlusCircleIcon className="size-3" />
-                    Aditivo
-                  </Button>
+                  {pode("projetos_gerenciar") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        setAditivoProjeto(proj)
+                        setAditivoForm({ data_fim_nova: "", motivo: "" })
+                        setAditivoOpen(true)
+                      }}
+                      title="Registrar Termo Aditivo"
+                    >
+                      <PlusCircleIcon className="size-3" />
+                      Aditivo
+                    </Button>
+                  )}
                 </CardFooter>
               </Card>
             )

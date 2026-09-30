@@ -22,7 +22,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { email, password, nome, cargo, role, telefone, ativo } = body
+    const { email, password, nome, cargo, role, telefone, ativo, permissoes } = body
 
     if (!email || !password || !nome) {
       return NextResponse.json(
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         cargo: cargo || null,
         role: role || 'ADMIN',
         telefone: telefone || null,
+        permissoes: permissoes || null,
       },
     })
 
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
         role: role || 'ADMIN',
         telefone: telefone || null,
         ativo: ativo ?? true,
+        permissoes: permissoes || null,
         updated_at: new Date().toISOString(),
       })
       .select()

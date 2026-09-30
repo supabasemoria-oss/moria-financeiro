@@ -26,12 +26,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { Projeto, Rubrica, DespesaComRelacoes } from "@/lib/types"
 import { transferegovExporter } from "@/lib/transferegov/exporter"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
 export default function PrestacaoContasPage() {
+  const { pode } = usePermissoes()
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [selectedProjetoId, setSelectedProjetoId] = useState<string>("")
   const [rubricas, setRubricas] = useState<any[]>([])
@@ -519,15 +521,17 @@ export default function PrestacaoContasPage() {
                     Demonstrativo exigido pelo Transferegov com fornecedor, documento fiscal e comprovação digital.
                   </CardDescription>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleExportExcel}
-                  className="gap-1.5 text-xs h-8 shrink-0"
-                >
-                  <FileSpreadsheetIcon className="size-3.5 text-emerald-600" />
-                  Baixar Relação (.XLSX)
-                </Button>
+                {pode("relatorios_exportar") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExportExcel}
+                    className="gap-1.5 text-xs h-8 shrink-0"
+                  >
+                    <FileSpreadsheetIcon className="size-3.5 text-emerald-600" />
+                    Baixar Relação (.XLSX)
+                  </Button>
+                )}
               </div>
             </CardHeader>
 
@@ -788,14 +792,16 @@ export default function PrestacaoContasPage() {
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleExportExcel}
-                  disabled={!currentProjeto || loading}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white w-full h-9 text-xs font-medium"
-                >
-                  <DownloadIcon className="size-4" />
-                  Exportar Relatório Excel (.XLSX)
-                </Button>
+                {pode("relatorios_exportar") && (
+                  <Button
+                    onClick={handleExportExcel}
+                    disabled={!currentProjeto || loading}
+                    className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white w-full h-9 text-xs font-medium"
+                  >
+                    <DownloadIcon className="size-4" />
+                    Exportar Relatório Excel (.XLSX)
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -826,15 +832,17 @@ export default function PrestacaoContasPage() {
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleExportZip}
-                  disabled={!currentProjeto || totalComprovantesAnexados === 0 || exportingZip}
-                  variant="outline"
-                  className="gap-2 border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white w-full h-9 text-xs font-medium"
-                >
-                  <DownloadIcon className="size-4" />
-                  {exportingZip ? (zipProgress || "Gerando Dossiê...") : "Baixar Dossiê Completo (.ZIP)"}
-                </Button>
+                {pode("relatorios_exportar") && (
+                  <Button
+                    onClick={handleExportZip}
+                    disabled={!currentProjeto || totalComprovantesAnexados === 0 || exportingZip}
+                    variant="outline"
+                    className="gap-2 border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-600 hover:text-white w-full h-9 text-xs font-medium"
+                  >
+                    <DownloadIcon className="size-4" />
+                    {exportingZip ? (zipProgress || "Gerando Dossiê...") : "Baixar Dossiê Completo (.ZIP)"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>

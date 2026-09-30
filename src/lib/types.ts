@@ -135,8 +135,68 @@ export interface LembreteAvulsoInsert {
   email_destino?: string | null
 }
 
-// ── Usuários ────────────────────────────────────────────────────────
+// ── Usuários & Permissões (RBAC Granular) ───────────────────────────
 export type RoleUsuario = 'ADMIN' | 'OPERADOR' | 'CONSULTA'
+
+export interface PermissoesUsuario {
+  despesas_lancar: boolean
+  despesas_quitar: boolean
+  despesas_excluir: boolean
+  comprovantes_anexar: boolean
+  projetos_gerenciar: boolean
+  orcamento_gerenciar: boolean
+  fornecedores_gerenciar: boolean
+  relatorios_exportar: boolean
+  configuracoes_acessar: boolean
+}
+
+export const PERMISSOES_LABELS: Record<keyof PermissoesUsuario, { label: string; descricao: string }> = {
+  despesas_lancar: { label: "Lançar Despesas", descricao: "Registrar novos gastos e compras no livro caixa" },
+  despesas_quitar: { label: "Quitar Parcelas", descricao: "Liquidar obrigações financeiras e pagamentos" },
+  despesas_excluir: { label: "Excluir Despesas e Parcelas", descricao: "Remover lançamentos e parcelas registradas" },
+  comprovantes_anexar: { label: "Anexar Comprovantes e NFs", descricao: "Upload e vínculo de documentos fiscais" },
+  projetos_gerenciar: { label: "Gerenciar Projetos e Termos", descricao: "Criar, editar e alterar dados de projetos" },
+  orcamento_gerenciar: { label: "Gerenciar Orçamento e Rubricas", descricao: "Criar, ajustar e redistribuir rubricas" },
+  fornecedores_gerenciar: { label: "Cadastrar Fornecedores", descricao: "Cadastrar e editar credores e prestadores" },
+  relatorios_exportar: { label: "Exportar Relatórios e Transferegov", descricao: "Baixar extratos CSV e lotes MROSC" },
+  configuracoes_acessar: { label: "Acessar Configurações", descricao: "Alterar parâmetros do sistema e chaves" },
+}
+
+export const PERMISSOES_DEFAULT_POR_ROLE: Record<RoleUsuario, PermissoesUsuario> = {
+  ADMIN: {
+    despesas_lancar: true,
+    despesas_quitar: true,
+    despesas_excluir: true,
+    comprovantes_anexar: true,
+    projetos_gerenciar: true,
+    orcamento_gerenciar: true,
+    fornecedores_gerenciar: true,
+    relatorios_exportar: true,
+    configuracoes_acessar: true,
+  },
+  OPERADOR: {
+    despesas_lancar: true,
+    despesas_quitar: true,
+    despesas_excluir: false,
+    comprovantes_anexar: true,
+    projetos_gerenciar: false,
+    orcamento_gerenciar: false,
+    fornecedores_gerenciar: true,
+    relatorios_exportar: true,
+    configuracoes_acessar: false,
+  },
+  CONSULTA: {
+    despesas_lancar: false,
+    despesas_quitar: false,
+    despesas_excluir: false,
+    comprovantes_anexar: false,
+    projetos_gerenciar: false,
+    orcamento_gerenciar: false,
+    fornecedores_gerenciar: false,
+    relatorios_exportar: true,
+    configuracoes_acessar: false,
+  },
+}
 
 export interface Usuario {
   id: string
@@ -146,6 +206,7 @@ export interface Usuario {
   role: RoleUsuario
   telefone: string | null
   ativo: boolean
+  permissoes?: PermissoesUsuario | null
   created_at: string
   updated_at: string
 }
@@ -158,6 +219,7 @@ export interface UsuarioInsert {
   telefone?: string | null
   password?: string
   ativo?: boolean
+  permissoes?: PermissoesUsuario | null
 }
 
 export interface UsuarioUpdate {
@@ -167,6 +229,7 @@ export interface UsuarioUpdate {
   telefone?: string | null
   password?: string
   ativo?: boolean
+  permissoes?: PermissoesUsuario | null
 }
 
 // Re-export Database for convenience

@@ -36,6 +36,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { Projeto, RubricaComDespesas, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
@@ -63,6 +64,7 @@ function formatYearMonth(ym: string): string {
 }
 
 function OrcamentoContent() {
+  const { pode } = usePermissoes()
   const searchParams = useSearchParams()
   const initialProjetoId = searchParams.get("projetoId") || ""
 
@@ -430,46 +432,48 @@ function OrcamentoContent() {
             </div>
 
             {/* Ações: Nova Rubrica / Importar */}
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger
-                render={
-                  <Button
-                    onClick={() => {
-                      if (selectedProjetoId !== "ALL") {
-                        setFormProjetoId(selectedProjetoId)
-                      } else if (projetos.length > 0) {
-                        setFormProjetoId(projetos[0].id)
+            {pode("orcamento_gerenciar") && (
+              <>
+                <Dialog open={open} onOpenChange={setOpen}>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        onClick={() => {
+                          if (selectedProjetoId !== "ALL") {
+                            setFormProjetoId(selectedProjetoId)
+                          } else if (projetos.length > 0) {
+                            setFormProjetoId(projetos[0].id)
+                          }
+                        }}
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        <PlusIcon className="size-4" />
+                        Nova Rubrica
+                      </Button>
+                    }
+                  />
+
+                  {selectedProjetoId !== "ALL" && (
+                    <ImportarPlanilhaDialog
+                      projetoId={selectedProjetoId}
+                      onImportado={() => loadRubricas(selectedProjetoId)}
+                      trigger={
+                        <Button variant="outline" className="gap-2">
+                          <UploadIcon className="size-4" />
+                          Importar Planilha
+                        </Button>
                       }
-                    }}
-                    className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
-                  >
-                    <PlusIcon className="size-4" />
-                    Nova Rubrica
-                  </Button>
-                }
-              />
+                    />
+                  )}
 
-              {selectedProjetoId !== "ALL" && (
-                <ImportarPlanilhaDialog
-                  projetoId={selectedProjetoId}
-                  onImportado={() => loadRubricas(selectedProjetoId)}
-                  trigger={
-                    <Button variant="outline" className="gap-2">
-                      <UploadIcon className="size-4" />
-                      Importar Planilha
-                    </Button>
-                  }
-                />
-              )}
-
-              <DialogContent className="sm:max-w-[560px]">
-                <form onSubmit={handleSubmit}>
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Item ao Plano de Trabalho</DialogTitle>
-                    <DialogDescription>
-                      Cadastre a rubrica com a natureza de despesa correspondente e regras de desembolso.
-                    </DialogDescription>
-                  </DialogHeader>
+                  <DialogContent className="sm:max-w-[560px]">
+                    <form onSubmit={handleSubmit}>
+                      <DialogHeader>
+                        <DialogTitle>Adicionar Item ao Plano de Trabalho</DialogTitle>
+                        <DialogDescription>
+                          Cadastre a rubrica com a natureza de despesa correspondente e regras de desembolso.
+                        </DialogDescription>
+                      </DialogHeader>
 
                   <div className="grid gap-4 py-4">
                     {/* Seletor de Projeto se estiver na visão consolidada */}
@@ -678,7 +682,9 @@ function OrcamentoContent() {
                 </form>
               </DialogContent>
             </Dialog>
-          </div>
+          </>
+        )}
+      </div>
         </div>
 
         {/* Cards de Métricas Superiores */}
@@ -1043,22 +1049,24 @@ function OrcamentoContent() {
                         )}
                       </div>
 
-                      <ConfirmDialog
-                        title="Remover rubrica?"
-                        description="A rubrica será removida do plano de trabalho. Esta ação não pode ser desfeita."
-                        confirmLabel="Excluir"
-                        onConfirm={() => handleDelete(rubrica.id)}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:bg-destructive/10"
-                            aria-label="Excluir"
-                          >
-                            <Trash2Icon className="size-3.5" />
-                          </Button>
-                        }
-                      />
+                      {pode("orcamento_gerenciar") && (
+                        <ConfirmDialog
+                          title="Remover rubrica?"
+                          description="A rubrica será removida do plano de trabalho. Esta ação não pode ser desfeita."
+                          confirmLabel="Excluir"
+                          onConfirm={() => handleDelete(rubrica.id)}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive hover:bg-destructive/10"
+                              aria-label="Excluir"
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                      )}
                     </div>
 
                     <CardTitle className="text-base font-semibold leading-snug mt-2 line-clamp-2">

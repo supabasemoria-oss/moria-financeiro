@@ -10,8 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { mroscService } from "@/lib/api/mrosc-service"
-import type { Usuario, RoleUsuario } from "@/lib/types"
+import {
+  type Usuario,
+  type RoleUsuario,
+  type PermissoesUsuario,
+  PERMISSOES_LABELS,
+  PERMISSOES_DEFAULT_POR_ROLE,
+} from "@/lib/types"
 import { maskTelefone } from "@/lib/masks"
 import { toast } from "sonner"
 import {
@@ -61,6 +68,7 @@ export function UsuariosManager() {
     cargo: "",
     role: "ADMIN" as RoleUsuario,
     telefone: "",
+    permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN } as PermissoesUsuario,
   })
 
   // Modal Editar
@@ -74,7 +82,28 @@ export function UsuariosManager() {
     telefone: "",
     ativo: true,
     password: "",
+    permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN } as PermissoesUsuario,
   })
+
+  function togglePermissaoCriar(chave: keyof PermissoesUsuario, valor: boolean) {
+    setFormCriar((prev) => ({
+      ...prev,
+      permissoes: {
+        ...prev.permissoes,
+        [chave]: valor,
+      },
+    }))
+  }
+
+  function togglePermissaoEditar(chave: keyof PermissoesUsuario, valor: boolean) {
+    setFormEditar((prev) => ({
+      ...prev,
+      permissoes: {
+        ...prev.permissoes,
+        [chave]: valor,
+      },
+    }))
+  }
 
   const carregarUsuarios = React.useCallback(async () => {
     try {
@@ -107,6 +136,11 @@ export function UsuariosManager() {
 
     try {
       setSavingCriar(true)
+      const perms =
+        formCriar.role === "ADMIN"
+          ? { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN }
+          : formCriar.permissoes
+
       await mroscService.createUsuario({
         nome: formCriar.nome.trim(),
         email: formCriar.email.trim().toLowerCase(),
@@ -115,10 +149,19 @@ export function UsuariosManager() {
         role: formCriar.role,
         telefone: formCriar.telefone.trim() || null,
         ativo: true,
+        permissoes: perms,
       })
       toast.success("Usuário criado com sucesso!")
       setOpenCriar(false)
-      setFormCriar({ nome: "", email: "", password: "", cargo: "", role: "ADMIN", telefone: "" })
+      setFormCriar({
+        nome: "",
+        email: "",
+        password: "",
+        cargo: "",
+        role: "ADMIN",
+        telefone: "",
+        permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN },
+      })
       carregarUsuarios()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao criar usuário"
@@ -138,6 +181,9 @@ export function UsuariosManager() {
       telefone: u.telefone || "",
       ativo: u.ativo,
       password: "",
+      permissoes: u.permissoes
+        ? { ...u.permissoes }
+        : { ...PERMISSOES_DEFAULT_POR_ROLE[u.role] },
     })
     setOpenEditar(true)
   }
@@ -157,12 +203,18 @@ export function UsuariosManager() {
 
     try {
       setSavingEditar(true)
+      const perms =
+        formEditar.role === "ADMIN"
+          ? { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN }
+          : formEditar.permissoes
+
       const payload: any = {
         nome: formEditar.nome.trim(),
         cargo: formEditar.cargo.trim() || null,
         role: formEditar.role,
         telefone: formEditar.telefone.trim() || null,
         ativo: formEditar.ativo,
+        permissoes: perms,
       }
       if (formEditar.password.trim()) {
         payload.password = formEditar.password.trim()
@@ -369,7 +421,7 @@ export function UsuariosManager() {
 
       {/* Modal Criar Usuário */}
       <Dialog open={openCriar} onOpenChange={setOpenCriar}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleCriar} className="space-y-4">
             <DialogHeader>
               <DialogTitle>Criar Novo Usuário</DialogTitle>
@@ -421,7 +473,14 @@ export function UsuariosManager() {
                   <Select
                     value={formCriar.role}
                     onValueChange={(v) => {
-                      if (v) setFormCriar({ ...formCriar, role: v as RoleUsuario })
+                      if (v) {
+                        const newRole = v as RoleUsuario
+                        setFormCriar({
+                          ...formCriar,
+                          role: newRole,
+                          permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE[newRole] },
+                        })
+                      }
                     }}
                   >
                     <SelectTrigger id="role">
@@ -456,6 +515,55 @@ export function UsuariosManager() {
                   }
                 />
               </div>
+
+              {/* Seletor de Permissões Granulares */}
+              {formCriar.role === "ADMIN" ? (
+                <div className="rounded-lg border bg-emerald-500/10 border-emerald-500/20 p-3 flex items-start gap-2.5 text-xs text-muted-foreground mt-2">
+                  <ShieldCheckIcon className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">Autoridade Total (Administrador)</p>
+                    <p>Administradores possuem acesso irrestrito a todas as operações, cadastros e configurações do sistema.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Autoridades Personalizadas
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground">
+                      Marque o que este usuário pode executar
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+                    {(Object.keys(PERMISSOES_LABELS) as (keyof PermissoesUsuario)[]).map((chave) => {
+                      const item = PERMISSOES_LABELS[chave]
+                      const checked = formCriar.permissoes?.[chave] ?? false
+                      return (
+                        <div
+                          key={chave}
+                          className="flex items-start gap-2 rounded-md border p-2 bg-background hover:bg-muted/30 transition-colors"
+                        >
+                          <Checkbox
+                            id={`criar-perm-${chave}`}
+                            checked={checked}
+                            onCheckedChange={(val) => togglePermissaoCriar(chave, Boolean(val))}
+                            className="mt-0.5"
+                          />
+                          <label
+                            htmlFor={`criar-perm-${chave}`}
+                            className="grid gap-0.5 cursor-pointer text-xs leading-none select-none"
+                          >
+                            <span className="font-medium text-foreground">{item.label}</span>
+                            <span className="text-[10px] text-muted-foreground line-clamp-1">{item.descricao}</span>
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter>
@@ -477,7 +585,7 @@ export function UsuariosManager() {
 
       {/* Modal Editar Usuário */}
       <Dialog open={openEditar} onOpenChange={setOpenEditar}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleEditar} className="space-y-4">
             <DialogHeader>
               <DialogTitle>Editar Usuário</DialogTitle>
@@ -503,7 +611,14 @@ export function UsuariosManager() {
                   <Select
                     value={formEditar.role}
                     onValueChange={(v) => {
-                      if (v) setFormEditar({ ...formEditar, role: v as RoleUsuario })
+                      if (v) {
+                        const newRole = v as RoleUsuario
+                        setFormEditar({
+                          ...formEditar,
+                          role: newRole,
+                          permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE[newRole] },
+                        })
+                      }
                     }}
                   >
                     <SelectTrigger id="edit-role">
@@ -555,6 +670,55 @@ export function UsuariosManager() {
                   />
                 </div>
               </div>
+
+              {/* Seletor de Permissões Granulares em Edição */}
+              {formEditar.role === "ADMIN" ? (
+                <div className="rounded-lg border bg-emerald-500/10 border-emerald-500/20 p-3 flex items-start gap-2.5 text-xs text-muted-foreground mt-2">
+                  <ShieldCheckIcon className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400">Autoridade Total (Administrador)</p>
+                    <p>Administradores possuem acesso irrestrito a todas as operações, cadastros e configurações do sistema.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Autoridades Personalizadas
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground">
+                      Marque o que este usuário pode executar
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
+                    {(Object.keys(PERMISSOES_LABELS) as (keyof PermissoesUsuario)[]).map((chave) => {
+                      const item = PERMISSOES_LABELS[chave]
+                      const checked = formEditar.permissoes?.[chave] ?? false
+                      return (
+                        <div
+                          key={chave}
+                          className="flex items-start gap-2 rounded-md border p-2 bg-background hover:bg-muted/30 transition-colors"
+                        >
+                          <Checkbox
+                            id={`editar-perm-${chave}`}
+                            checked={checked}
+                            onCheckedChange={(val) => togglePermissaoEditar(chave, Boolean(val))}
+                            className="mt-0.5"
+                          />
+                          <label
+                            htmlFor={`editar-perm-${chave}`}
+                            className="grid gap-0.5 cursor-pointer text-xs leading-none select-none"
+                          >
+                            <span className="font-medium text-foreground">{item.label}</span>
+                            <span className="text-[10px] text-muted-foreground line-clamp-1">{item.descricao}</span>
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2 border-t space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

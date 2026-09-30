@@ -9,7 +9,7 @@ export async function PATCH(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params
     const body = await req.json()
-    const { nome, cargo, role, telefone, ativo, password } = body
+    const { nome, cargo, role, telefone, ativo, password, permissoes } = body
 
     const admin = getSupabaseAdmin()
 
@@ -23,6 +23,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (cargo !== undefined) userMeta.cargo = cargo
     if (role !== undefined) userMeta.role = role
     if (telefone !== undefined) userMeta.telefone = telefone
+    if (permissoes !== undefined) userMeta.permissoes = permissoes
     if (Object.keys(userMeta).length > 0) {
       authUpdatePayload.user_metadata = userMeta
     }
@@ -43,6 +44,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (role !== undefined) tableUpdatePayload.role = role
     if (telefone !== undefined) tableUpdatePayload.telefone = telefone
     if (ativo !== undefined) tableUpdatePayload.ativo = ativo
+    if (permissoes !== undefined) tableUpdatePayload.permissoes = permissoes
 
     const { data, error } = await admin
       .from('usuarios')
