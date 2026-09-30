@@ -25,7 +25,7 @@ import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Despesa } from "@/lib/types"
 
 export function SectionCards() {
-  const { instituicaoId, projetoId } = useFiltroGlobal()
+  const { projetoPertenceAoFiltro } = useFiltroGlobal()
 
   const fetchProjetos = useCallback(
     () => mroscService.getProjetos(),
@@ -46,14 +46,8 @@ export function SectionCards() {
   )
 
   const projetosFiltrados = useMemo(() => {
-    if (projetoId !== "ALL") {
-      return projetos.filter((p) => p.id === projetoId)
-    }
-    if (instituicaoId !== "ALL") {
-      return projetos.filter((p) => p.instituicao_id === instituicaoId)
-    }
-    return projetos
-  }, [projetos, instituicaoId, projetoId])
+    return projetos.filter((p) => projetoPertenceAoFiltro(p.id))
+  }, [projetos, projetoPertenceAoFiltro])
 
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((d) => projetosFiltrados.some((p) => p.id === d.projeto_id))

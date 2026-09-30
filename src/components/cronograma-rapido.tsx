@@ -33,7 +33,7 @@ import { formatCurrency, formatDate, getTodaySaoPaulo } from "@/lib/utils"
 import { toast } from "sonner"
 
 export function CronogramaRapido() {
-  const { instituicaoId, projetoId, projetosDisponiveis } = useFiltroGlobal()
+  const { instituicaoId, projetoId, projetosDisponiveis, projetoPertenceAoFiltro } = useFiltroGlobal()
   const [parcelas, setParcelas] = React.useState<ParcelaComRelacoes[]>([])
   const [loading, setLoading] = React.useState(true)
 
@@ -150,19 +150,13 @@ export function CronogramaRapido() {
     return result
   }, [])
 
-  // 3. Filtrar parcelas pelo contexto global (instituição e projeto ativos)
+  // 3. Filtrar parcelas pelo contexto global (Opções 1, 2 e 3)
   const parcelasFiltradas = React.useMemo(() => {
     return parcelas.filter((p) => {
-      if (projetoId !== "ALL" && p.projeto_id !== projetoId) {
-        return false
-      }
-      if (instituicaoId !== "ALL") {
-        const pertenceInst = projetosDisponiveis.some((pr) => pr.id === p.projeto_id)
-        if (!pertenceInst) return false
-      }
-      return true
+      if (!p.projeto_id) return true
+      return projetoPertenceAoFiltro(p.projeto_id)
     })
-  }, [parcelas, projetoId, instituicaoId, projetosDisponiveis])
+  }, [parcelas, projetoPertenceAoFiltro])
 
   // Ações de Seleção Múltipla (Batch)
   const handleToggleSelect = React.useCallback((id: string) => {
