@@ -213,36 +213,47 @@ export default function PrestacaoContasPage() {
           </p>
         </div>
 
-        {/* Seleção de Projeto sincronizada */}
-        <div className="w-full sm:w-80">
-          <Select
-            value={selectedProjetoId}
-            onValueChange={(val) => {
-              if (val) {
-                setSelectedProjetoId(val)
-                setProjetoId(val)
-              }
-            }}
+        {/* Ações de Topo e Seleção de Projeto */}
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+          <Button
+            size="sm"
+            onClick={() => setActiveTab("exportar")}
+            className="h-9 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-1.5 shadow-xs shrink-0 cursor-pointer"
           >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Selecione o Projeto...">
-                {(val) => {
-                  if (!val) return "Selecione o Projeto..."
-                  const p = (projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).find(
-                    (item) => item.id === val
-                  )
-                  return p?.nome ?? val
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {(projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs">
-                  {p.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <DownloadIcon className="size-4" />
+            Exportações Oficiais
+          </Button>
+
+          <div className="w-full sm:w-72">
+            <Select
+              value={selectedProjetoId}
+              onValueChange={(val) => {
+                if (val) {
+                  setSelectedProjetoId(val)
+                  setProjetoId(val)
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Selecione o Projeto...">
+                  {(val) => {
+                    if (!val) return "Selecione o Projeto..."
+                    const p = (projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).find(
+                      (item) => item.id === val
+                    )
+                    return p?.nome ?? val
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    {p.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -350,9 +361,15 @@ export default function PrestacaoContasPage() {
               {rubricas.length}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="exportar" className="gap-2 text-xs">
-            <DownloadIcon className="size-3.5" />
-            Exportações Oficiais Transferegov
+          <TabsTrigger
+            value="exportar"
+            className="gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 shadow-xs data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:border-emerald-700 transition-all"
+          >
+            <DownloadIcon className="size-3.5 text-emerald-600 dark:text-emerald-300" />
+            <span className="font-bold">Exportações Oficiais Transferegov</span>
+            <Badge className="ml-0.5 bg-emerald-600 text-white dark:bg-emerald-400 dark:text-slate-950 text-[9px] px-1.5 py-0 font-bold uppercase tracking-wider shadow-xs">
+              Dossiê MROSC
+            </Badge>
           </TabsTrigger>
         </TabsList>
 
