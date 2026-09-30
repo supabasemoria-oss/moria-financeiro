@@ -45,6 +45,7 @@ export function OnboardingModal() {
 
   // Modo no Passo 2: "manual" ou "importar"
   const [modoPasso2, setModoPasso2] = React.useState<"escolha" | "manual">("escolha")
+  const [importarDialogOpen, setImportarDialogOpen] = React.useState(false)
 
   // Passo 1: Dados do Sistema & Senha
   const [formSistema, setFormSistema] = React.useState({
@@ -224,10 +225,10 @@ export function OnboardingModal() {
   if (checking || !open) return null
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-[620px] max-h-[92vh] overflow-y-auto p-0 gap-0">
+    <Dialog open={open && !importarDialogOpen} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-[620px] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Banner Superior de Boas-Vindas */}
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-6 rounded-t-lg">
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-6 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Badge className="bg-white/20 hover:bg-white/20 text-white border-0 text-xs">
@@ -283,7 +284,7 @@ export function OnboardingModal() {
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 flex-1 overflow-y-auto overflow-x-hidden min-w-0">
           {/* ======================================================== */}
           {/* PASSO 1: DADOS BÁSICOS DO SISTEMA & ALTERAR SENHA        */}
           {/* ======================================================== */}
@@ -536,9 +537,12 @@ export function OnboardingModal() {
 
                   <div className="mt-4">
                     <ImportarPlanilhaDialog
+                      open={importarDialogOpen}
+                      onOpenChange={setImportarDialogOpen}
                       trigger={
                         <Button
                           type="button"
+                          onClick={() => setImportarDialogOpen(true)}
                           className="w-full bg-teal-600 hover:bg-teal-500 text-white gap-1.5"
                           size="sm"
                         >

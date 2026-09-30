@@ -61,8 +61,10 @@ type Etapa = "upload" | "mapeando" | "validando" | "importando" | "concluido"
 
 interface Props {
   projetoId?: string
-  trigger: React.ReactNode
+  trigger?: React.ReactNode
   onImportado?: () => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const CAMPO_LABELS: Record<string, string> = {
@@ -74,9 +76,18 @@ const CAMPO_LABELS: Record<string, string> = {
   valor_unitario: "Valor Unitário",
 }
 
-export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Props) {
+export function ImportarPlanilhaDialog({
+  projetoId,
+  trigger,
+  onImportado,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+}: Props) {
   const router = useRouter()
-  const [open, setOpen] = React.useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : uncontrolledOpen
+  const setOpen = isControlled ? (setControlledOpen || (() => {})) : setUncontrolledOpen
   const [etapa, setEtapa] = React.useState<Etapa>("upload")
   const [arquivo, setArquivo] = React.useState<File | null>(null)
   const [rowsXLS, setRowsXLS] = React.useState<string[][]>([])
@@ -428,21 +439,26 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UploadIcon className="size-4" />
-            Importar Planilha Orçamentária
-          </DialogTitle>
-          <DialogDescription>
-            Importe rubricas e cotações de um arquivo XLS, XLSX ou PDF. A inteligência MROSC sugerirá o mapeamento e vinculará as entidades.
-          </DialogDescription>
-        </DialogHeader>
+      {trigger && <DialogTrigger render={trigger as React.ReactElement} />}
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {/* Header fixo no topo com cantos protegidos */}
+        <div className="p-6 pb-4 border-b shrink-0 pr-12">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UploadIcon className="size-4" />
+              Importar Planilha Orçamentária
+            </DialogTitle>
+            <DialogDescription>
+              Importe rubricas e cotações de um arquivo XLS, XLSX ou PDF. A inteligência MROSC sugerirá o mapeamento e vinculará as entidades.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        {/* ETAPA: UPLOAD */}
-        {etapa === "upload" && (
-          <div className="flex flex-col gap-4">
+        {/* Corpo rolável apenas na vertical, sem overflow nos cantos */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4 min-w-0">
+          {/* ETAPA: UPLOAD */}
+          {etapa === "upload" && (
+            <div className="flex flex-col gap-4">
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
@@ -728,7 +744,7 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
                   {/* Tabela detalhada do ciclo */}
                   {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
                     <div className="max-h-72 overflow-y-auto rounded-lg border">
-                      <Table>
+                      <Table className="min-w-[640px]">
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-[35%]">O que pagar (Item / Despesa)</TableHead>
@@ -990,35 +1006,40 @@ export function ImportarPlanilhaDialog({ projetoId, trigger, onImportado }: Prop
           </div>
         )}
 
-        <DialogFooter className="gap-2">
-          {etapa === "upload" && (
-            <Button variant="outline" onClick={() => handleClose(false)}>
-              Cancelar
-            </Button>
-          )}
-          {etapa === "validando" && (
-            <>
-              <Button
-                variant="outline"
-                onClick={reset}
-                className="gap-1 cursor-pointer"
-              >
-                <XIcon className="size-3.5" />
-                Trocar arquivo
+        </div>
+
+        {/* Rodapé de ações fixo na base */}
+        <div className="p-4 border-t bg-muted/20 shrink-0">
+          <DialogFooter className="gap-2 sm:justify-end">
+            {etapa === "upload" && (
+              <Button variant="outline" onClick={() => handleClose(false)}>
+                Cancelar
               </Button>
-              <Button
-                onClick={handleImportar}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"
-              >
-                <UploadIcon className="size-4" />
-                Confirmar e Importar
-              </Button>
-            </>
-          )}
-          {etapa === "concluido" && (
-            <Button onClick={() => handleClose(false)} className="cursor-pointer">Fechar</Button>
-          )}
-        </DialogFooter>
+            )}
+            {etapa === "validando" && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={reset}
+                  className="gap-1 cursor-pointer"
+                >
+                  <XIcon className="size-3.5" />
+                  Trocar arquivo
+                </Button>
+                <Button
+                  onClick={handleImportar}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"
+                >
+                  <UploadIcon className="size-4" />
+                  Confirmar e Importar
+                </Button>
+              </>
+            )}
+            {etapa === "concluido" && (
+              <Button onClick={() => handleClose(false)} className="cursor-pointer">Fechar</Button>
+            )}
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )
