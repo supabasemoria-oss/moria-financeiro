@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { ImportarPlanilhaDialog } from "@/components/importar-planilha-dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { saveSettings } from "@/lib/settings"
+import { saveSettings, uploadSystemLogo } from "@/lib/settings"
 import { useSystemSettings } from "@/contexts/system-context"
 import { supabase } from "@/lib/supabase"
 import { maskCnpj, maskTelefone } from "@/lib/masks"
@@ -40,6 +40,8 @@ export function OnboardingModal() {
   const [step, setStep] = React.useState<1 | 2>(1)
   const [savingStep1, setSavingStep1] = React.useState(false)
   const [savingManualInst, setSavingManualInst] = React.useState(false)
+  const [uploadingLogo, setUploadingLogo] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Modo no Passo 2: "manual" ou "importar"
   const [modoPasso2, setModoPasso2] = React.useState<"escolha" | "manual">("escolha")
@@ -75,6 +77,33 @@ export function OnboardingModal() {
       }))
     }
   }, [settings])
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem válido (PNG, JPG, SVG ou WebP).")
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("A imagem deve ter no máximo 5MB.")
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const publicUrl = await uploadSystemLogo(file)
+      setFormSistema((prev) => ({ ...prev, logo_url: publicUrl }))
+      toast.success("Logotipo enviado com sucesso!")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido"
+      toast.error("Erro ao enviar logotipo: " + msg)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
 
   // Verificar se há instituições cadastradas
   const verificarInstituicoes = React.useCallback(async () => {
@@ -295,32 +324,103 @@ export function OnboardingModal() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="logo_url">Caminho da Logo (opcional)</Label>
-                    <Input
-                      id="logo_url"
-                      placeholder="/logo-symbol.png"
-                      value={formSistema.logo_url}
-                      onChange={(e) =>
-                        setFormSistema({ ...formSistema, logo_url: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="whatsapp_phone">WhatsApp de Avisos (opcional)</Label>
-                    <Input
-                      id="whatsapp_phone"
-                      placeholder="(00) 00000-0000"
-                      value={formSistema.whatsapp_phone}
-                      onChange={(e) =>
-                        setFormSistema({
-                          ...formSistema,
-                          whatsapp_phone: maskTelefone(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
+                {/* Logotipo do Sistema */}
+                <div className="space-y-2 pt-1">
+                  <Label>Logotipo do Sistema</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+
+                  {formSistema.logo_url ? (
+                    <div className="flex items-center gap-3.5 p-3 rounded-lg border bg-muted/20">
+                      <div className="relative flex aspect-square size-14 shrink-0 items-center justify-center rounded-lg bg-background border p-1 shadow-2xs overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={formSistema.logo_url}
+                          alt="Logotipo atual"
+                          className="max-h-full max-w-full object-contain rounded"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "/logo-symbol.png"
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground">Logotipo Atual</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          Exibido na barra lateral e cabeçalhos do sistema.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingLogo}
+                          className="h-8 text-xs gap-1.5"
+                        >
+                          <UploadIcon className="size-3.5" />
+                          {uploadingLogo ? "Enviando..." : "Substituir"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFormSistema((prev) => ({ ...prev, logo_url: "" }))}
+                          className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-emerald-600 bg-muted/10 hover:bg-muted/20 cursor-pointer transition-colors text-center"
+                    >
+                      <div className="size-9 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                        <UploadIcon className="size-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">
+                          {uploadingLogo
+                            ? "Enviando imagem..."
+                            : "Clique para enviar o logotipo da sua organização"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Formatos aceitos: PNG, JPG, SVG ou WebP (máx. 5MB)
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={uploadingLogo}
+                        className="h-7 text-xs mt-1"
+                      >
+                        Selecionar Imagem
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="whatsapp_phone">WhatsApp de Avisos (opcional)</Label>
+                  <Input
+                    id="whatsapp_phone"
+                    placeholder="(00) 00000-0000"
+                    value={formSistema.whatsapp_phone}
+                    onChange={(e) =>
+                      setFormSistema({
+                        ...formSistema,
+                        whatsapp_phone: maskTelefone(e.target.value),
+                      })
+                    }
+                  />
                 </div>
 
                 {/* Seção Opcional de Redefinição de Senha */}
