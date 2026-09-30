@@ -8,7 +8,6 @@ import { ShieldCheckIcon } from "lucide-react"
 
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
-import { FiltroGlobalHeader } from "@/components/filtro-global-header"
 
 const titleMap: Record<string, string> = {
   "/": "Painel de Controle e Auditoria",
@@ -34,15 +33,10 @@ export function SiteHeader() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="h-4" />
         <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold text-foreground md:text-base hidden sm:inline-block">
+          <h1 className="text-sm font-semibold text-foreground md:text-base">
             {pageTitle}
           </h1>
         </div>
-      </div>
-
-      {/* Filtro Global do Topo: Instituição & Projeto */}
-      <div className="flex items-center">
-        <FiltroGlobalHeader />
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">

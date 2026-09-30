@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { SystemProvider } from "@/contexts/system-context";
-import { FiltroGlobalProvider } from "@/contexts/filtro-global-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,12 +50,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
         <SystemProvider>
-          <FiltroGlobalProvider>
-            <TooltipProvider>
-              {children}
-              <Toaster richColors position="top-right" />
-            </TooltipProvider>
-          </FiltroGlobalProvider>
+          <TooltipProvider>
+            {children}
+            <Toaster richColors position="top-right" />
+          </TooltipProvider>
         </SystemProvider>
       </body>
     </html>

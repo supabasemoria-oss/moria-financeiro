@@ -36,7 +36,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, RubricaComDespesas, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
@@ -67,16 +66,9 @@ function OrcamentoContent() {
   const searchParams = useSearchParams()
   const initialProjetoId = searchParams.get("projetoId") || ""
 
-  const {
-    projetoId: globalProjetoId,
-    instituicaoId: globalInstituicaoId,
-    setProjetoId: setGlobalProjetoId,
-    projetosDisponiveis,
-  } = useFiltroGlobal()
-
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [selectedProjetoId, setSelectedProjetoId] = useState<string>(
-    initialProjetoId || globalProjetoId || "ALL"
+    initialProjetoId || "ALL"
   )
   const [rubricas, setRubricas] = useState<RubricaComDespesas[]>([])
   const [loading, setLoading] = useState(true)
@@ -114,7 +106,7 @@ function OrcamentoContent() {
         const projData = await mroscService.getProjetos()
         setProjetos(projData)
 
-        const projId = initialProjetoId || globalProjetoId || "ALL"
+        const projId = initialProjetoId || "ALL"
         setSelectedProjetoId(projId)
         const rubData = await mroscService.getRubricas(projId === "ALL" ? undefined : projId)
         setRubricas(rubData)
@@ -127,14 +119,6 @@ function OrcamentoContent() {
     }
     loadInitial()
   }, [initialProjetoId])
-
-  // Sincronizar com filtro de projeto global do topo do sistema
-  useEffect(() => {
-    if (globalProjetoId && globalProjetoId !== selectedProjetoId) {
-      setSelectedProjetoId(globalProjetoId)
-      loadRubricas(globalProjetoId)
-    }
-  }, [globalProjetoId])
 
   // Carregar Rubricas do serviço
   async function loadRubricas(projId: string) {
@@ -152,21 +136,20 @@ function OrcamentoContent() {
 
   async function handleProjectChange(projId: string) {
     setSelectedProjetoId(projId)
-    setGlobalProjetoId(projId)
     loadRubricas(projId)
   }
 
   const currentProjeto = useMemo(() => {
     if (selectedProjetoId === "ALL") {
-      const somaTeto = projetosDisponiveis.reduce((acc, p) => acc + Number(p.valor_total_aprovado || 0), 0)
+      const somaTeto = projetos.reduce((acc, p) => acc + Number(p.valor_total_aprovado || 0), 0)
       return {
         id: "ALL",
-        nome: globalInstituicaoId !== "ALL" ? "Projetos da Instituição Selecionada" : "Todas as Parcerias (Consolidado)",
+        nome: "Todas as Parcerias (Consolidado)",
         valor_total_aprovado: somaTeto,
       } as Projeto
     }
     return projetos.find((p) => p.id === selectedProjetoId) || projetos[0]
-  }, [projetos, projetosDisponiveis, selectedProjetoId, globalInstituicaoId])
+  }, [projetos, selectedProjetoId])
 
   // Cálculos automáticos do formulário
   const formQtd = parseFloat(formData.quantidade.replace(",", ".")) || 0
@@ -242,13 +225,7 @@ function OrcamentoContent() {
       if (filtroSaldo === "ESGOTADO" && !(saldo <= 0 && totalGasto > 0)) return false
       if (filtroSaldo === "ESTOURADO" && saldo >= 0) return false
 
-      // 4. Filtro de Instituição Global (quando Projeto for ALL)
-      if (globalInstituicaoId !== "ALL" && selectedProjetoId === "ALL") {
-        const proj = projetos.find((p) => p.id === rubrica.projeto_id)
-        if (proj && proj.instituicao_id !== globalInstituicaoId) return false
-      }
-
-      // 5. Filtro de Período Temporal
+      // 4. Filtro de Período Temporal
       if (filtroPeriodo !== "ALL") {
         const parcelas = rubrica.parcelas_pagamento || []
         if (parcelas.length === 0) return false
@@ -272,7 +249,7 @@ function OrcamentoContent() {
 
       return true
     })
-  }, [rubricas, searchTerm, filtroTipo, filtroSaldo, filtroPeriodo, globalInstituicaoId, selectedProjetoId, projetos, weekRange, currentYearMonth, nextYearMonth])
+  }, [rubricas, searchTerm, filtroTipo, filtroSaldo, filtroPeriodo, selectedProjetoId, projetos, weekRange, currentYearMonth, nextYearMonth])
 
   // Desembolso no Período Selecionado
   const { totalPrevistoPeriodo, totalPagoPeriodo, qtdParcelasPeriodo } = useMemo(() => {
@@ -394,9 +371,9 @@ function OrcamentoContent() {
   const opcoesSelectProjeto = useMemo(
     () => [
       { id: "ALL", label: "Todos os Projetos (Consolidado)" },
-      ...projetosDisponiveis.map((p) => ({ id: p.id, label: p.nome })),
+      ...projetos.map((p) => ({ id: p.id, label: p.nome })),
     ],
-    [projetosDisponiveis]
+    [projetos]
   )
 
   return (

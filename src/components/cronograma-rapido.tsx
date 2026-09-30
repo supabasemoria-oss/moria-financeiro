@@ -27,13 +27,11 @@ import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
 import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { ParcelaComRelacoes, Fornecedor } from "@/lib/types"
 import { formatCurrency, formatDate, getTodaySaoPaulo } from "@/lib/utils"
 import { toast } from "sonner"
 
 export function CronogramaRapido() {
-  const { instituicaoId, projetoId, projetosDisponiveis, projetoPertenceAoFiltro } = useFiltroGlobal()
   const [parcelas, setParcelas] = React.useState<ParcelaComRelacoes[]>([])
   const [loading, setLoading] = React.useState(true)
 
@@ -150,13 +148,8 @@ export function CronogramaRapido() {
     return result
   }, [])
 
-  // 3. Filtrar parcelas pelo contexto global (Opções 1, 2 e 3)
-  const parcelasFiltradas = React.useMemo(() => {
-    return parcelas.filter((p) => {
-      if (!p.projeto_id) return true
-      return projetoPertenceAoFiltro(p.projeto_id)
-    })
-  }, [parcelas, projetoPertenceAoFiltro])
+  // 3. Parcelas da agenda
+  const parcelasFiltradas = parcelas
 
   // Ações de Seleção Múltipla (Batch)
   const handleToggleSelect = React.useCallback((id: string) => {
@@ -469,7 +462,7 @@ export function CronogramaRapido() {
                                 <p className="truncate text-foreground font-medium text-[11px]">
                                   {p.descricao || p.rubricas_orcamentarias?.descricao || "Parcela"}
                                 </p>
-                                {p.projetos && projetoId === "ALL" && (
+                                {p.projetos && (
                                   <p className="truncate text-[10px] text-muted-foreground">
                                     {p.projetos.nome}
                                   </p>
@@ -531,7 +524,7 @@ export function CronogramaRapido() {
                     size="sm"
                     render={
                       <Link
-                        href={`/execucao?projetoId=${projetoId !== "ALL" ? projetoId : ""}`}
+                        href="/execucao"
                       />
                     }
                     className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1 px-2"

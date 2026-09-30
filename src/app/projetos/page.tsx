@@ -28,7 +28,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import { diffDias } from "@/lib/parcelas"
 import type { Projeto, Instituicao, TermoAditivo, StatusProjeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -44,7 +43,6 @@ const STATUS_LABELS: Record<StatusProjeto, { label: string; variant: "default" |
 }
 
 export default function ProjetosPage() {
-  const { instituicaoId, projetoId } = useFiltroGlobal()
   const [projetos, setProjetos] = useState<(Projeto & { instituicoes?: Instituicao | null })[]>([])
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,16 +120,8 @@ export default function ProjetosPage() {
     loadData()
   }, [])
 
-  // Projetos filtrados pelo contexto global do topo
-  const projetosBase = useMemo(() => {
-    if (projetoId !== "ALL") {
-      return projetos.filter((p) => p.id === projetoId)
-    }
-    if (instituicaoId !== "ALL") {
-      return projetos.filter((p) => p.instituicao_id === instituicaoId)
-    }
-    return projetos
-  }, [projetos, instituicaoId, projetoId])
+  // Projetos base (todos os cadastrados)
+  const projetosBase = projetos
 
   // KPIs
   const kpis = useMemo(() => {

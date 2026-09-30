@@ -39,7 +39,6 @@ import { CriarProjetoDialog } from "@/components/dialogs/criar-projeto-dialog"
 import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
@@ -51,12 +50,6 @@ function ExecucaoContent() {
   const initialRubricaId = searchParams.get("rubricaId") || ""
   const initialParcelaId = searchParams.get("parcelaId") || ""
 
-  const {
-    projetoId: globalProjetoId,
-    setProjetoId: setGlobalProjetoId,
-    projetosDisponiveis,
-  } = useFiltroGlobal()
-
   // Dados principais
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
@@ -66,7 +59,7 @@ function ExecucaoContent() {
 
   // Filtros
   const [filterProjeto, setFilterProjeto] = useState<string>(
-    initialProjetoId || globalProjetoId || "ALL"
+    initialProjetoId || "ALL"
   )
   const [filterRubrica, setFilterRubrica] = useState<string>(initialRubricaId || "ALL")
   const [filterFornecedor, setFilterFornecedor] = useState<string>("ALL")
@@ -224,11 +217,6 @@ function ExecucaoContent() {
     if (rId && rId !== filterRubrica) setFilterRubrica(rId)
   }, [searchParams])
 
-  useEffect(() => {
-    if (globalProjetoId && globalProjetoId !== filterProjeto) {
-      setFilterProjeto(globalProjetoId)
-    }
-  }, [globalProjetoId])
 
   useEffect(() => {
     refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
@@ -978,21 +966,20 @@ function ExecucaoContent() {
                     onValueChange={(val) => {
                       const v = val ?? "ALL"
                       setFilterProjeto(v)
-                      setGlobalProjetoId(v)
                     }}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Projeto">
                         {(val) => {
                           if (!val || val === "ALL") return "Todos os Projetos"
-                          const p = projetosDisponiveis.find((item) => item.id === val)
+                          const p = projetos.find((item) => item.id === val)
                           return p?.nome ?? val
                         }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todos os Projetos</SelectItem>
-                      {projetosDisponiveis.map((p) => (
+                      {projetos.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.nome}
                         </SelectItem>

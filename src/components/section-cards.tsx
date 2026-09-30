@@ -21,12 +21,13 @@ import { mroscService } from "@/lib/api/mrosc-service"
 import { formatCurrency } from "@/lib/utils"
 import { calcularTotalPago, calcularTotalPendente } from "@/lib/calculos"
 import { useMroscQuery } from "@/hooks/use-mrosc-query"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Despesa } from "@/lib/types"
 
-export function SectionCards() {
-  const { projetoPertenceAoFiltro } = useFiltroGlobal()
+interface SectionCardsProps {
+  projetoId?: string
+}
 
+export function SectionCards({ projetoId }: SectionCardsProps = {}) {
   const fetchProjetos = useCallback(
     () => mroscService.getProjetos(),
     []
@@ -46,8 +47,11 @@ export function SectionCards() {
   )
 
   const projetosFiltrados = useMemo(() => {
-    return projetos.filter((p) => projetoPertenceAoFiltro(p.id))
-  }, [projetos, projetoPertenceAoFiltro])
+    if (projetoId && projetoId !== "ALL") {
+      return projetos.filter((p) => p.id === projetoId)
+    }
+    return projetos
+  }, [projetos, projetoId])
 
   const despesasFiltradas = useMemo(() => {
     return despesas.filter((d) => projetosFiltrados.some((p) => p.id === d.projeto_id))

@@ -26,15 +26,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { mroscService } from "@/lib/api/mrosc-service"
-import { useFiltroGlobal } from "@/contexts/filtro-global-context"
 import type { Projeto, Rubrica, DespesaComRelacoes } from "@/lib/types"
 import { transferegovExporter } from "@/lib/transferegov/exporter"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
 export default function PrestacaoContasPage() {
-  const { projetoId, setProjetoId, projetosDisponiveis } = useFiltroGlobal()
-
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [selectedProjetoId, setSelectedProjetoId] = useState<string>("")
   const [rubricas, setRubricas] = useState<any[]>([])
@@ -57,11 +54,8 @@ export default function PrestacaoContasPage() {
       try {
         const data = await mroscService.getProjetos()
         setProjetos(data)
-        // Se houver projeto ativo no filtro global, usar ele; senão, o primeiro do banco
-        if (projetoId && projetoId !== "ALL") {
-          setSelectedProjetoId(projetoId)
-        } else if (data.length > 0) {
-          setSelectedProjetoId(data[0].id)
+        if (data.length > 0) {
+          setSelectedProjetoId((curr) => curr || data[0].id)
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Erro desconhecido"
@@ -69,14 +63,7 @@ export default function PrestacaoContasPage() {
       }
     }
     fetchProjetos()
-  }, [projetoId])
-
-  // Sincronizar com mudanças do filtro global
-  useEffect(() => {
-    if (projetoId && projetoId !== "ALL" && projetoId !== selectedProjetoId) {
-      setSelectedProjetoId(projetoId)
-    }
-  }, [projetoId, selectedProjetoId])
+  }, [])
 
   // Carregar dados analíticos do projeto selecionado
   const loadProjectDetails = useCallback(async (projId: string) => {
@@ -230,7 +217,6 @@ export default function PrestacaoContasPage() {
               onValueChange={(val) => {
                 if (val) {
                   setSelectedProjetoId(val)
-                  setProjetoId(val)
                 }
               }}
             >
@@ -238,15 +224,13 @@ export default function PrestacaoContasPage() {
                 <SelectValue placeholder="Selecione o Projeto...">
                   {(val) => {
                     if (!val) return "Selecione o Projeto..."
-                    const p = (projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).find(
-                      (item) => item.id === val
-                    )
+                    const p = projetos.find((item) => item.id === val)
                     return p?.nome ?? val
                   }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {(projetosDisponiveis.length > 0 ? projetosDisponiveis : projetos).map((p) => (
+                {projetos.map((p) => (
                   <SelectItem key={p.id} value={p.id} className="text-xs">
                     {p.nome}
                   </SelectItem>
