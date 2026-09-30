@@ -139,7 +139,7 @@ export const mroscService = {
 
   // ?? Despesas ?????????????????????????????????????
   async getDespesas(filters?: DespesaFilters): Promise<DespesaComRelacoes[]> {
-    let q = supabase.from('despesas').select('*, projetos(*), rubricas_orcamentarias(*), fornecedores(*)')
+    let q = supabase.from('despesas').select('*, projetos(*), rubricas_orcamentarias(*), fornecedores(*), comprovantes(*)')
     if (filters?.projetoId) q = q.eq('projeto_id', filters.projetoId) as typeof q
     if (filters?.rubrica_id) q = q.eq('rubrica_id', filters.rubrica_id) as typeof q
     if (filters?.status) q = q.eq('status', filters.status) as typeof q
