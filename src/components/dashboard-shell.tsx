@@ -4,6 +4,7 @@ import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { OnboardingModal } from "@/components/onboarding-modal"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +27,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </SidebarInset>
+      <OnboardingModal />
     </SidebarProvider>
   )
 }
