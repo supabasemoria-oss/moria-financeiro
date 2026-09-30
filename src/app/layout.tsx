@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -16,11 +16,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#1a1a2e",
+};
+
 export const metadata: Metadata = {
   title: "MROSC Gestão - Gestão de Parcerias",
   description: "Assessoria técnica e auditoria financeira para o Terceiro Setor (Lei 13.019/2014)",
+  icons: {
+    icon: [
+      { url: "/logo-symbol.png", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    shortcut: "/logo-symbol.png",
+    apple: "/logo-symbol.png",
+  },
   manifest: "/manifest.json",
-  themeColor: "#1a1a2e",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
