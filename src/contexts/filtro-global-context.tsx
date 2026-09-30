@@ -88,48 +88,48 @@ export function FiltroGlobalProvider({ children }: { children: React.ReactNode }
         localStorage.setItem(STORAGE_KEY_INSTITUICAO, id)
       } catch {}
 
-      // Se mudou para uma instituição específica e o projeto atual não pertence a ela, reseta para ALL
-      if (id !== "ALL") {
-        setProjetoIdState((currProjId) => {
-          if (currProjId === "ALL") return "ALL"
-          const proj = projetos.find((p) => p.id === currProjId)
-          if (!proj || proj.instituicao_id !== id) {
-            try {
-              localStorage.setItem(STORAGE_KEY_PROJETO, "ALL")
-            } catch {}
-            return "ALL"
-          }
-          return currProjId
-        })
-      }
+      // Ao mudar ou definir instituição, sempre reseta o projeto para "ALL" (sem cascata acidental)
+      setProjetoIdState("ALL")
+      try {
+        localStorage.setItem(STORAGE_KEY_PROJETO, "ALL")
+      } catch {}
 
-      window.dispatchEvent(new CustomEvent("moria_filtro_global_changed", { detail: { instituicaoId: id } }))
+      window.dispatchEvent(
+        new CustomEvent("moria_filtro_global_changed", {
+          detail: { instituicaoId: id, projetoId: "ALL" },
+        })
+      )
     },
-    [projetos]
+    []
   )
 
-  // 4. Atualizar Projeto fixando no localStorage
+  // 4. Atualizar Projeto fixando no localStorage (SEM CASCATA)
   const setProjetoId = React.useCallback(
     (id: string) => {
+      // Regra de isolamento estrito:
+      // Ao definir instituição, só permitir selecionar projeto vinculado àquela instituição.
+      // Para trocar para projeto de outra instituição, deve-se escolher a outra instituição primeiro.
+      if (id !== "ALL") {
+        if (instituicaoId === "ALL") {
+          // Nenhuma instituição definida: bloquear seleção de projeto individual
+          return
+        }
+        const proj = projetos.find((p) => p.id === id)
+        if (!proj || proj.instituicao_id !== instituicaoId) {
+          // Projeto pertence a outra instituição: bloquear
+          return
+        }
+      }
+
       setProjetoIdState(id)
       try {
         localStorage.setItem(STORAGE_KEY_PROJETO, id)
       } catch {}
 
-      // Se o usuário selecionou um projeto específico e a instituição está em "ALL", sincroniza a instituição
-      if (id !== "ALL") {
-        const proj = projetos.find((p) => p.id === id)
-        if (proj && proj.instituicao_id) {
-          setInstituicaoIdState(proj.instituicao_id)
-          try {
-            localStorage.setItem(STORAGE_KEY_INSTITUICAO, proj.instituicao_id)
-          } catch {}
-        }
-      }
-
+      // NUNCA alterar instituicaoId aqui (zero cascata reversa)
       window.dispatchEvent(new CustomEvent("moria_filtro_global_changed", { detail: { projetoId: id } }))
     },
-    [projetos]
+    [projetos, instituicaoId]
   )
 
   // 5. Limpar filtros para "ALL" (Exibir Todos)
@@ -143,9 +143,9 @@ export function FiltroGlobalProvider({ children }: { children: React.ReactNode }
     window.dispatchEvent(new CustomEvent("moria_filtro_global_changed", { detail: { instituicaoId: "ALL", projetoId: "ALL" } }))
   }, [])
 
-  // 6. Projetos disponíveis filtrados pela instituição ativa
+  // 6. Projetos disponíveis filtrados estritamente pela instituição ativa
   const projetosDisponiveis = React.useMemo(() => {
-    if (instituicaoId === "ALL") return projetos
+    if (instituicaoId === "ALL") return []
     return projetos.filter((p) => p.instituicao_id === instituicaoId)
   }, [projetos, instituicaoId])
 
