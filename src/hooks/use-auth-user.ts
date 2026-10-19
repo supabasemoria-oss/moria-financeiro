@@ -55,8 +55,11 @@ export function useAuthUser() {
 
     loadUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      loadUser()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Evitar reload duplicado se já foi disparado na inicialização
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        loadUser()
+      }
     })
 
     return () => {

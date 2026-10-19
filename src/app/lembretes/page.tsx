@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
@@ -167,12 +167,14 @@ export default function LembretesPage() {
   const parcelas = rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
 
   // Projetos para filtro
-  const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [projetosRaw, setProjetosRaw] = useState<Projeto[]>([])
   useEffect(() => {
-    mroscService.getProjetos().then((data) => {
-      setProjetos(data.filter((p) => temAcessoAoProjeto(p.id)))
-    }).catch(() => {})
-  }, [temAcessoAoProjeto])
+    mroscService.getProjetos().then(setProjetosRaw).catch(() => {})
+  }, [])
+
+  const projetos = useMemo(() => {
+    return projetosRaw.filter((p) => temAcessoAoProjeto(p.id))
+  }, [projetosRaw, temAcessoAoProjeto])
 
   // Executar parcela individual
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
@@ -263,7 +265,7 @@ export default function LembretesPage() {
   }
 
   // Lembretes avulsos
-  const [lembretes, setLembretes] = useState<LembreteAvulso[]>([])
+  const [lembretesRaw, setLembretesRaw] = useState<LembreteAvulso[]>([])
   const [loadingLembretes, setLoadingLembretes] = useState(true)
   const [openNovoLembrete, setOpenNovoLembrete] = useState(false)
   const [formLembrete, setFormLembrete] = useState({
@@ -272,6 +274,10 @@ export default function LembretesPage() {
   })
   const [salvandoLembrete, setSavingLembrete] = useState(false)
   const [sendingType, setSendingType] = useState<string | null>(null)
+
+  const lembretes = useMemo(() => {
+    return lembretesRaw.filter((l) => temAcessoAoProjeto(l.projeto_id))
+  }, [lembretesRaw, temAcessoAoProjeto])
 
   async function handleSendSummary(type: "morning" | "evening") {
     setSendingType(type)
@@ -294,13 +300,13 @@ export default function LembretesPage() {
     setLoadingLembretes(true)
     try {
       const data = await mroscService.getLembretesAvulsos(filtroProjeto || undefined)
-      setLembretes(data.filter((l) => temAcessoAoProjeto(l.projeto_id)))
+      setLembretesRaw(data)
     } catch {
       // tabela pode não existir ainda — silencioso
     } finally {
       setLoadingLembretes(false)
     }
-  }, [filtroProjeto, temAcessoAoProjeto])
+  }, [filtroProjeto])
 
   useEffect(() => { carregarLembretes() }, [carregarLembretes])
 
@@ -334,7 +340,7 @@ export default function LembretesPage() {
   async function concluirLembrete(id: string) {
     try {
       await mroscService.updateLembreteAvulso(id, { status: "CONCLUIDO" })
-      setLembretes(prev => prev.map(l => l.id === id ? { ...l, status: "CONCLUIDO" } : l))
+      setLembretesRaw(prev => prev.map(l => l.id === id ? { ...l, status: "CONCLUIDO" } : l))
       toast.success("Lembrete concluído!")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro")
@@ -344,7 +350,7 @@ export default function LembretesPage() {
   async function excluirLembrete(id: string) {
     try {
       await mroscService.deleteLembreteAvulso(id)
-      setLembretes(prev => prev.filter(l => l.id !== id))
+      setLembretesRaw(prev => prev.filter(l => l.id !== id))
       toast.success("Lembrete excluído.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro")
