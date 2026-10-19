@@ -148,9 +148,11 @@ export interface PermissoesUsuario {
   fornecedores_gerenciar: boolean
   relatorios_exportar: boolean
   configuracoes_acessar: boolean
+  acesso_todos_projetos?: boolean
+  projetos_permitidos?: string[]
 }
 
-export const PERMISSOES_LABELS: Record<keyof PermissoesUsuario, { label: string; descricao: string }> = {
+export const PERMISSOES_LABELS: Record<keyof Omit<PermissoesUsuario, 'acesso_todos_projetos' | 'projetos_permitidos'>, { label: string; descricao: string }> = {
   despesas_lancar: { label: "Lançar Despesas", descricao: "Registrar novos gastos e compras no livro caixa" },
   despesas_quitar: { label: "Quitar Parcelas", descricao: "Liquidar obrigações financeiras e pagamentos" },
   despesas_excluir: { label: "Excluir Despesas e Parcelas", descricao: "Remover lançamentos e parcelas registradas" },
@@ -173,6 +175,8 @@ export const PERMISSOES_DEFAULT_POR_ROLE: Record<RoleUsuario, PermissoesUsuario>
     fornecedores_gerenciar: true,
     relatorios_exportar: true,
     configuracoes_acessar: true,
+    acesso_todos_projetos: true,
+    projetos_permitidos: [],
   },
   OPERADOR: {
     despesas_lancar: true,
@@ -184,6 +188,8 @@ export const PERMISSOES_DEFAULT_POR_ROLE: Record<RoleUsuario, PermissoesUsuario>
     fornecedores_gerenciar: true,
     relatorios_exportar: true,
     configuracoes_acessar: false,
+    acesso_todos_projetos: true,
+    projetos_permitidos: [],
   },
   CONSULTA: {
     despesas_lancar: false,
@@ -195,6 +201,8 @@ export const PERMISSOES_DEFAULT_POR_ROLE: Record<RoleUsuario, PermissoesUsuario>
     fornecedores_gerenciar: false,
     relatorios_exportar: true,
     configuracoes_acessar: false,
+    acesso_todos_projetos: true,
+    projetos_permitidos: [],
   },
 }
 
@@ -207,6 +215,8 @@ export interface Usuario {
   telefone: string | null
   ativo: boolean
   permissoes?: PermissoesUsuario | null
+  acesso_todos_projetos?: boolean
+  projetos_permitidos?: string[]
   created_at: string
   updated_at: string
 }
@@ -220,6 +230,8 @@ export interface UsuarioInsert {
   password?: string
   ativo?: boolean
   permissoes?: PermissoesUsuario | null
+  acesso_todos_projetos?: boolean
+  projetos_permitidos?: string[]
 }
 
 export interface UsuarioUpdate {
@@ -230,6 +242,8 @@ export interface UsuarioUpdate {
   password?: string
   ativo?: boolean
   permissoes?: PermissoesUsuario | null
+  acesso_todos_projetos?: boolean
+  projetos_permitidos?: string[]
 }
 
 // Re-export Database for convenience

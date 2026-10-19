@@ -44,7 +44,7 @@ const STATUS_LABELS: Record<StatusProjeto, { label: string; variant: "default" |
 }
 
 export default function ProjetosPage() {
-  const { pode } = usePermissoes()
+  const { pode, temAcessoAoProjeto } = usePermissoes()
   const [projetos, setProjetos] = useState<(Projeto & { instituicoes?: Instituicao | null })[]>([])
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,8 +122,10 @@ export default function ProjetosPage() {
     loadData()
   }, [])
 
-  // Projetos base (todos os cadastrados)
-  const projetosBase = projetos
+  // Projetos base (filtrados por permissão de acesso)
+  const projetosBase = useMemo(() => {
+    return projetos.filter((p) => temAcessoAoProjeto(p.id))
+  }, [projetos, temAcessoAoProjeto])
 
   // KPIs
   const kpis = useMemo(() => {

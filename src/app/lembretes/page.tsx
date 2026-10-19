@@ -25,6 +25,7 @@ import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dia
 import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { useAlertas } from "@/hooks/use-alertas"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { toast } from "sonner"
 import {
@@ -153,19 +154,25 @@ function LembreteCard({ lembrete, onConcluir, onExcluir }: {
 // Página principal
 // ---------------------------------------------------------------------------
 export default function LembretesPage() {
+  const { temAcessoAoProjeto } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
-  const { data: parcelas, loading, refetch } = useParcelas({
+  const { data: rawParcelas, loading, refetch } = useParcelas({
     proximosDias: 60,
     projetoId: filtroProjeto || undefined,
   })
   const { alertas, urgentes, atencao } = useAlertas()
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications()
 
+  // Parcelas filtradas por permissão de acesso
+  const parcelas = rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
+
   // Projetos para filtro
   const [projetos, setProjetos] = useState<Projeto[]>([])
   useEffect(() => {
-    mroscService.getProjetos().then(setProjetos).catch(() => {})
-  }, [])
+    mroscService.getProjetos().then((data) => {
+      setProjetos(data.filter((p) => temAcessoAoProjeto(p.id)))
+    }).catch(() => {})
+  }, [temAcessoAoProjeto])
 
   // Executar parcela individual
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
@@ -287,13 +294,13 @@ export default function LembretesPage() {
     setLoadingLembretes(true)
     try {
       const data = await mroscService.getLembretesAvulsos(filtroProjeto || undefined)
-      setLembretes(data)
+      setLembretes(data.filter((l) => temAcessoAoProjeto(l.projeto_id)))
     } catch {
       // tabela pode não existir ainda — silencioso
     } finally {
       setLoadingLembretes(false)
     }
-  }, [filtroProjeto])
+  }, [filtroProjeto, temAcessoAoProjeto])
 
   useEffect(() => { carregarLembretes() }, [carregarLembretes])
 

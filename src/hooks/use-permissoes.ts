@@ -26,10 +26,29 @@ export function usePermissoes() {
     return false
   }
 
+  // Regras de acesso a projetos
+  const isAdmin = usuario?.role === "ADMIN"
+
+  const acessoTodosProjetos =
+    isAdmin ||
+    usuario?.permissoes?.acesso_todos_projetos !== false
+
+  const projetosPermitidos: string[] =
+    usuario?.permissoes?.projetos_permitidos || []
+
+  const temAcessoAoProjeto = (projetoId?: string | null): boolean => {
+    if (!projetoId) return true
+    if (acessoTodosProjetos) return true
+    return projetosPermitidos.includes(projetoId)
+  }
+
   return {
     usuario,
     loading,
     pode,
-    isAdmin: usuario?.role === "ADMIN",
+    isAdmin,
+    acessoTodosProjetos,
+    projetosPermitidos,
+    temAcessoAoProjeto,
   }
 }

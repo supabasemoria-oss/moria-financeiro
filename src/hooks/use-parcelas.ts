@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { ParcelaComRelacoes, ParcelaFilters } from "@/lib/types"
 
 export function useParcelas(filters?: ParcelaFilters) {
+  const { temAcessoAoProjeto } = usePermissoes()
   const [data, setData] = useState<ParcelaComRelacoes[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -14,14 +16,14 @@ export function useParcelas(filters?: ParcelaFilters) {
     setError(null)
     try {
       const result = await mroscService.getParcelas(filters)
-      setData(result)
+      setData(result.filter((p) => temAcessoAoProjeto(p.projeto_id)))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido")
     } finally {
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters?.projetoId, filters?.rubricaId, filters?.status, filters?.proximosDias])
+  }, [filters?.projetoId, filters?.rubricaId, filters?.status, filters?.proximosDias, temAcessoAoProjeto])
 
   useEffect(() => {
     refetch()

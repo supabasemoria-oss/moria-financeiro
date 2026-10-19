@@ -40,6 +40,19 @@ export async function POST(req: Request) {
 
     const admin = getSupabaseAdmin()
 
+    // Normalizar permissoes para conter flags de projetos
+    const finalPermissoes = {
+      ...(permissoes || {}),
+      acesso_todos_projetos:
+        body.acesso_todos_projetos !== undefined
+          ? body.acesso_todos_projetos
+          : permissoes?.acesso_todos_projetos ?? true,
+      projetos_permitidos:
+        body.projetos_permitidos !== undefined
+          ? body.projetos_permitidos
+          : permissoes?.projetos_permitidos ?? [],
+    }
+
     // 1. Criar no Supabase Auth
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email,
@@ -50,7 +63,9 @@ export async function POST(req: Request) {
         cargo: cargo || null,
         role: role || 'ADMIN',
         telefone: telefone || null,
-        permissoes: permissoes || null,
+        permissoes: finalPermissoes,
+        acesso_todos_projetos: finalPermissoes.acesso_todos_projetos,
+        projetos_permitidos: finalPermissoes.projetos_permitidos,
       },
     })
 
@@ -71,7 +86,7 @@ export async function POST(req: Request) {
         role: role || 'ADMIN',
         telefone: telefone || null,
         ativo: ativo ?? true,
-        permissoes: permissoes || null,
+        permissoes: finalPermissoes,
         updated_at: new Date().toISOString(),
       })
       .select()

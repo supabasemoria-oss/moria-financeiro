@@ -21,6 +21,7 @@ import { mroscService } from "@/lib/api/mrosc-service"
 import { formatCurrency } from "@/lib/utils"
 import { calcularTotalPago, calcularTotalPendente } from "@/lib/calculos"
 import { useMroscQuery } from "@/hooks/use-mrosc-query"
+import { usePermissoes } from "@/hooks/use-permissoes"
 import type { Projeto, Despesa } from "@/lib/types"
 
 interface SectionCardsProps {
@@ -28,6 +29,7 @@ interface SectionCardsProps {
 }
 
 export function SectionCards({ projetoId }: SectionCardsProps = {}) {
+  const { temAcessoAoProjeto } = usePermissoes()
   const fetchProjetos = useCallback(
     () => mroscService.getProjetos(),
     []
@@ -37,14 +39,22 @@ export function SectionCards({ projetoId }: SectionCardsProps = {}) {
     []
   )
 
-  const { data: projetos } = useMroscQuery<Projeto[]>(
+  const { data: rawProjetos } = useMroscQuery<Projeto[]>(
     fetchProjetos,
     []
   )
-  const { data: despesas } = useMroscQuery<Despesa[]>(
+  const { data: rawDespesas } = useMroscQuery<Despesa[]>(
     fetchDespesas,
     []
   )
+
+  const projetos = useMemo(() => {
+    return rawProjetos.filter((p) => temAcessoAoProjeto(p.id))
+  }, [rawProjetos, temAcessoAoProjeto])
+
+  const despesas = useMemo(() => {
+    return rawDespesas.filter((d) => temAcessoAoProjeto(d.projeto_id))
+  }, [rawDespesas, temAcessoAoProjeto])
 
   const projetosFiltrados = useMemo(() => {
     if (projetoId && projetoId !== "ALL") {

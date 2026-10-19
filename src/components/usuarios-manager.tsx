@@ -16,6 +16,7 @@ import {
   type Usuario,
   type RoleUsuario,
   type PermissoesUsuario,
+  type ProjetoComInstituicao,
   PERMISSOES_LABELS,
   PERMISSOES_DEFAULT_POR_ROLE,
 } from "@/lib/types"
@@ -32,6 +33,8 @@ import {
   ShieldIcon,
   KeyRoundIcon,
   RefreshCwIcon,
+  FolderGit2Icon,
+  CheckIcon,
 } from "lucide-react"
 
 const ROLE_CONFIG: Record<RoleUsuario, { label: string; variant: "default" | "secondary" | "outline"; icon: React.ReactNode }> = {
@@ -54,6 +57,7 @@ const ROLE_CONFIG: Record<RoleUsuario, { label: string; variant: "default" | "se
 
 export function UsuariosManager() {
   const [usuarios, setUsuarios] = React.useState<Usuario[]>([])
+  const [projetos, setProjetos] = React.useState<ProjetoComInstituicao[]>([])
   const [loading, setLoading] = React.useState(true)
   const [busca, setBusca] = React.useState("")
   const [filtroRole, setFiltroRole] = React.useState<string>("TODOS")
@@ -69,6 +73,8 @@ export function UsuariosManager() {
     role: "ADMIN" as RoleUsuario,
     telefone: "",
     permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN } as PermissoesUsuario,
+    acesso_todos_projetos: true,
+    projetos_permitidos: [] as string[],
   })
 
   // Modal Editar
@@ -83,6 +89,8 @@ export function UsuariosManager() {
     ativo: true,
     password: "",
     permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN } as PermissoesUsuario,
+    acesso_todos_projetos: true,
+    projetos_permitidos: [] as string[],
   })
 
   function togglePermissaoCriar(chave: keyof PermissoesUsuario, valor: boolean) {
@@ -105,22 +113,50 @@ export function UsuariosManager() {
     }))
   }
 
-  const carregarUsuarios = React.useCallback(async () => {
+  function toggleProjetoCriar(projetoId: string) {
+    setFormCriar((prev) => {
+      const existe = prev.projetos_permitidos.includes(projetoId)
+      return {
+        ...prev,
+        projetos_permitidos: existe
+          ? prev.projetos_permitidos.filter((id) => id !== projetoId)
+          : [...prev.projetos_permitidos, projetoId],
+      }
+    })
+  }
+
+  function toggleProjetoEditar(projetoId: string) {
+    setFormEditar((prev) => {
+      const existe = prev.projetos_permitidos.includes(projetoId)
+      return {
+        ...prev,
+        projetos_permitidos: existe
+          ? prev.projetos_permitidos.filter((id) => id !== projetoId)
+          : [...prev.projetos_permitidos, projetoId],
+      }
+    })
+  }
+
+  const carregarDados = React.useCallback(async () => {
     try {
       setLoading(true)
-      const data = await mroscService.getUsuarios()
-      setUsuarios(data)
+      const [usersData, projsData] = await Promise.all([
+        mroscService.getUsuarios(),
+        mroscService.getProjetos().catch(() => []),
+      ])
+      setUsuarios(usersData)
+      setProjetos(projsData)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro desconhecido"
-      toast.error("Erro ao carregar usuários: " + msg)
+      toast.error("Erro ao carregar dados: " + msg)
     } finally {
       setLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    carregarUsuarios()
-  }, [carregarUsuarios])
+    carregarDados()
+  }, [carregarDados])
 
   // Submissão Criar
   async function handleCriar(e: React.FormEvent) {
@@ -138,8 +174,16 @@ export function UsuariosManager() {
       setSavingCriar(true)
       const perms =
         formCriar.role === "ADMIN"
-          ? { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN }
-          : formCriar.permissoes
+          ? {
+              ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN,
+              acesso_todos_projetos: true,
+              projetos_permitidos: [],
+            }
+          : {
+              ...formCriar.permissoes,
+              acesso_todos_projetos: formCriar.acesso_todos_projetos,
+              projetos_permitidos: formCriar.acesso_todos_projetos ? [] : formCriar.projetos_permitidos,
+            }
 
       await mroscService.createUsuario({
         nome: formCriar.nome.trim(),
@@ -161,8 +205,10 @@ export function UsuariosManager() {
         role: "ADMIN",
         telefone: "",
         permissoes: { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN },
+        acesso_todos_projetos: true,
+        projetos_permitidos: [],
       })
-      carregarUsuarios()
+      carregarDados()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao criar usuário"
       toast.error(msg)
@@ -174,6 +220,12 @@ export function UsuariosManager() {
   // Abrir Modal Editar
   function abrirEdicao(u: Usuario) {
     setUsuarioEditando(u)
+    const acessoTodos =
+      u.permissoes?.acesso_todos_projetos !== undefined
+        ? u.permissoes.acesso_todos_projetos
+        : true
+    const projsPermitidos = u.permissoes?.projetos_permitidos || []
+
     setFormEditar({
       nome: u.nome,
       cargo: u.cargo || "",
@@ -184,6 +236,8 @@ export function UsuariosManager() {
       permissoes: u.permissoes
         ? { ...u.permissoes }
         : { ...PERMISSOES_DEFAULT_POR_ROLE[u.role] },
+      acesso_todos_projetos: acessoTodos,
+      projetos_permitidos: projsPermitidos,
     })
     setOpenEditar(true)
   }
@@ -205,8 +259,16 @@ export function UsuariosManager() {
       setSavingEditar(true)
       const perms =
         formEditar.role === "ADMIN"
-          ? { ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN }
-          : formEditar.permissoes
+          ? {
+              ...PERMISSOES_DEFAULT_POR_ROLE.ADMIN,
+              acesso_todos_projetos: true,
+              projetos_permitidos: [],
+            }
+          : {
+              ...formEditar.permissoes,
+              acesso_todos_projetos: formEditar.acesso_todos_projetos,
+              projetos_permitidos: formEditar.acesso_todos_projetos ? [] : formEditar.projetos_permitidos,
+            }
 
       const payload: any = {
         nome: formEditar.nome.trim(),
@@ -223,7 +285,7 @@ export function UsuariosManager() {
       await mroscService.updateUsuario(usuarioEditando.id, payload)
       toast.success("Usuário atualizado com sucesso!")
       setOpenEditar(false)
-      carregarUsuarios()
+      carregarDados()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao atualizar usuário"
       toast.error(msg)
@@ -237,7 +299,7 @@ export function UsuariosManager() {
     try {
       await mroscService.deleteUsuario(id)
       toast.success("Usuário excluído com sucesso.")
-      carregarUsuarios()
+      carregarDados()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao excluir usuário"
       toast.error(msg)
@@ -289,7 +351,7 @@ export function UsuariosManager() {
           <Button
             variant="outline"
             size="icon"
-            onClick={carregarUsuarios}
+            onClick={carregarDados}
             title="Atualizar lista"
             className="shrink-0"
           >
@@ -322,6 +384,7 @@ export function UsuariosManager() {
                 <TableRow className="bg-muted/30">
                   <TableHead>Usuário</TableHead>
                   <TableHead>Perfil</TableHead>
+                  <TableHead>Acesso a Projetos</TableHead>
                   <TableHead>Cargo / Função</TableHead>
                   <TableHead>Telefone</TableHead>
                   <TableHead>Status</TableHead>
@@ -331,14 +394,14 @@ export function UsuariosManager() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                       <RefreshCwIcon className="size-5 animate-spin mx-auto mb-2 text-primary" />
                       Carregando usuários...
                     </TableCell>
                   </TableRow>
                 ) : filtrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                       <UsersIcon className="size-8 mx-auto mb-2 opacity-40" />
                       Nenhum usuário localizado.
                     </TableCell>
@@ -346,6 +409,11 @@ export function UsuariosManager() {
                 ) : (
                   filtrados.map((u) => {
                     const roleConfig = ROLE_CONFIG[u.role] || ROLE_CONFIG.ADMIN
+                    const isAll =
+                      u.role === "ADMIN" ||
+                      u.permissoes?.acesso_todos_projetos !== false
+                    const countPermitidos = u.permissoes?.projetos_permitidos?.length || 0
+
                     return (
                       <TableRow key={u.id} className="hover:bg-muted/40 transition-colors">
                         <TableCell>
@@ -359,6 +427,19 @@ export function UsuariosManager() {
                             {roleConfig.icon}
                             {roleConfig.label}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {isAll ? (
+                            <Badge variant="outline" className="text-[11px] bg-muted/40 font-normal text-muted-foreground gap-1">
+                              <FolderGit2Icon className="size-3 text-emerald-600" />
+                              Todos os Projetos
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[11px] font-medium text-foreground gap-1">
+                              <FolderGit2Icon className="size-3 text-primary" />
+                              {countPermitidos} {countPermitidos === 1 ? "projeto" : "projetos"}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {u.cargo || "—"}
@@ -537,9 +618,9 @@ export function UsuariosManager() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
-                    {(Object.keys(PERMISSOES_LABELS) as (keyof PermissoesUsuario)[]).map((chave) => {
+                    {(Object.keys(PERMISSOES_LABELS) as (keyof typeof PERMISSOES_LABELS)[]).map((chave) => {
                       const item = PERMISSOES_LABELS[chave]
-                      const checked = formCriar.permissoes?.[chave] ?? false
+                      const checked = Boolean(formCriar.permissoes?.[chave])
                       return (
                         <div
                           key={chave}
@@ -562,6 +643,81 @@ export function UsuariosManager() {
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Seletor de Acesso a Projetos */}
+              {formCriar.role !== "ADMIN" && (
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <FolderGit2Icon className="size-3.5 text-primary" />
+                        Acesso a Projetos
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Restrinja a quais projetos este usuário poderá visualizar e gerenciar
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-md border p-2.5 bg-muted/20">
+                    <Checkbox
+                      id="criar-todos-projetos"
+                      checked={formCriar.acesso_todos_projetos}
+                      onCheckedChange={(val) =>
+                        setFormCriar((prev) => ({
+                          ...prev,
+                          acesso_todos_projetos: Boolean(val),
+                          projetos_permitidos: Boolean(val) ? [] : prev.projetos_permitidos,
+                        }))
+                      }
+                    />
+                    <label
+                      htmlFor="criar-todos-projetos"
+                      className="cursor-pointer text-xs font-medium text-foreground select-none"
+                    >
+                      Acesso a todos os projetos (atuais e futuros)
+                    </label>
+                  </div>
+
+                  {!formCriar.acesso_todos_projetos && (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Selecione os projetos permitidos ({formCriar.projetos_permitidos.length} selecionados):
+                      </span>
+                      <div className="max-h-[160px] overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
+                        {projetos.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">Nenhum projeto cadastrado.</p>
+                        ) : (
+                          projetos.map((proj) => {
+                            const isSelected = formCriar.projetos_permitidos.includes(proj.id)
+                            return (
+                              <div
+                                key={proj.id}
+                                className="flex items-center gap-2 rounded p-1.5 hover:bg-muted/40 transition-colors text-xs"
+                              >
+                                <Checkbox
+                                  id={`criar-proj-${proj.id}`}
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleProjetoCriar(proj.id)}
+                                />
+                                <label
+                                  htmlFor={`criar-proj-${proj.id}`}
+                                  className="cursor-pointer flex-1 flex items-center justify-between select-none"
+                                >
+                                  <span className="font-medium text-foreground">{proj.nome}</span>
+                                  {proj.numero_termo && (
+                                    <span className="text-[10px] text-muted-foreground">{proj.numero_termo}</span>
+                                  )}
+                                </label>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -692,9 +848,9 @@ export function UsuariosManager() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
-                    {(Object.keys(PERMISSOES_LABELS) as (keyof PermissoesUsuario)[]).map((chave) => {
+                    {(Object.keys(PERMISSOES_LABELS) as (keyof typeof PERMISSOES_LABELS)[]).map((chave) => {
                       const item = PERMISSOES_LABELS[chave]
-                      const checked = formEditar.permissoes?.[chave] ?? false
+                      const checked = Boolean(formEditar.permissoes?.[chave])
                       return (
                         <div
                           key={chave}
@@ -717,6 +873,81 @@ export function UsuariosManager() {
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Seletor de Acesso a Projetos em Edição */}
+              {formEditar.role !== "ADMIN" && (
+                <div className="space-y-3 pt-3 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <FolderGit2Icon className="size-3.5 text-primary" />
+                        Acesso a Projetos
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Restrinja a quais projetos este usuário poderá visualizar e gerenciar
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-md border p-2.5 bg-muted/20">
+                    <Checkbox
+                      id="editar-todos-projetos"
+                      checked={formEditar.acesso_todos_projetos}
+                      onCheckedChange={(val) =>
+                        setFormEditar((prev) => ({
+                          ...prev,
+                          acesso_todos_projetos: Boolean(val),
+                          projetos_permitidos: Boolean(val) ? [] : prev.projetos_permitidos,
+                        }))
+                      }
+                    />
+                    <label
+                      htmlFor="editar-todos-projetos"
+                      className="cursor-pointer text-xs font-medium text-foreground select-none"
+                    >
+                      Acesso a todos os projetos (atuais e futuros)
+                    </label>
+                  </div>
+
+                  {!formEditar.acesso_todos_projetos && (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Selecione os projetos permitidos ({formEditar.projetos_permitidos.length} selecionados):
+                      </span>
+                      <div className="max-h-[160px] overflow-y-auto space-y-1 border rounded-md p-2 bg-background">
+                        {projetos.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2 text-center">Nenhum projeto cadastrado.</p>
+                        ) : (
+                          projetos.map((proj) => {
+                            const isSelected = formEditar.projetos_permitidos.includes(proj.id)
+                            return (
+                              <div
+                                key={proj.id}
+                                className="flex items-center gap-2 rounded p-1.5 hover:bg-muted/40 transition-colors text-xs"
+                              >
+                                <Checkbox
+                                  id={`editar-proj-${proj.id}`}
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleProjetoEditar(proj.id)}
+                                />
+                                <label
+                                  htmlFor={`editar-proj-${proj.id}`}
+                                  className="cursor-pointer flex-1 flex items-center justify-between select-none"
+                                >
+                                  <span className="font-medium text-foreground">{proj.nome}</span>
+                                  {proj.numero_termo && (
+                                    <span className="text-[10px] text-muted-foreground">{proj.numero_termo}</span>
+                                  )}
+                                </label>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

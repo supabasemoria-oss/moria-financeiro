@@ -9,7 +9,7 @@ export async function PATCH(req: Request, context: RouteContext) {
   try {
     const { id } = await context.params
     const body = await req.json()
-    const { nome, cargo, role, telefone, ativo, password, permissoes } = body
+    const { nome, cargo, role, telefone, ativo, password, permissoes, acesso_todos_projetos, projetos_permitidos } = body
 
     const admin = getSupabaseAdmin()
 
@@ -23,7 +23,24 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (cargo !== undefined) userMeta.cargo = cargo
     if (role !== undefined) userMeta.role = role
     if (telefone !== undefined) userMeta.telefone = telefone
-    if (permissoes !== undefined) userMeta.permissoes = permissoes
+    
+    // Normalizar permissoes
+    let finalPermissoes = permissoes
+    if (permissoes !== undefined || acesso_todos_projetos !== undefined || projetos_permitidos !== undefined) {
+      finalPermissoes = {
+        ...(permissoes || {}),
+        ...(acesso_todos_projetos !== undefined ? { acesso_todos_projetos } : {}),
+        ...(projetos_permitidos !== undefined ? { projetos_permitidos } : {}),
+      }
+      userMeta.permissoes = finalPermissoes
+      if (finalPermissoes.acesso_todos_projetos !== undefined) {
+        userMeta.acesso_todos_projetos = finalPermissoes.acesso_todos_projetos
+      }
+      if (finalPermissoes.projetos_permitidos !== undefined) {
+        userMeta.projetos_permitidos = finalPermissoes.projetos_permitidos
+      }
+    }
+
     if (Object.keys(userMeta).length > 0) {
       authUpdatePayload.user_metadata = userMeta
     }
@@ -44,7 +61,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (role !== undefined) tableUpdatePayload.role = role
     if (telefone !== undefined) tableUpdatePayload.telefone = telefone
     if (ativo !== undefined) tableUpdatePayload.ativo = ativo
-    if (permissoes !== undefined) tableUpdatePayload.permissoes = permissoes
+    if (finalPermissoes !== undefined) tableUpdatePayload.permissoes = finalPermissoes
 
     const { data, error } = await admin
       .from('usuarios')
