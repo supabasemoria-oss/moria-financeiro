@@ -93,7 +93,15 @@ function GrupoSection({
               )}
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="font-medium text-sm truncate">{p.descricao}</span>
-                <span className="text-xs text-muted-foreground">{p.projetos?.nome ?? "—"}</span>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>{p.projetos?.nome ?? "—"}</span>
+                  {p.rubricas_orcamentarias && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal bg-muted">
+                      {p.rubricas_orcamentarias.tipo ? `[${p.rubricas_orcamentarias.tipo}] ` : ""}
+                      {p.rubricas_orcamentarias.descricao}
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
                     {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
@@ -408,6 +416,38 @@ export default function LembretesPage() {
     } else {
       setSelectedLembretes(new Set(lembretes.map(l => l.id)))
     }
+  }
+
+  // Seletores inteligentes temporais
+  const selecionarPorCriterio = (criterio: "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes") => {
+    const hojeStr = getTodaySaoPaulo()
+    const selecionados = lembretes.filter((l) => {
+      const dias = diasRestantesSaoPaulo(l.data_vencimento)
+      if (criterio === "atrasados3d") {
+        return l.status === "PENDENTE" && dias <= -3
+      }
+      if (criterio === "vencidos") {
+        return l.status === "PENDENTE" && dias < 0
+      }
+      if (criterio === "hoje") {
+        return l.status === "PENDENTE" && l.data_vencimento === hojeStr
+      }
+      if (criterio === "semana") {
+        return l.status === "PENDENTE" && dias >= 0 && dias <= 7
+      }
+      if (criterio === "mes") {
+        return l.status === "PENDENTE" && dias >= 0 && dias <= 30
+      }
+      return false
+    })
+
+    if (selecionados.length === 0) {
+      toast.info("Nenhum lembrete pendente encontrado para este período.")
+      return
+    }
+
+    setSelectedLembretes(new Set(selecionados.map((l) => l.id)))
+    toast.success(`${selecionados.length} lembrete(s) selecionado(s)!`)
   }
 
   const selectedLembretesObjs = lembretes.filter(l => selectedLembretes.has(l.id))
@@ -760,23 +800,78 @@ export default function LembretesPage() {
                 </div>
               )}
 
-              {/* Barra de utilitários: Selecionar todos / Desmarcar todos */}
+              {/* Barra de utilitários: Seleção rápida por data / período */}
               {!loadingLembretes && lembretes.length > 0 && (
-                <div className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-muted-foreground mr-1">
+                      Seleção Rápida:
+                    </span>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={toggleSelectAllLembretes}
-                      className="text-xs h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => selecionarPorCriterio("atrasados3d")}
+                      className="text-xs h-7 px-2.5 gap-1 border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
+                      title="Selecionar pendentes vencidos há 3 dias ou mais"
                     >
-                      <CheckIcon className="size-3.5 text-emerald-600" />
+                      🔴 Atrasados (+3 dias)
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarPorCriterio("vencidos")}
+                      className="text-xs h-7 px-2.5 gap-1 border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                      title="Selecionar todos os pendentes já vencidos"
+                    >
+                      ⚠️ Todos Vencidos
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarPorCriterio("hoje")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar pendentes que vencem hoje"
+                    >
+                      📅 Vencem Hoje
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarPorCriterio("semana")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar pendentes dos próximos 7 dias"
+                    >
+                      📆 Esta Semana
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarPorCriterio("mes")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar pendentes dos próximos 30 dias"
+                    >
+                      🗓️ Próximos 30 dias
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={toggleSelectAllLembretes}
+                      className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <CheckIcon className="size-3 text-emerald-600" />
                       {selectedLembretes.size === lembretes.length && lembretes.length > 0
                         ? "Desmarcar Todos"
-                        : "Selecionar Todos os Lembretes"}
+                        : "Marcar Todos"}
                     </Button>
-                    <span className="text-xs text-muted-foreground">
-                      {lembretes.length} lembrete(s) no total
+                    <span className="text-[11px] text-muted-foreground">
+                      ({lembretes.length} lembretes)
                     </span>
                   </div>
                 </div>
