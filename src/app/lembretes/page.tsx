@@ -115,25 +115,52 @@ function GrupoSection({
 // ---------------------------------------------------------------------------
 // LembreteCard
 // ---------------------------------------------------------------------------
-function LembreteCard({ lembrete, onConcluir, onExcluir }: {
+function LembreteCard({
+  lembrete,
+  onConcluir,
+  onExcluir,
+  isSelected,
+  onToggleSelect,
+}: {
   lembrete: LembreteAvulso
   onConcluir: (id: string) => void
   onExcluir: (id: string) => void
+  isSelected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   const dias = diasRestantes(lembrete.data_vencimento)
   const atrasado = dias < 0 && lembrete.status === "PENDENTE"
   const concluido = lembrete.status === "CONCLUIDO"
   return (
-    <div className={`flex items-center justify-between rounded-lg border p-3 ${concluido ? "opacity-60 bg-muted/40" : atrasado ? "border-red-200 bg-red-50" : "border-border bg-card"}`}>
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span className={`font-medium text-sm truncate ${concluido ? "line-through" : ""}`}>{lembrete.titulo}</span>
-        {lembrete.descricao && <span className="text-xs text-muted-foreground truncate">{lembrete.descricao}</span>}
-        {lembrete.projetos && <span className="text-xs text-muted-foreground">{lembrete.projetos.nome}</span>}
-        <div className="flex items-center gap-2 mt-1">
-          <Badge variant={concluido ? "secondary" : atrasado ? "destructive" : "outline"} className="text-xs">
-            {concluido ? "Concluído" : atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(lembrete.data_vencimento)}
-          </Badge>
-          {lembrete.valor && <span className="text-xs font-semibold">{formatBRL(lembrete.valor)}</span>}
+    <div
+      className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
+        isSelected
+          ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30"
+          : concluido
+          ? "opacity-60 bg-muted/40"
+          : atrasado
+          ? "border-red-200 bg-red-50 dark:bg-red-950/20"
+          : "border-border bg-card"
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        {onToggleSelect && (
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggleSelect(lembrete.id)}
+            aria-label={`Selecionar lembrete ${lembrete.titulo}`}
+          />
+        )}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className={`font-medium text-sm truncate ${concluido ? "line-through" : ""}`}>{lembrete.titulo}</span>
+          {lembrete.descricao && <span className="text-xs text-muted-foreground truncate">{lembrete.descricao}</span>}
+          {lembrete.projetos && <span className="text-xs text-muted-foreground">{lembrete.projetos.nome}</span>}
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant={concluido ? "secondary" : atrasado ? "destructive" : "outline"} className="text-xs">
+              {concluido ? "Concluído" : atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(lembrete.data_vencimento)}
+            </Badge>
+            {lembrete.valor && <span className="text-xs font-semibold">{formatBRL(lembrete.valor)}</span>}
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-1 ml-3 shrink-0">
@@ -351,9 +378,76 @@ export default function LembretesPage() {
     try {
       await mroscService.deleteLembreteAvulso(id)
       setLembretesRaw(prev => prev.filter(l => l.id !== id))
+      setSelectedLembretes(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
       toast.success("Lembrete excluído.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro")
+    }
+  }
+
+  // Seleção e Ações em Lote de Lembretes Avulsos
+  const [selectedLembretes, setSelectedLembretes] = useState<Set<string>>(new Set())
+  const [salvandoLoteLembretes, setSalvandoLoteLembretes] = useState(false)
+
+  const toggleSelectLembrete = (id: string) => {
+    setSelectedLembretes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAllLembretes = () => {
+    if (selectedLembretes.size === lembretes.length && lembretes.length > 0) {
+      setSelectedLembretes(new Set())
+    } else {
+      setSelectedLembretes(new Set(lembretes.map(l => l.id)))
+    }
+  }
+
+  const selectedLembretesObjs = lembretes.filter(l => selectedLembretes.has(l.id))
+  const totalValorLoteLembretes = selectedLembretesObjs.reduce((acc, l) => acc + (l.valor || 0), 0)
+
+  async function concluirLoteLembretes() {
+    if (selectedLembretesObjs.length === 0) return
+    setSalvandoLoteLembretes(true)
+    try {
+      for (const l of selectedLembretesObjs) {
+        if (l.status !== "CONCLUIDO") {
+          await mroscService.updateLembreteAvulso(l.id, { status: "CONCLUIDO" })
+        }
+      }
+      setLembretesRaw(prev =>
+        prev.map(l => (selectedLembretes.has(l.id) ? { ...l, status: "CONCLUIDO" } : l))
+      )
+      toast.success(`${selectedLembretesObjs.length} lembrete(s) concluído(s) com sucesso!`)
+      setSelectedLembretes(new Set())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao concluir lembretes em lote")
+    } finally {
+      setSalvandoLoteLembretes(false)
+    }
+  }
+
+  async function excluirLoteLembretes() {
+    if (selectedLembretesObjs.length === 0) return
+    setSalvandoLoteLembretes(true)
+    try {
+      for (const l of selectedLembretesObjs) {
+        await mroscService.deleteLembreteAvulso(l.id)
+      }
+      setLembretesRaw(prev => prev.filter(l => !selectedLembretes.has(l.id)))
+      toast.success(`${selectedLembretesObjs.length} lembrete(s) excluído(s) com sucesso!`)
+      setSelectedLembretes(new Set())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao excluir lembretes em lote")
+    } finally {
+      setSalvandoLoteLembretes(false)
     }
   }
 
@@ -617,7 +711,77 @@ export default function LembretesPage() {
             </TabsContent>
 
             {/* Tab Lembretes avulsos */}
-            <TabsContent value="lembretes" className="mt-4">
+            <TabsContent value="lembretes" className="mt-4 space-y-4">
+              {/* Barra de Ações em Lote para Lembretes */}
+              {selectedLembretes.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2.5">
+                    <Badge className="bg-emerald-600 text-white font-mono text-xs">
+                      {selectedLembretes.size} selecionado(s)
+                    </Badge>
+                    {totalValorLoteLembretes > 0 && (
+                      <span className="text-xs font-semibold text-foreground font-mono">
+                        Total: {formatBRL(totalValorLoteLembretes)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={concluirLoteLembretes}
+                      disabled={salvandoLoteLembretes}
+                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
+                    >
+                      <CheckCircleIcon className="size-3.5" />
+                      {salvandoLoteLembretes ? "Concluindo..." : `Concluir Selecionados (${selectedLembretes.size})`}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={excluirLoteLembretes}
+                      disabled={salvandoLoteLembretes}
+                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+                    >
+                      <TrashIcon className="size-3.5" />
+                      Excluir ({selectedLembretes.size})
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedLembretes(new Set())}
+                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Desmarcar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de utilitários: Selecionar todos / Desmarcar todos */}
+              {!loadingLembretes && lembretes.length > 0 && (
+                <div className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={toggleSelectAllLembretes}
+                      className="text-xs h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <CheckIcon className="size-3.5 text-emerald-600" />
+                      {selectedLembretes.size === lembretes.length && lembretes.length > 0
+                        ? "Desmarcar Todos"
+                        : "Selecionar Todos os Lembretes"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {lembretes.length} lembrete(s) no total
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {loadingLembretes && <p className="text-muted-foreground text-sm">Carregando lembretes...</p>}
               {!loadingLembretes && (
                 <div className="space-y-6">
@@ -625,7 +789,14 @@ export default function LembretesPage() {
                     <div className="space-y-2">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">⚠️ Atrasados</h3>
                       {lembretesAtrasados.map(l => (
-                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                        <LembreteCard
+                          key={l.id}
+                          lembrete={l}
+                          onConcluir={concluirLembrete}
+                          onExcluir={excluirLembrete}
+                          isSelected={selectedLembretes.has(l.id)}
+                          onToggleSelect={toggleSelectLembrete}
+                        />
                       ))}
                     </div>
                   )}
@@ -633,7 +804,14 @@ export default function LembretesPage() {
                     <div className="space-y-2">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">📋 Pendentes</h3>
                       {lembretesPendentes.map(l => (
-                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                        <LembreteCard
+                          key={l.id}
+                          lembrete={l}
+                          onConcluir={concluirLembrete}
+                          onExcluir={excluirLembrete}
+                          isSelected={selectedLembretes.has(l.id)}
+                          onToggleSelect={toggleSelectLembrete}
+                        />
                       ))}
                     </div>
                   )}
@@ -641,7 +819,14 @@ export default function LembretesPage() {
                     <div className="space-y-2">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">✅ Concluídos</h3>
                       {lembretesConcluidos.map(l => (
-                        <LembreteCard key={l.id} lembrete={l} onConcluir={concluirLembrete} onExcluir={excluirLembrete} />
+                        <LembreteCard
+                          key={l.id}
+                          lembrete={l}
+                          onConcluir={concluirLembrete}
+                          onExcluir={excluirLembrete}
+                          isSelected={selectedLembretes.has(l.id)}
+                          onToggleSelect={toggleSelectLembrete}
+                        />
                       ))}
                     </div>
                   )}
