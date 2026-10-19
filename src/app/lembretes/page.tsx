@@ -235,6 +235,47 @@ export default function LembretesPage() {
     })
   }
 
+  const toggleSelectAllParcelas = () => {
+    const parcelasPendentes = parcelas.filter((p) => p.status !== "PAGO")
+    if (selectedParcelas.size === parcelasPendentes.length && parcelasPendentes.length > 0) {
+      setSelectedParcelas(new Set())
+    } else {
+      setSelectedParcelas(new Set(parcelasPendentes.map((p) => p.id)))
+    }
+  }
+
+  const selecionarParcelasPorCriterio = (criterio: "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes") => {
+    const hojeStr = getTodaySaoPaulo()
+    const selecionados = parcelas.filter((p) => {
+      if (p.status === "PAGO") return false
+      const dias = diasRestantesSaoPaulo(p.data_vencimento)
+      if (criterio === "atrasados3d") {
+        return dias <= -3
+      }
+      if (criterio === "vencidos") {
+        return dias < 0 || p.status === "ATRASADO"
+      }
+      if (criterio === "hoje") {
+        return p.data_vencimento === hojeStr
+      }
+      if (criterio === "semana") {
+        return dias >= 0 && dias <= 7
+      }
+      if (criterio === "mes") {
+        return dias >= 0 && dias <= 30
+      }
+      return false
+    })
+
+    if (selecionados.length === 0) {
+      toast.info("Nenhuma parcela pendente encontrada para este período.")
+      return
+    }
+
+    setSelectedParcelas(new Set(selecionados.map((p) => p.id)))
+    toast.success(`${selecionados.length} parcela(s) selecionada(s)!`)
+  }
+
   const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
   const totalValorLote = selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
 
@@ -687,6 +728,80 @@ export default function LembretesPage() {
                       className="h-8 text-xs text-muted-foreground hover:text-foreground"
                     >
                       Desmarcar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de utilitários: Seleção rápida por data / período de Parcelas */}
+              {!loading && parcelas.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-muted-foreground mr-1">
+                      Seleção Rápida:
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarParcelasPorCriterio("atrasados3d")}
+                      className="text-xs h-7 px-2.5 gap-1 border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
+                      title="Selecionar parcelas vencidas há 3 dias ou mais"
+                    >
+                      🔴 Atrasados (+3 dias)
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarParcelasPorCriterio("vencidos")}
+                      className="text-xs h-7 px-2.5 gap-1 border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                      title="Selecionar todas as parcelas já vencidas"
+                    >
+                      ⚠️ Todos Vencidos
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarParcelasPorCriterio("hoje")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar parcelas que vencem hoje"
+                    >
+                      📅 Vencem Hoje
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarParcelasPorCriterio("semana")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar parcelas dos próximos 7 dias"
+                    >
+                      📆 Esta Semana
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selecionarParcelasPorCriterio("mes")}
+                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
+                      title="Selecionar parcelas dos próximos 30 dias"
+                    >
+                      🗓️ Próximos 30 dias
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={toggleSelectAllParcelas}
+                      className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <CheckIcon className="size-3 text-emerald-600" />
+                      {selectedParcelas.size === parcelas.filter(p => p.status !== "PAGO").length && parcelas.some(p => p.status !== "PAGO")
+                        ? "Desmarcar Todas"
+                        : "Marcar Todas"}
                     </Button>
                   </div>
                 </div>
