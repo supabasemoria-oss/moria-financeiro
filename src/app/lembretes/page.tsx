@@ -566,39 +566,6 @@ export default function LembretesPage() {
             </Card>
           </div>
 
-          {/* Barra de Ações em Lote */}
-          {selectedParcelas.size > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
-              <div className="flex items-center gap-2.5">
-                <Badge className="bg-emerald-600 text-white font-mono text-xs">
-                  {selectedParcelas.size} selecionada(s)
-                </Badge>
-                <span className="text-xs font-semibold text-foreground font-mono">
-                  Total: {formatBRL(totalValorLote)}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={abrirModalLote}
-                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
-                >
-                  <CheckCircleIcon className="size-3.5" />
-                  Executar / Quitar Selecionadas ({selectedParcelas.size})
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSelectedParcelas(new Set())}
-                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Desmarcar
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Card Principal de Central de Filtros Refatorada */}
           <div className="bg-card border border-border rounded-xl p-4 shadow-2xs space-y-4">
             {/* Cabeçalho dos Filtros */}
@@ -911,6 +878,39 @@ export default function LembretesPage() {
               </div>
             </div>
           </div>
+
+          {/* Barra de Ações em Lote (Resumo e Execução) */}
+          {selectedParcelas.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <Badge className="bg-emerald-600 text-white font-mono text-xs">
+                  {selectedParcelas.size} selecionada(s)
+                </Badge>
+                <span className="text-xs font-semibold text-foreground font-mono">
+                  Total: {formatBRL(totalValorLote)}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={abrirModalLote}
+                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
+                >
+                  <CheckCircleIcon className="size-3.5" />
+                  Executar / Quitar Selecionadas ({selectedParcelas.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedParcelas(new Set())}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Desmarcar
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Conteúdo principal de Parcelas */}
           {loading && <p className="text-muted-foreground text-sm">Carregando parcelas...</p>}
