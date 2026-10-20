@@ -44,11 +44,15 @@ export async function POST(req: Request) {
     const finalPermissoes = {
       ...(permissoes || {}),
       acesso_todos_projetos:
-        body.acesso_todos_projetos !== undefined
-          ? body.acesso_todos_projetos
-          : permissoes?.acesso_todos_projetos ?? true,
+        role === 'ADMIN'
+          ? true
+          : body.acesso_todos_projetos !== undefined
+          ? Boolean(body.acesso_todos_projetos)
+          : Boolean(permissoes?.acesso_todos_projetos),
       projetos_permitidos:
-        body.projetos_permitidos !== undefined
+        role === 'ADMIN'
+          ? []
+          : body.projetos_permitidos !== undefined
           ? body.projetos_permitidos
           : permissoes?.projetos_permitidos ?? [],
     }

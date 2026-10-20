@@ -171,7 +171,7 @@ function GrupoSection({
 // Página principal
 // ---------------------------------------------------------------------------
 export default function LembretesPage() {
-  const { temAcessoAoProjeto } = usePermissoes()
+  const { temAcessoAoProjeto, isAdmin } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<TipoRubrica>>(new Set())
   const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
@@ -243,6 +243,13 @@ export default function LembretesPage() {
   const projetos = useMemo(() => {
     return projetosRaw.filter((p) => temAcessoAoProjeto(p.id))
   }, [projetosRaw, temAcessoAoProjeto])
+
+  // Se o usuário não for admin e tiver apenas 1 projeto permitido, fixa automaticamente nele
+  useEffect(() => {
+    if (!isAdmin && projetos.length === 1 && !filtroProjeto) {
+      setFiltroProjeto(projetos[0].id)
+    }
+  }, [isAdmin, projetos, filtroProjeto])
 
   // Executar parcela individual
   const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaComRelacoes | null>(null)
@@ -755,9 +762,15 @@ export default function LembretesPage() {
                   <select
                     value={filtroProjeto}
                     onChange={(e) => setFiltroProjeto(e.target.value)}
-                    className="bg-transparent font-medium text-foreground text-xs focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate"
+                    disabled={!isAdmin && projetos.length <= 1}
+                    className="bg-transparent font-medium text-foreground text-xs focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate disabled:cursor-default disabled:opacity-90"
+                    title={!isAdmin && projetos.length === 1 ? `Projeto vinculado: ${projetos[0]?.nome}` : undefined}
                   >
-                    <option value="" className="bg-background text-foreground">Todos os Projetos</option>
+                    {isAdmin ? (
+                      <option value="" className="bg-background text-foreground">Todos os Projetos</option>
+                    ) : projetos.length > 1 ? (
+                      <option value="" className="bg-background text-foreground">Meus Projetos ({projetos.length})</option>
+                    ) : null}
                     {projetos.map((p) => (
                       <option key={p.id} value={p.id} className="bg-background text-foreground">
                         {p.nome}

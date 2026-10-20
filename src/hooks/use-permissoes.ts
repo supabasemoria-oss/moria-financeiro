@@ -7,12 +7,14 @@ import { PERMISSOES_DEFAULT_POR_ROLE, type PermissoesUsuario } from "@/lib/types
 export function usePermissoes() {
   const { usuario, loading } = useAuthUser()
 
-  // Regras de acesso a projetos
+  // Regras de acesso a projetos:
+  // Superadministrador (ADMIN) tem acesso irrestrito a todos os projetos.
+  // Usuários comuns só acessam se tiverem permissão global explícita ou via projetos_permitidos vinculados.
   const isAdmin = usuario?.role === "ADMIN"
 
   const acessoTodosProjetos =
     isAdmin ||
-    usuario?.permissoes?.acesso_todos_projetos !== false
+    usuario?.permissoes?.acesso_todos_projetos === true
 
   const projetosPermitidos = usuario?.permissoes?.projetos_permitidos || []
   const projsKey = projetosPermitidos.join(",")
@@ -20,11 +22,12 @@ export function usePermissoes() {
   const temAcessoAoProjeto = useCallback(
     (projetoId?: string | null): boolean => {
       if (!projetoId) return true
+      if (isAdmin) return true
       if (acessoTodosProjetos) return true
       return projetosPermitidos.includes(projetoId)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [acessoTodosProjetos, projsKey]
+    [isAdmin, acessoTodosProjetos, projsKey]
   )
 
   const pode = useCallback(
