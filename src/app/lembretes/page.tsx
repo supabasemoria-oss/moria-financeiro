@@ -14,6 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -36,6 +41,7 @@ import {
   FilterIcon,
   CalendarIcon,
   XIcon,
+  ChevronDownIcon,
 } from "lucide-react"
 import type { ParcelaComRelacoes, Projeto, TipoRubrica } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
@@ -97,12 +103,12 @@ function GrupoSection({
           return (
             <div
               key={p.id}
-              className={`flex items-center justify-between rounded-lg border p-2.5 transition-all text-xs ${
+              className={`flex items-center justify-between rounded-lg border p-2.5 transition-all text-xs shadow-2xs ${
                 isSelected
-                  ? "bg-emerald-500/10 border-emerald-500/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500/40"
+                  ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40"
                   : atrasado
-                  ? "border-red-200 bg-red-50/50 dark:bg-red-950/20 hover:border-red-300"
-                  : "border-border bg-card hover:border-border/80"
+                  ? "bg-white dark:bg-card border-rose-200/80 hover:border-rose-300 dark:border-rose-900/50"
+                  : "bg-white dark:bg-card border-border hover:border-border/80"
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -122,9 +128,21 @@ function GrupoSection({
                     {p.projetos?.nome ?? "Sem projeto"}
                   </span>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <Badge variant={atrasado ? "destructive" : "outline"} className="text-[10px] h-4 px-1.5 font-medium">
-                      {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
-                    </Badge>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        atrasado
+                          ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400"
+                          : dias === 0
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {atrasado
+                        ? `Atrasado ${Math.abs(dias)}d`
+                        : dias === 0
+                        ? "Hoje"
+                        : formatDate(p.data_vencimento)}
+                    </span>
                     <span className="text-xs font-bold font-mono text-foreground">
                       {formatBRL(p.valor_previsto)}
                     </span>
@@ -136,10 +154,9 @@ function GrupoSection({
                 size="sm"
                 variant="outline"
                 onClick={() => onExecutar(p)}
-                className="ml-2 h-7 px-2 text-[11px] shrink-0 font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                className="ml-2 h-7 px-2.5 text-[11px] font-medium border border-border rounded-md hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 dark:hover:bg-sky-950/50 shrink-0 transition-colors"
                 title="Registrar pagamento individual"
               >
-                <CheckCircleIcon className="size-3 mr-1 text-emerald-600" />
                 Quitar
               </Button>
             </div>
@@ -587,316 +604,262 @@ export default function LembretesPage() {
             </Card>
           </div>
 
-          {/* Card Principal de Central de Filtros Refatorada */}
-          <div className="bg-card border border-border rounded-xl p-4 shadow-2xs space-y-4">
-            {/* Cabeçalho dos Filtros */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/60">
-              <div>
-                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-primary/10 text-primary">
-                    <FilterIcon className="size-3.5" />
-                  </span>
-                  Central de Filtros de Parcelas
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Filtre por projeto, categoria orçamentária ou recorte de vencimento
-                </p>
-              </div>
-
-              {temFiltroAtivo && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={resetFiltros}
-                  className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted gap-1 self-start sm:self-auto"
-                >
-                  <XIcon className="size-3.5" />
-                  Limpar Todos os Filtros
-                </Button>
-              )}
-            </div>
-
-            {/* NÍVEL 1: ESCOPO & VÍNCULO (Projeto & Macro-Categorias Multisselecionáveis) */}
-            <div className="space-y-2.5">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                1. Escopo & Vínculo
-              </span>
-              <div className="p-3 bg-muted/30 rounded-xl border border-border/50 space-y-3">
-                {/* Linha do Projeto */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Label className="text-xs font-semibold text-foreground shrink-0">Projeto MROSC:</Label>
-                  <div className="w-72">
-                    <Select
-                      value={filtroProjeto}
-                      onValueChange={(v: string | null) => {
-                        setFiltroProjeto(v === "todos" || !v ? "" : v)
-                      }}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-background">
-                        <SelectValue placeholder="Todos os projetos (Geral)">
-                          {(val) => {
-                            if (!val || val === "todos") return "Todos os projetos (Geral)"
-                            const p = projetos.find((item) => item.id === val)
-                            return p?.nome ?? val
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos os projetos (Geral)</SelectItem>
-                        {projetos.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Multisseleção de Macro-Categorias */}
-                <div className="space-y-1.5 pt-2.5 border-t border-border/40">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-foreground">
-                      Categorias Orçamentárias (Multisseleção):
-                    </Label>
-                    {categoriasSelecionadas.size > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={limparCategorias}
-                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
-                      >
-                        <XIcon className="size-3" />
-                        Limpar categorias ({categoriasSelecionadas.size})
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Botão Todas as Categorias */}
-                    <Button
-                      size="sm"
-                      variant={categoriasSelecionadas.size === 0 ? "default" : "outline"}
-                      onClick={limparCategorias}
-                      className="text-xs h-7 px-2.5 gap-1.5"
-                    >
-                      Todas as Categorias
-                    </Button>
-
-                    {/* Botões individuais de Macro-Categorias com toggle de multisseleção */}
-                    {MACRO_CATEGORIAS.map((cat) => {
-                      const isSelected = categoriasSelecionadas.has(cat.id)
-                      const count = contadoresCategoria[cat.id] || 0
-                      return (
-                        <Button
-                          key={cat.id}
-                          size="sm"
-                          variant={isSelected ? "default" : "outline"}
-                          onClick={() => toggleCategoria(cat.id)}
-                          className={`text-xs h-7 px-2.5 gap-1.5 transition-all ${
-                            isSelected
-                              ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary"
-                              : "hover:bg-muted/60"
-                          }`}
-                          title={`Filtrar por ${cat.label}`}
-                        >
-                          <span>{cat.icon}</span>
-                          <span>{cat.label}</span>
-                          <Badge
-                            variant={isSelected ? "secondary" : "outline"}
-                            className="text-[10px] h-4 px-1 rounded font-mono"
-                          >
-                            {count}
-                          </Badge>
-                        </Button>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* NÍVEL 2: PRAZOS & LINHA DO TEMPO */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  2. Prazos & Linha do Tempo
-                </span>
-                <Badge variant="outline" className="text-[11px] font-medium bg-primary/10 text-primary border-primary/20">
-                  Exibindo: {textoFiltroAtivo}
-                </Badge>
-              </div>
-
-              {/* Pílulas de Seleção Rápida */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "todos" ? "default" : "outline"}
+          {/* TOOLBAR MINIMALISTA DE FILTROS (2 LINHAS COMPACTAS) */}
+          <div className="bg-card border border-border rounded-xl p-3 shadow-2xs space-y-2.5">
+            {/* LINHA 1: SEGMENTED CONTROL DE PRAZOS + AÇÕES RÁPIDAS */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              {/* Segmented Control / Pílulas de Seleção de Prazo */}
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg overflow-x-auto text-xs">
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo("todos")
                   }}
-                  className="text-xs h-7 px-2.5 gap-1.5"
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    !dataInicio && !dataFim && filtroPeriodo === "todos"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
                 >
-                  Todos
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "todos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.total}
-                  </Badge>
-                </Button>
+                  <span>Todos</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.total}</span>
+                </button>
 
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "atrasados3d" ? "destructive" : "outline"}
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "atrasados3d" ? "todos" : "atrasados3d"))
                   }}
-                  className={`text-xs h-7 px-2.5 gap-1.5 ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
                     !dataInicio && !dataFim && filtroPeriodo === "atrasados3d"
-                      ? ""
-                      : "border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
+                      ? "bg-rose-500 text-white shadow-2xs font-semibold"
+                      : "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
                   }`}
                   title="Filtrar parcelas pendentes com mais de 3 dias de atraso"
                 >
-                  🔴 Atrasados (+3 dias)
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "atrasados3d" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.atrasados3d}
-                  </Badge>
-                </Button>
+                  <span>🔴 Atrasados (+3d)</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.atrasados3d}</span>
+                </button>
 
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "vencidos" ? "destructive" : "outline"}
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "vencidos" ? "todos" : "vencidos"))
                   }}
-                  className={`text-xs h-7 px-2.5 gap-1.5 ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
                     !dataInicio && !dataFim && filtroPeriodo === "vencidos"
-                      ? ""
-                      : "border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                      ? "bg-amber-500 text-white shadow-2xs font-semibold"
+                      : "text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
                   }`}
                   title="Filtrar todas as parcelas já vencidas"
                 >
-                  ⚠️ Todos Vencidos
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "vencidos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.vencidos}
-                  </Badge>
-                </Button>
+                  <span>⚠️ Todos Vencidos</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.vencidos}</span>
+                </button>
 
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "hoje" ? "default" : "outline"}
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "hoje" ? "todos" : "hoje"))
                   }}
-                  className="text-xs h-7 px-2.5 gap-1.5"
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    !dataInicio && !dataFim && filtroPeriodo === "hoje"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
                   title="Filtrar parcelas que vencem hoje"
                 >
-                  📅 Vencem Hoje
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "hoje" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.hoje}
-                  </Badge>
-                </Button>
+                  <span>📅 Vencem Hoje</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.hoje}</span>
+                </button>
 
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "semana" ? "default" : "outline"}
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "semana" ? "todos" : "semana"))
                   }}
-                  className="text-xs h-7 px-2.5 gap-1.5"
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    !dataInicio && !dataFim && filtroPeriodo === "semana"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
                   title="Filtrar parcelas dos próximos 7 dias"
                 >
-                  📆 Esta Semana
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "semana" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.semana}
-                  </Badge>
-                </Button>
+                  <span>📆 Esta Semana</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.semana}</span>
+                </button>
 
-                <Button
-                  size="sm"
-                  variant={!dataInicio && !dataFim && filtroPeriodo === "mes" ? "default" : "outline"}
+                <button
+                  type="button"
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "mes" ? "todos" : "mes"))
                   }}
-                  className="text-xs h-7 px-2.5 gap-1.5"
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    !dataInicio && !dataFim && filtroPeriodo === "mes"
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
                   title="Filtrar parcelas dos próximos 30 dias"
                 >
-                  🗓️ Próximos 30 dias
-                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "mes" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                    {contadores.mes}
-                  </Badge>
-                </Button>
+                  <span>🗓️ Próximos 30d</span>
+                  <span className="text-[10px] font-mono opacity-80">{contadores.mes}</span>
+                </button>
               </div>
 
-              {/* Linha de Intervalo Customizado e Ação de Lote */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/40 mt-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                    <CalendarIcon className="size-3.5 text-muted-foreground" />
-                    Ou por Intervalo Específico:
-                  </span>
+              {/* Botões Limpar Filtros e Marcar Todas */}
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                {temFiltroAtivo && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={resetFiltros}
+                    className="h-7 px-2 text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-500/10 gap-1"
+                  >
+                    <XIcon className="size-3.5" />
+                    Limpar Filtros
+                  </Button>
+                )}
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">De</span>
-                    <Input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="h-7 w-36 text-xs bg-background"
-                    />
-                  </div>
+                {parcelasVisiveisPendentes.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={toggleSelectVisiveis}
+                    className="h-7 px-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100/80 border-emerald-200 dark:border-emerald-800 gap-1.5 shadow-2xs"
+                  >
+                    <CheckIcon className="size-3.5 text-emerald-600" />
+                    {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
+                  </Button>
+                )}
+              </div>
+            </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">Até</span>
-                    <Input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="h-7 w-36 text-xs bg-background"
-                    />
-                  </div>
+            {/* LINHA 2: DROPDOWNS E FILTROS DE ESCOPO EM UMA ÚNICA FAIXA AREJADA */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-border/50 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Dropdown Projeto Compacto */}
+                <div className="flex items-center gap-1.5 bg-muted/40 border border-border rounded-lg px-2.5 py-1">
+                  <span className="text-muted-foreground text-xs font-medium">Projeto:</span>
+                  <select
+                    value={filtroProjeto}
+                    onChange={(e) => setFiltroProjeto(e.target.value)}
+                    className="bg-transparent font-medium text-foreground text-xs focus:outline-none cursor-pointer max-w-[200px] truncate"
+                  >
+                    <option value="" className="bg-background text-foreground">Todos os Projetos</option>
+                    {projetos.map((p) => (
+                      <option key={p.id} value={p.id} className="bg-background text-foreground">
+                        {p.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
+                {/* Popover Multiselect de Macro-Categorias */}
+                <Popover>
+                  <PopoverTrigger className="flex items-center gap-1.5 bg-muted/40 hover:bg-muted/70 border border-border rounded-lg px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer">
+                    <span className="text-muted-foreground">Categorias:</span>
+                    <span className="font-semibold text-foreground">
+                      {categoriasSelecionadas.size === 0
+                        ? "Todas"
+                        : `${categoriasSelecionadas.size} selecionada(s)`}
+                    </span>
+                    <ChevronDownIcon className="size-3 text-muted-foreground" />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-64 p-2.5 space-y-1 text-xs">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-border px-1 font-semibold text-muted-foreground">
+                      <span>Filtrar Categorias</span>
+                      {categoriasSelecionadas.size > 0 ? (
+                        <button
+                          type="button"
+                          onClick={limparCategorias}
+                          className="text-[11px] text-primary hover:underline font-normal"
+                        >
+                          Marcar Todas
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground font-normal">Todas ativas</span>
+                      )}
+                    </div>
+
+                    {MACRO_CATEGORIAS.map((cat) => {
+                      const isChecked = categoriasSelecionadas.has(cat.id)
+                      const count = contadoresCategoria[cat.id] || 0
+                      return (
+                        <label
+                          key={cat.id}
+                          className="flex items-center justify-between p-1.5 hover:bg-muted rounded-md cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => toggleCategoria(cat.id)}
+                              className="size-3.5"
+                            />
+                            <span className="truncate">{cat.icon} {cat.label}</span>
+                          </div>
+                          <span className="font-mono text-muted-foreground text-[11px] ml-2 shrink-0">
+                            {count}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </PopoverContent>
+                </Popover>
+
+                {/* Intervalo de Datas Compacto De / Até */}
+                <div className="flex items-center gap-1.5 bg-muted/40 border border-border rounded-lg px-2 py-0.5">
+                  <span className="text-muted-foreground text-[11px]">De</span>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => {
+                      setDataInicio(e.target.value)
+                      if (e.target.value) setFiltroPeriodo("todos")
+                    }}
+                    className="bg-transparent text-foreground text-xs focus:outline-none w-28"
+                  />
+                  <span className="text-muted-foreground text-[11px]">Até</span>
+                  <input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => {
+                      setDataFim(e.target.value)
+                      if (e.target.value) setFiltroPeriodo("todos")
+                    }}
+                    className="bg-transparent text-foreground text-xs focus:outline-none w-28"
+                  />
                   {(dataInicio || dataFim) && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                    <button
+                      type="button"
                       onClick={() => {
                         setDataInicio("")
                         setDataFim("")
                       }}
-                      className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 gap-1"
-                      title="Limpar intervalo de datas"
+                      className="text-muted-foreground hover:text-destructive text-xs p-0.5 ml-0.5"
+                      title="Limpar datas"
                     >
                       <XIcon className="size-3" />
-                      Limpar datas
-                    </Button>
-                  )}
-                </div>
-
-                {/* Marcar todas as parcelas filtradas */}
-                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                  {parcelasVisiveisPendentes.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={toggleSelectVisiveis}
-                      className="text-xs h-7.5 px-3 gap-1.5 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
-                    >
-                      <CheckIcon className="size-3.5 text-emerald-600" />
-                      {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
-                    </Button>
+                    </button>
                   )}
                 </div>
               </div>
+
+              {/* Indicador de Status Discreto */}
+              <span className="text-[11px] text-muted-foreground font-medium">
+                Exibindo: <strong className="text-foreground">{textoFiltroAtivo}</strong>
+              </span>
             </div>
           </div>
 
