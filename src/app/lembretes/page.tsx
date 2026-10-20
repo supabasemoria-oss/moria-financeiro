@@ -34,6 +34,8 @@ import {
   MoonIcon,
   Loader2Icon,
   FilterIcon,
+  CalendarIcon,
+  XIcon,
 } from "lucide-react"
 import type { ParcelaComRelacoes, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
@@ -131,9 +133,11 @@ export default function LembretesPage() {
   const { temAcessoAoProjeto } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
   const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
+  const [dataInicio, setDataInicio] = useState<string>("")
+  const [dataFim, setDataFim] = useState<string>("")
 
   const { data: rawParcelas, loading, refetch } = useParcelas({
-    proximosDias: 60,
+    proximosDias: 365,
     projetoId: filtroProjeto || undefined,
   })
   const { alertas, urgentes, atencao } = useAlertas()
@@ -202,8 +206,18 @@ export default function LembretesPage() {
     return { atrasados3d, vencidos, hoje, semana, mes, total: totalPendentes }
   }, [parcelas])
 
-  // Parcelas filtradas pelo filtro rápido de período ativo
+  // Parcelas filtradas pelo filtro rápido de período ou range de datas ativo
   const parcelasExibidas = useMemo(() => {
+    // Se o usuário selecionou um range de datas específico (De/Até)
+    if (dataInicio || dataFim) {
+      return parcelas.filter((p) => {
+        const v = p.data_vencimento?.slice(0, 10)
+        if (dataInicio && v < dataInicio) return false
+        if (dataFim && v > dataFim) return false
+        return true
+      })
+    }
+
     if (filtroPeriodo === "todos") return parcelas
     const hojeStr = getTodaySaoPaulo()
     return parcelas.filter((p) => {
@@ -216,7 +230,7 @@ export default function LembretesPage() {
       if (filtroPeriodo === "mes") return dias >= 0 && dias <= 30
       return true
     })
-  }, [parcelas, filtroPeriodo])
+  }, [parcelas, filtroPeriodo, dataInicio, dataFim])
 
   // Parcelas pendentes da visualização atual
   const parcelasVisiveisPendentes = useMemo(() => {
@@ -510,112 +524,187 @@ export default function LembretesPage() {
             </div>
           )}
 
-          {/* Barra de Filtros Rápidos por Período */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-                <FilterIcon className="size-3" />
-                Filtrar por Período:
-              </span>
+          {/* Barra de Filtros Rápidos por Período e Range de Datas */}
+          <div className="flex flex-col gap-2.5 p-2.5 rounded-lg border bg-muted/20">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+                  <FilterIcon className="size-3" />
+                  Filtrar por Período:
+                </span>
 
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "todos" ? "default" : "outline"}
-                onClick={() => setFiltroPeriodo("todos")}
-                className="text-xs h-7 px-2.5 gap-1.5"
-              >
-                Todos
-                <Badge variant={filtroPeriodo === "todos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.total}
-                </Badge>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "atrasados3d" ? "destructive" : "outline"}
-                onClick={() => setFiltroPeriodo(f => f === "atrasados3d" ? "todos" : "atrasados3d")}
-                className={`text-xs h-7 px-2.5 gap-1.5 ${
-                  filtroPeriodo === "atrasados3d"
-                    ? ""
-                    : "border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
-                }`}
-                title="Filtrar parcelas pendentes com mais de 3 dias de atraso"
-              >
-                🔴 Atrasados (+3 dias)
-                <Badge variant={filtroPeriodo === "atrasados3d" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.atrasados3d}
-                </Badge>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "vencidos" ? "destructive" : "outline"}
-                onClick={() => setFiltroPeriodo(f => f === "vencidos" ? "todos" : "vencidos")}
-                className={`text-xs h-7 px-2.5 gap-1.5 ${
-                  filtroPeriodo === "vencidos"
-                    ? ""
-                    : "border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-                }`}
-                title="Filtrar todas as parcelas já vencidas"
-              >
-                ⚠️ Todos Vencidos
-                <Badge variant={filtroPeriodo === "vencidos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.vencidos}
-                </Badge>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "hoje" ? "default" : "outline"}
-                onClick={() => setFiltroPeriodo(f => f === "hoje" ? "todos" : "hoje")}
-                className="text-xs h-7 px-2.5 gap-1.5"
-                title="Filtrar parcelas que vencem hoje"
-              >
-                📅 Vencem Hoje
-                <Badge variant={filtroPeriodo === "hoje" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.hoje}
-                </Badge>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "semana" ? "default" : "outline"}
-                onClick={() => setFiltroPeriodo(f => f === "semana" ? "todos" : "semana")}
-                className="text-xs h-7 px-2.5 gap-1.5"
-                title="Filtrar parcelas dos próximos 7 dias"
-              >
-                📆 Esta Semana
-                <Badge variant={filtroPeriodo === "semana" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.semana}
-                </Badge>
-              </Button>
-
-              <Button
-                size="sm"
-                variant={filtroPeriodo === "mes" ? "default" : "outline"}
-                onClick={() => setFiltroPeriodo(f => f === "mes" ? "todos" : "mes")}
-                className="text-xs h-7 px-2.5 gap-1.5"
-                title="Filtrar parcelas dos próximos 30 dias"
-              >
-                🗓️ Próximos 30 dias
-                <Badge variant={filtroPeriodo === "mes" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
-                  {contadores.mes}
-                </Badge>
-              </Button>
-            </div>
-
-            {/* Marcar todas as parcelas filtradas */}
-            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-              {parcelasVisiveisPendentes.length > 0 && (
                 <Button
                   size="sm"
-                  variant="ghost"
-                  onClick={toggleSelectVisiveis}
-                  className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "todos" ? "default" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo("todos")
+                  }}
+                  className="text-xs h-7 px-2.5 gap-1.5"
                 >
-                  <CheckIcon className="size-3 text-emerald-600" />
-                  {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
+                  Todos
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "todos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.total}
+                  </Badge>
                 </Button>
+
+                <Button
+                  size="sm"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "atrasados3d" ? "destructive" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo(f => f === "atrasados3d" ? "todos" : "atrasados3d")
+                  }}
+                  className={`text-xs h-7 px-2.5 gap-1.5 ${
+                    !dataInicio && !dataFim && filtroPeriodo === "atrasados3d"
+                      ? ""
+                      : "border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
+                  }`}
+                  title="Filtrar parcelas pendentes com mais de 3 dias de atraso"
+                >
+                  🔴 Atrasados (+3 dias)
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "atrasados3d" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.atrasados3d}
+                  </Badge>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "vencidos" ? "destructive" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo(f => f === "vencidos" ? "todos" : "vencidos")
+                  }}
+                  className={`text-xs h-7 px-2.5 gap-1.5 ${
+                    !dataInicio && !dataFim && filtroPeriodo === "vencidos"
+                      ? ""
+                      : "border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                  }`}
+                  title="Filtrar todas as parcelas já vencidas"
+                >
+                  ⚠️ Todos Vencidos
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "vencidos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.vencidos}
+                  </Badge>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "hoje" ? "default" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo(f => f === "hoje" ? "todos" : "hoje")
+                  }}
+                  className="text-xs h-7 px-2.5 gap-1.5"
+                  title="Filtrar parcelas que vencem hoje"
+                >
+                  📅 Vencem Hoje
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "hoje" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.hoje}
+                  </Badge>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "semana" ? "default" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo(f => f === "semana" ? "todos" : "semana")
+                  }}
+                  className="text-xs h-7 px-2.5 gap-1.5"
+                  title="Filtrar parcelas dos próximos 7 dias"
+                >
+                  📆 Esta Semana
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "semana" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.semana}
+                  </Badge>
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={!dataInicio && !dataFim && filtroPeriodo === "mes" ? "default" : "outline"}
+                  onClick={() => {
+                    setDataInicio("")
+                    setDataFim("")
+                    setFiltroPeriodo(f => f === "mes" ? "todos" : "mes")
+                  }}
+                  className="text-xs h-7 px-2.5 gap-1.5"
+                  title="Filtrar parcelas dos próximos 30 dias"
+                >
+                  🗓️ Próximos 30 dias
+                  <Badge variant={!dataInicio && !dataFim && filtroPeriodo === "mes" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                    {contadores.mes}
+                  </Badge>
+                </Button>
+              </div>
+
+              {/* Marcar todas as parcelas filtradas */}
+              <div className="flex items-center gap-2 self-end lg:self-auto shrink-0">
+                {parcelasVisiveisPendentes.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={toggleSelectVisiveis}
+                    className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <CheckIcon className="size-3 text-emerald-600" />
+                    {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Linha de Range de Datas Customizado */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40 text-xs">
+              <span className="font-semibold text-muted-foreground flex items-center gap-1 mr-1">
+                <CalendarIcon className="size-3.5 text-primary" />
+                Intervalo personalizado:
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-[11px]">De</span>
+                <Input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="h-7 w-36 text-xs bg-background"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-[11px]">Até</span>
+                <Input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="h-7 w-36 text-xs bg-background"
+                />
+              </div>
+
+              {(dataInicio || dataFim) && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[11px] h-6 bg-primary/10 text-primary border-primary/30">
+                    {parcelasExibidas.length} parcela(s) no intervalo
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setDataInicio("")
+                      setDataFim("")
+                    }}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                    title="Limpar intervalo de datas"
+                  >
+                    <XIcon className="size-3" />
+                    Limpar datas
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -625,46 +714,69 @@ export default function LembretesPage() {
           {!loading && (
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-6">
-                {/* Seções de acordo com os grupos das parcelas filtradas */}
-                <GrupoSection
-                  titulo={filtroPeriodo === "atrasados3d" ? "🔴 Atrasados (+3 dias)" : "⚠️ Atrasados"}
-                  parcelas={atrasadas}
-                  onExecutar={abrirModal}
-                  selectedParcelas={selectedParcelas}
-                  onToggleSelect={toggleSelectParcela}
-                />
-                <GrupoSection
-                  titulo="📅 Vencem hoje"
-                  parcelas={deHoje}
-                  onExecutar={abrirModal}
-                  selectedParcelas={selectedParcelas}
-                  onToggleSelect={toggleSelectParcela}
-                />
-                <GrupoSection
-                  titulo="📆 Próximos 7 dias"
-                  parcelas={proximos7}
-                  onExecutar={abrirModal}
-                  selectedParcelas={selectedParcelas}
-                  onToggleSelect={toggleSelectParcela}
-                />
-                <GrupoSection
-                  titulo="🗓️ Próximos 30 dias"
-                  parcelas={proximos30}
-                  onExecutar={abrirModal}
-                  selectedParcelas={selectedParcelas}
-                  onToggleSelect={toggleSelectParcela}
-                />
+                {/* Se houver intervalo personalizado, exibe diretamente as parcelas do período */}
+                {(dataInicio || dataFim) ? (
+                  <GrupoSection
+                    titulo={`🗓️ Parcelas no Período (${dataInicio ? formatDate(dataInicio) : "início"} até ${dataFim ? formatDate(dataFim) : "fim"})`}
+                    parcelas={parcelasExibidas}
+                    onExecutar={abrirModal}
+                    selectedParcelas={selectedParcelas}
+                    onToggleSelect={toggleSelectParcela}
+                  />
+                ) : (
+                  <>
+                    <GrupoSection
+                      titulo={filtroPeriodo === "atrasados3d" ? "🔴 Atrasados (+3 dias)" : "⚠️ Atrasados"}
+                      parcelas={atrasadas}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="📅 Vencem hoje"
+                      parcelas={deHoje}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="📆 Próximos 7 dias"
+                      parcelas={proximos7}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                    <GrupoSection
+                      titulo="🗓️ Próximos 30 dias"
+                      parcelas={proximos30}
+                      onExecutar={abrirModal}
+                      selectedParcelas={selectedParcelas}
+                      onToggleSelect={toggleSelectParcela}
+                    />
+                  </>
+                )}
 
-                {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
+                {parcelasExibidas.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center gap-2 rounded-lg border border-dashed bg-muted/10 p-6">
-                    <p className="text-sm font-medium text-foreground">Nenhuma parcela pendente encontrada.</p>
+                    <p className="text-sm font-medium text-foreground">Nenhuma parcela encontrada.</p>
                     <p className="text-xs text-muted-foreground">
-                      {filtroPeriodo !== "todos"
+                      {dataInicio || dataFim
+                        ? "Não há contas com vencimento no intervalo selecionado."
+                        : filtroPeriodo !== "todos"
                         ? "Não há contas em aberto para o período selecionado. Tente clicar em 'Todos'."
-                        : "Não há contas em aberto nos próximos 60 dias para o projeto selecionado."}
+                        : "Não há contas em aberto para o projeto selecionado."}
                     </p>
-                    {filtroPeriodo !== "todos" && (
-                      <Button size="sm" variant="outline" onClick={() => setFiltroPeriodo("todos")} className="mt-2 text-xs">
+                    {(dataInicio || dataFim || filtroPeriodo !== "todos") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDataInicio("")
+                          setDataFim("")
+                          setFiltroPeriodo("todos")
+                        }}
+                        className="mt-2 text-xs"
+                      >
                         Ver Todas as Parcelas
                       </Button>
                     )}
