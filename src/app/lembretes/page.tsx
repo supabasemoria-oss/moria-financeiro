@@ -37,19 +37,28 @@ import {
   CalendarIcon,
   XIcon,
 } from "lucide-react"
-import type { ParcelaComRelacoes, Projeto } from "@/lib/types"
+import type { ParcelaComRelacoes, Projeto, TipoRubrica } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers & Macro-Categorias
 // ---------------------------------------------------------------------------
 function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 const diasRestantes = diasRestantesSaoPaulo
+
+// Macro-Categorias oficiais do MROSC
+const MACRO_CATEGORIAS: { id: TipoRubrica; label: string; icon: string }[] = [
+  { id: "MATERIAL", label: "Compra de Materiais", icon: "📦" },
+  { id: "SERVICO", label: "Serviços de Terceiros", icon: "🛠️" },
+  { id: "RH", label: "Recursos Humanos (RH)", icon: "👥" },
+  { id: "LOCACAO", label: "Locações", icon: "🏢" },
+  { id: "OUTROS", label: "Outros / Encargos", icon: "📑" },
+]
 
 // Tipos de Filtro Rápido de Período
 type FiltroPeriodo = "todos" | "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes"
@@ -126,7 +135,7 @@ function GrupoSection({
 export default function LembretesPage() {
   const { temAcessoAoProjeto } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
-  const [filtroRubrica, setFiltroRubrica] = useState<string>("")
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<TipoRubrica>>(new Set())
   const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
   const [dataInicio, setDataInicio] = useState<string>("")
   const [dataFim, setDataFim] = useState<string>("")
@@ -143,29 +152,49 @@ export default function LembretesPage() {
     return rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
   }, [rawParcelas, temAcessoAoProjeto])
 
-  // Opções de rubricas/categorias disponíveis
-  const rubricasDisponiveis = useMemo(() => {
-    const map = new Map<string, { id: string; tipo: string; descricao: string }>()
+  // Alternar seleção de uma macro-categoria
+  const toggleCategoria = (tipo: TipoRubrica) => {
+    setCategoriasSelecionadas((prev) => {
+      const next = new Set(prev)
+      if (next.has(tipo)) next.delete(tipo)
+      else next.add(tipo)
+      return next
+    })
+  }
+
+  const limparCategorias = () => {
+    setCategoriasSelecionadas(new Set())
+  }
+
+  // Contadores por macro-categoria (baseados em todas as parcelas do projeto ativo)
+  const contadoresCategoria = useMemo(() => {
+    const counts: Record<TipoRubrica, number> = {
+      MATERIAL: 0,
+      SERVICO: 0,
+      RH: 0,
+      LOCACAO: 0,
+      OUTROS: 0,
+    }
     parcelas.forEach((p) => {
-      if (p.rubricas_orcamentarias) {
-        const r = p.rubricas_orcamentarias
-        if (!map.has(r.id)) {
-          map.set(r.id, {
-            id: r.id,
-            tipo: r.tipo || "",
-            descricao: r.descricao,
-          })
-        }
+      if (p.status === "PAGO") return
+      const tipo = (p.rubricas_orcamentarias?.tipo as TipoRubrica) || "OUTROS"
+      if (counts[tipo] !== undefined) {
+        counts[tipo]++
+      } else {
+        counts.OUTROS++
       }
     })
-    return Array.from(map.values()).sort((a, b) => a.descricao.localeCompare(b.descricao))
+    return counts
   }, [parcelas])
 
-  // Parcelas considerando o filtro de rubrica / categoria
+  // Parcelas considerando as macro-categorias selecionadas (se nenhuma selecionada, considera todas)
   const parcelasBase = useMemo(() => {
-    if (!filtroRubrica) return parcelas
-    return parcelas.filter((p) => p.rubrica_id === filtroRubrica)
-  }, [parcelas, filtroRubrica])
+    if (categoriasSelecionadas.size === 0) return parcelas
+    return parcelas.filter((p) => {
+      const tipo = (p.rubricas_orcamentarias?.tipo as TipoRubrica) || "OUTROS"
+      return categoriasSelecionadas.has(tipo)
+    })
+  }, [parcelas, categoriasSelecionadas])
 
   // Projetos para filtro
   const [projetosRaw, setProjetosRaw] = useState<Projeto[]>([])
@@ -202,7 +231,7 @@ export default function LembretesPage() {
     })
   }
 
-  // Contadores para os botões de filtro baseados nas parcelas (respeitando a rubrica se filtrada)
+  // Contadores para os botões de filtro baseados nas parcelas (respeitando as categorias se filtradas)
   const contadores = useMemo(() => {
     const hojeStr = getTodaySaoPaulo()
     let atrasados3d = 0
@@ -280,29 +309,48 @@ export default function LembretesPage() {
 
   const resetFiltros = () => {
     setFiltroProjeto("")
-    setFiltroRubrica("")
+    limparCategorias()
     setDataInicio("")
     setDataFim("")
     setFiltroPeriodo("todos")
     setSelectedParcelas(new Set())
   }
 
-  const temFiltroAtivo = !!(filtroProjeto || filtroRubrica || dataInicio || dataFim || filtroPeriodo !== "todos")
+  const temFiltroAtivo = !!(
+    filtroProjeto ||
+    categoriasSelecionadas.size > 0 ||
+    dataInicio ||
+    dataFim ||
+    filtroPeriodo !== "todos"
+  )
 
   const textoFiltroAtivo = useMemo(() => {
+    const partes: string[] = []
+
+    if (categoriasSelecionadas.size > 0) {
+      const nomesCat = Array.from(categoriasSelecionadas)
+        .map((id) => MACRO_CATEGORIAS.find((c) => c.id === id)?.label || id)
+        .join(", ")
+      partes.push(`Categorias: ${nomesCat}`)
+    }
+
     if (dataInicio || dataFim) {
-      return `Intervalo: ${dataInicio ? formatDate(dataInicio) : "início"} até ${dataFim ? formatDate(dataFim) : "fim"}`
+      partes.push(`Período: ${dataInicio ? formatDate(dataInicio) : "início"} até ${dataFim ? formatDate(dataFim) : "fim"}`)
+    } else if (filtroPeriodo !== "todos") {
+      const map: Record<FiltroPeriodo, string> = {
+        todos: "Todos",
+        atrasados3d: "Atrasados (+3 dias)",
+        vencidos: "Todos Vencidos",
+        hoje: "Vencem Hoje",
+        semana: "Esta Semana",
+        mes: "Próximos 30 dias",
+      }
+      partes.push(`Prazo: ${map[filtroPeriodo]}`)
     }
-    const map: Record<FiltroPeriodo, string> = {
-      todos: "Todos",
-      atrasados3d: "Atrasados (+3 dias)",
-      vencidos: "Todos Vencidos",
-      hoje: "Vencem Hoje",
-      semana: "Esta Semana",
-      mes: "Próximos 30 dias",
-    }
-    return map[filtroPeriodo] || "Todos"
-  }, [filtroPeriodo, dataInicio, dataFim])
+
+    if (partes.length === 0) return "Todos os pagamentos"
+    return partes.join(" · ")
+  }, [categoriasSelecionadas, filtroPeriodo, dataInicio, dataFim])
 
   const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
   const totalValorLote = selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
@@ -580,65 +628,100 @@ export default function LembretesPage() {
               )}
             </div>
 
-            {/* NÍVEL 1: ESCOPO & VÍNCULO (Projeto & Categoria / Rubrica) */}
-            <div className="space-y-1.5">
+            {/* NÍVEL 1: ESCOPO & VÍNCULO (Projeto & Macro-Categorias Multisselecionáveis) */}
+            <div className="space-y-2.5">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 1. Escopo & Vínculo
               </span>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
-                {/* Dropdown Projeto */}
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-foreground">Projeto MROSC</Label>
-                  <Select
-                    value={filtroProjeto}
-                    onValueChange={(v: string | null) => {
-                      setFiltroProjeto(v === "todos" || !v ? "" : v)
-                      setFiltroRubrica("")
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-background">
-                      <SelectValue placeholder="Todos os projetos (Geral)">
-                        {(val) => {
-                          if (!val || val === "todos") return "Todos os projetos (Geral)"
-                          const p = projetos.find((item) => item.id === val)
-                          return p?.nome ?? val
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os projetos (Geral)</SelectItem>
-                      {projetos.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="p-3 bg-muted/30 rounded-xl border border-border/50 space-y-3">
+                {/* Linha do Projeto */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Label className="text-xs font-semibold text-foreground shrink-0">Projeto MROSC:</Label>
+                  <div className="w-72">
+                    <Select
+                      value={filtroProjeto}
+                      onValueChange={(v: string | null) => {
+                        setFiltroProjeto(v === "todos" || !v ? "" : v)
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs bg-background">
+                        <SelectValue placeholder="Todos os projetos (Geral)">
+                          {(val) => {
+                            if (!val || val === "todos") return "Todos os projetos (Geral)"
+                            const p = projetos.find((item) => item.id === val)
+                            return p?.nome ?? val
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos os projetos (Geral)</SelectItem>
+                        {projetos.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                {/* Dropdown Categoria / Rubrica */}
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-foreground">Categoria / Rubrica Orçamentária</Label>
-                  <Select
-                    value={filtroRubrica}
-                    onValueChange={(v: string | null) => setFiltroRubrica(v === "todas" || !v ? "" : v)}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-background">
-                      <SelectValue placeholder="Todas as categorias">
-                        {(val) => {
-                          if (!val || val === "todas") return "Todas as categorias"
-                          const r = rubricasDisponiveis.find((item) => item.id === val)
-                          return r ? `${r.tipo ? `[${r.tipo}] ` : ""}${r.descricao}` : val
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as categorias / rubricas</SelectItem>
-                      {rubricasDisponiveis.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.tipo ? `[${r.tipo}] ` : ""}{r.descricao}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Multisseleção de Macro-Categorias */}
+                <div className="space-y-1.5 pt-2.5 border-t border-border/40">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground">
+                      Categorias Orçamentárias (Multisseleção):
+                    </Label>
+                    {categoriasSelecionadas.size > 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={limparCategorias}
+                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1"
+                      >
+                        <XIcon className="size-3" />
+                        Limpar categorias ({categoriasSelecionadas.size})
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Botão Todas as Categorias */}
+                    <Button
+                      size="sm"
+                      variant={categoriasSelecionadas.size === 0 ? "default" : "outline"}
+                      onClick={limparCategorias}
+                      className="text-xs h-7 px-2.5 gap-1.5"
+                    >
+                      Todas as Categorias
+                    </Button>
+
+                    {/* Botões individuais de Macro-Categorias com toggle de multisseleção */}
+                    {MACRO_CATEGORIAS.map((cat) => {
+                      const isSelected = categoriasSelecionadas.has(cat.id)
+                      const count = contadoresCategoria[cat.id] || 0
+                      return (
+                        <Button
+                          key={cat.id}
+                          size="sm"
+                          variant={isSelected ? "default" : "outline"}
+                          onClick={() => toggleCategoria(cat.id)}
+                          className={`text-xs h-7 px-2.5 gap-1.5 transition-all ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary"
+                              : "hover:bg-muted/60"
+                          }`}
+                          title={`Filtrar por ${cat.label}`}
+                        >
+                          <span>{cat.icon}</span>
+                          <span>{cat.label}</span>
+                          <Badge
+                            variant={isSelected ? "secondary" : "outline"}
+                            className="text-[10px] h-4 px-1 rounded font-mono"
+                          >
+                            {count}
+                          </Badge>
+                        </Button>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
