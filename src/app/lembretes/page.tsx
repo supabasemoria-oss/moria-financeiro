@@ -95,7 +95,7 @@ function GrupoSection({
         </h3>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 min-w-0">
         {parcelas.map((p) => {
           const dias = diasRestantes(p.data_vencimento)
           const atrasado = p.status === "ATRASADO" || dias < 0
@@ -103,7 +103,7 @@ function GrupoSection({
           return (
             <div
               key={p.id}
-              className={`flex items-center justify-between rounded-lg border p-2.5 transition-all text-xs shadow-2xs ${
+              className={`flex items-center justify-between rounded-lg border p-2.5 transition-all text-xs shadow-2xs min-w-0 ${
                 isSelected
                   ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40"
                   : atrasado
@@ -488,13 +488,13 @@ export default function LembretesPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <BellIcon className="size-4 text-muted-foreground" />
-          <h1 className="font-semibold text-sm">Lembretes & Agenda de Pagamentos</h1>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+      <SidebarInset className="min-w-0 max-w-full overflow-x-hidden">
+        <header className="flex h-14 items-center gap-2 border-b px-4 min-w-0 overflow-x-auto sm:overflow-visible">
+          <SidebarTrigger className="-ml-1 shrink-0" />
+          <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
+          <BellIcon className="size-4 text-muted-foreground shrink-0" />
+          <h1 className="font-semibold text-sm truncate">Lembretes & Agenda de Pagamentos</h1>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             <RelogioHeader />
             <LembretesPopover />
             {pushSupported && (
@@ -518,7 +518,7 @@ export default function LembretesPage() {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex flex-1 flex-col gap-6 p-4 sm:p-6 min-w-0 max-w-full">
           {/* Topo: Disparo de Resumo WhatsApp */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -604,12 +604,12 @@ export default function LembretesPage() {
             </Card>
           </div>
 
-          {/* TOOLBAR MINIMALISTA DE FILTROS (2 LINHAS COMPACTAS) */}
-          <div className="bg-card border border-border rounded-xl p-3 shadow-2xs space-y-2.5">
+          {/* TOOLBAR MINIMALISTA DE FILTROS (2 LINHAS COMPACTAS E RESPONSIVAS) */}
+          <div className="bg-card border border-border rounded-xl p-3 shadow-2xs space-y-2.5 min-w-0 max-w-full">
             {/* LINHA 1: SEGMENTED CONTROL DE PRAZOS + AÇÕES RÁPIDAS */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
               {/* Segmented Control / Pílulas de Seleção de Prazo */}
-              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg overflow-x-auto text-xs">
+              <div className="flex flex-wrap items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs min-w-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -617,7 +617,7 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo("todos")
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "todos"
                       ? "bg-background text-foreground shadow-2xs font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -634,7 +634,7 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "atrasados3d" ? "todos" : "atrasados3d"))
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "atrasados3d"
                       ? "bg-rose-500 text-white shadow-2xs font-semibold"
                       : "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
@@ -652,14 +652,14 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "vencidos" ? "todos" : "vencidos"))
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "vencidos"
                       ? "bg-amber-500 text-white shadow-2xs font-semibold"
                       : "text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
                   }`}
                   title="Filtrar todas as parcelas já vencidas"
                 >
-                  <span>⚠️ Todos Vencidos</span>
+                  <span>⚠️ Vencidos</span>
                   <span className="text-[10px] font-mono opacity-80">{contadores.vencidos}</span>
                 </button>
 
@@ -670,14 +670,14 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "hoje" ? "todos" : "hoje"))
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "hoje"
                       ? "bg-background text-foreground shadow-2xs font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                   }`}
                   title="Filtrar parcelas que vencem hoje"
                 >
-                  <span>📅 Vencem Hoje</span>
+                  <span>📅 Hoje</span>
                   <span className="text-[10px] font-mono opacity-80">{contadores.hoje}</span>
                 </button>
 
@@ -688,7 +688,7 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "semana" ? "todos" : "semana"))
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "semana"
                       ? "bg-background text-foreground shadow-2xs font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
@@ -706,20 +706,20 @@ export default function LembretesPage() {
                     setDataFim("")
                     setFiltroPeriodo((f) => (f === "mes" ? "todos" : "mes"))
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "mes"
                       ? "bg-background text-foreground shadow-2xs font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                   }`}
                   title="Filtrar parcelas dos próximos 30 dias"
                 >
-                  <span>🗓️ Próximos 30d</span>
+                  <span>🗓️ 30 dias</span>
                   <span className="text-[10px] font-mono opacity-80">{contadores.mes}</span>
                 </button>
               </div>
 
               {/* Botões Limpar Filtros e Marcar Todas */}
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {temFiltroAtivo && (
                   <Button
                     size="sm"
@@ -747,15 +747,15 @@ export default function LembretesPage() {
             </div>
 
             {/* LINHA 2: DROPDOWNS E FILTROS DE ESCOPO EM UMA ÚNICA FAIXA AREJADA */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-border/50 text-xs">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-border/50 text-xs min-w-0">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
                 {/* Dropdown Projeto Compacto */}
                 <div className="flex items-center gap-1.5 bg-muted/40 border border-border rounded-lg px-2.5 py-1">
-                  <span className="text-muted-foreground text-xs font-medium">Projeto:</span>
+                  <span className="text-muted-foreground text-xs font-medium shrink-0">Projeto:</span>
                   <select
                     value={filtroProjeto}
                     onChange={(e) => setFiltroProjeto(e.target.value)}
-                    className="bg-transparent font-medium text-foreground text-xs focus:outline-none cursor-pointer max-w-[200px] truncate"
+                    className="bg-transparent font-medium text-foreground text-xs focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[220px] truncate"
                   >
                     <option value="" className="bg-background text-foreground">Todos os Projetos</option>
                     {projetos.map((p) => (
@@ -768,7 +768,7 @@ export default function LembretesPage() {
 
                 {/* Popover Multiselect de Macro-Categorias */}
                 <Popover>
-                  <PopoverTrigger className="flex items-center gap-1.5 bg-muted/40 hover:bg-muted/70 border border-border rounded-lg px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer">
+                  <PopoverTrigger className="flex items-center gap-1.5 bg-muted/40 hover:bg-muted/70 border border-border rounded-lg px-2.5 py-1 text-xs text-foreground transition-colors cursor-pointer shrink-0">
                     <span className="text-muted-foreground">Categorias:</span>
                     <span className="font-semibold text-foreground">
                       {categoriasSelecionadas.size === 0
@@ -819,7 +819,7 @@ export default function LembretesPage() {
                 </Popover>
 
                 {/* Intervalo de Datas Compacto De / Até */}
-                <div className="flex items-center gap-1.5 bg-muted/40 border border-border rounded-lg px-2 py-0.5">
+                <div className="flex items-center gap-1.5 bg-muted/40 border border-border rounded-lg px-2 py-0.5 shrink-0">
                   <span className="text-muted-foreground text-[11px]">De</span>
                   <input
                     type="date"
@@ -857,7 +857,7 @@ export default function LembretesPage() {
               </div>
 
               {/* Indicador de Status Discreto */}
-              <span className="text-[11px] text-muted-foreground font-medium">
+              <span className="text-[11px] text-muted-foreground font-medium truncate max-w-full sm:max-w-xs shrink-0" title={textoFiltroAtivo}>
                 Exibindo: <strong className="text-foreground">{textoFiltroAtivo}</strong>
               </span>
             </div>
