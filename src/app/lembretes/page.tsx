@@ -101,12 +101,6 @@ function GrupoSection({
                 <span className="font-medium text-sm truncate">{p.descricao}</span>
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   <span>{p.projetos?.nome ?? "—"}</span>
-                  {p.rubricas_orcamentarias && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal bg-muted">
-                      {p.rubricas_orcamentarias.tipo ? `[${p.rubricas_orcamentarias.tipo}] ` : ""}
-                      {p.rubricas_orcamentarias.descricao}
-                    </Badge>
-                  )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
@@ -132,6 +126,7 @@ function GrupoSection({
 export default function LembretesPage() {
   const { temAcessoAoProjeto } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
+  const [filtroRubrica, setFiltroRubrica] = useState<string>("")
   const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
   const [dataInicio, setDataInicio] = useState<string>("")
   const [dataFim, setDataFim] = useState<string>("")
@@ -147,6 +142,30 @@ export default function LembretesPage() {
   const parcelas = useMemo(() => {
     return rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
   }, [rawParcelas, temAcessoAoProjeto])
+
+  // Opções de rubricas/categorias disponíveis
+  const rubricasDisponiveis = useMemo(() => {
+    const map = new Map<string, { id: string; tipo: string; descricao: string }>()
+    parcelas.forEach((p) => {
+      if (p.rubricas_orcamentarias) {
+        const r = p.rubricas_orcamentarias
+        if (!map.has(r.id)) {
+          map.set(r.id, {
+            id: r.id,
+            tipo: r.tipo || "",
+            descricao: r.descricao,
+          })
+        }
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.descricao.localeCompare(b.descricao))
+  }, [parcelas])
+
+  // Parcelas considerando o filtro de rubrica / categoria
+  const parcelasBase = useMemo(() => {
+    if (!filtroRubrica) return parcelas
+    return parcelas.filter((p) => p.rubrica_id === filtroRubrica)
+  }, [parcelas, filtroRubrica])
 
   // Projetos para filtro
   const [projetosRaw, setProjetosRaw] = useState<Projeto[]>([])
@@ -183,7 +202,7 @@ export default function LembretesPage() {
     })
   }
 
-  // Contadores para os botões de filtro
+  // Contadores para os botões de filtro baseados nas parcelas (respeitando a rubrica se filtrada)
   const contadores = useMemo(() => {
     const hojeStr = getTodaySaoPaulo()
     let atrasados3d = 0
@@ -192,7 +211,7 @@ export default function LembretesPage() {
     let semana = 0
     let mes = 0
 
-    parcelas.forEach((p) => {
+    parcelasBase.forEach((p) => {
       if (p.status === "PAGO") return
       const dias = diasRestantesSaoPaulo(p.data_vencimento)
       if (dias <= -3) atrasados3d++
@@ -202,15 +221,15 @@ export default function LembretesPage() {
       if (dias >= 0 && dias <= 30) mes++
     })
 
-    const totalPendentes = parcelas.filter((p) => p.status !== "PAGO").length
+    const totalPendentes = parcelasBase.filter((p) => p.status !== "PAGO").length
     return { atrasados3d, vencidos, hoje, semana, mes, total: totalPendentes }
-  }, [parcelas])
+  }, [parcelasBase])
 
   // Parcelas filtradas pelo filtro rápido de período ou range de datas ativo
   const parcelasExibidas = useMemo(() => {
     // Se o usuário selecionou um range de datas específico (De/Até)
     if (dataInicio || dataFim) {
-      return parcelas.filter((p) => {
+      return parcelasBase.filter((p) => {
         const v = p.data_vencimento?.slice(0, 10)
         if (dataInicio && v < dataInicio) return false
         if (dataFim && v > dataFim) return false
@@ -218,9 +237,9 @@ export default function LembretesPage() {
       })
     }
 
-    if (filtroPeriodo === "todos") return parcelas
+    if (filtroPeriodo === "todos") return parcelasBase
     const hojeStr = getTodaySaoPaulo()
-    return parcelas.filter((p) => {
+    return parcelasBase.filter((p) => {
       if (p.status === "PAGO") return false
       const dias = diasRestantesSaoPaulo(p.data_vencimento)
       if (filtroPeriodo === "atrasados3d") return dias <= -3
@@ -230,7 +249,7 @@ export default function LembretesPage() {
       if (filtroPeriodo === "mes") return dias >= 0 && dias <= 30
       return true
     })
-  }, [parcelas, filtroPeriodo, dataInicio, dataFim])
+  }, [parcelasBase, filtroPeriodo, dataInicio, dataFim])
 
   // Parcelas pendentes da visualização atual
   const parcelasVisiveisPendentes = useMemo(() => {
@@ -388,29 +407,80 @@ export default function LembretesPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
-          {/* Topo: Filtro por projeto e Disparo de Resumo WhatsApp */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Topo: Filtro por projeto, Categoria/Rubrica e Disparo de Resumo WhatsApp */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-wrap">
-              <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
-              <div className="w-72">
-                <Select value={filtroProjeto} onValueChange={(v: string | null) => setFiltroProjeto(v === "todos" || !v ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os projetos">
-                      {(val) => {
-                        if (!val || val === "todos") return "Todos os projetos"
-                        const p = projetos.find((item) => item.id === val)
-                        return p?.nome ?? val
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os projetos</SelectItem>
-                    {projetos.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Filtro por projeto */}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground shrink-0 font-medium">Projeto:</Label>
+                <div className="w-56">
+                  <Select
+                    value={filtroProjeto}
+                    onValueChange={(v: string | null) => {
+                      setFiltroProjeto(v === "todos" || !v ? "" : v)
+                      setFiltroRubrica("")
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos os projetos">
+                        {(val) => {
+                          if (!val || val === "todos") return "Todos os projetos"
+                          const p = projetos.find((item) => item.id === val)
+                          return p?.nome ?? val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os projetos</SelectItem>
+                      {projetos.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
+              {/* Filtro por Categoria / Rubrica */}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground shrink-0 font-medium">Categoria / Rubrica:</Label>
+                <div className="w-64">
+                  <Select
+                    value={filtroRubrica}
+                    onValueChange={(v: string | null) => setFiltroRubrica(v === "todas" || !v ? "" : v)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todas as categorias">
+                        {(val) => {
+                          if (!val || val === "todas") return "Todas as categorias"
+                          const r = rubricasDisponiveis.find((item) => item.id === val)
+                          return r ? `${r.tipo ? `[${r.tipo}] ` : ""}${r.descricao}` : val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as categorias / rubricas</SelectItem>
+                      {rubricasDisponiveis.map(r => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.tipo ? `[${r.tipo}] ` : ""}{r.descricao}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {filtroRubrica && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setFiltroRubrica("")}
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title="Limpar filtro de categoria"
+                >
+                  <XIcon className="size-3 mr-1" />
+                  Limpar categoria
+                </Button>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
