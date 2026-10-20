@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
@@ -8,17 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SelectComCriar } from "@/components/select-com-criar"
 import { CriarFornecedorDialog } from "@/components/dialogs/criar-fornecedor-dialog"
@@ -29,14 +26,18 @@ import { usePermissoes } from "@/hooks/use-permissoes"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { toast } from "sonner"
 import {
-  BellIcon, AlertTriangleIcon, CalendarClockIcon,
-  CheckCircleIcon, ClockIcon, PlusIcon, TrashIcon, CheckIcon, BellOffIcon,
-  SunIcon, MoonIcon, Loader2Icon,
+  BellIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  BellOffIcon,
+  SunIcon,
+  MoonIcon,
+  Loader2Icon,
+  FilterIcon,
 } from "lucide-react"
-import type { ParcelaComRelacoes, LembreteAvulso, Projeto } from "@/lib/types"
+import type { ParcelaComRelacoes, Projeto } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
-import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
 
@@ -47,6 +48,9 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 const diasRestantes = diasRestantesSaoPaulo
+
+// Tipos de Filtro Rápido de Período
+type FiltroPeriodo = "todos" | "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes"
 
 // ---------------------------------------------------------------------------
 // GrupoSection — lista parcelas por grupo com suporte a seleção múltipla
@@ -70,7 +74,7 @@ function GrupoSection({
       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{titulo}</h3>
       {parcelas.map((p) => {
         const dias = diasRestantes(p.data_vencimento)
-        const atrasado = p.status === "ATRASADO"
+        const atrasado = p.status === "ATRASADO" || dias < 0
         const isSelected = selectedParcelas?.has(p.id) || false
         return (
           <div
@@ -121,76 +125,13 @@ function GrupoSection({
 }
 
 // ---------------------------------------------------------------------------
-// LembreteCard
-// ---------------------------------------------------------------------------
-function LembreteCard({
-  lembrete,
-  onConcluir,
-  onExcluir,
-  isSelected,
-  onToggleSelect,
-}: {
-  lembrete: LembreteAvulso
-  onConcluir: (id: string) => void
-  onExcluir: (id: string) => void
-  isSelected?: boolean
-  onToggleSelect?: (id: string) => void
-}) {
-  const dias = diasRestantes(lembrete.data_vencimento)
-  const atrasado = dias < 0 && lembrete.status === "PENDENTE"
-  const concluido = lembrete.status === "CONCLUIDO"
-  return (
-    <div
-      className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-        isSelected
-          ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30"
-          : concluido
-          ? "opacity-60 bg-muted/40"
-          : atrasado
-          ? "border-red-200 bg-red-50 dark:bg-red-950/20"
-          : "border-border bg-card"
-      }`}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        {onToggleSelect && (
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={() => onToggleSelect(lembrete.id)}
-            aria-label={`Selecionar lembrete ${lembrete.titulo}`}
-          />
-        )}
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className={`font-medium text-sm truncate ${concluido ? "line-through" : ""}`}>{lembrete.titulo}</span>
-          {lembrete.descricao && <span className="text-xs text-muted-foreground truncate">{lembrete.descricao}</span>}
-          {lembrete.projetos && <span className="text-xs text-muted-foreground">{lembrete.projetos.nome}</span>}
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant={concluido ? "secondary" : atrasado ? "destructive" : "outline"} className="text-xs">
-              {concluido ? "Concluído" : atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(lembrete.data_vencimento)}
-            </Badge>
-            {lembrete.valor && <span className="text-xs font-semibold">{formatBRL(lembrete.valor)}</span>}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-1 ml-3 shrink-0">
-        {!concluido && (
-          <Button size="sm" variant="ghost" onClick={() => onConcluir(lembrete.id)} title="Marcar como concluído">
-            <CheckIcon className="size-4" />
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={() => onExcluir(lembrete.id)} className="text-destructive hover:text-destructive" title="Excluir">
-          <TrashIcon className="size-4" />
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 export default function LembretesPage() {
   const { temAcessoAoProjeto } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
+  const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
+
   const { data: rawParcelas, loading, refetch } = useParcelas({
     proximosDias: 60,
     projetoId: filtroProjeto || undefined,
@@ -199,7 +140,9 @@ export default function LembretesPage() {
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications()
 
   // Parcelas filtradas por permissão de acesso
-  const parcelas = rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
+  const parcelas = useMemo(() => {
+    return rawParcelas.filter((p) => temAcessoAoProjeto(p.projeto_id))
+  }, [rawParcelas, temAcessoAoProjeto])
 
   // Projetos para filtro
   const [projetosRaw, setProjetosRaw] = useState<Projeto[]>([])
@@ -225,6 +168,7 @@ export default function LembretesPage() {
   const [formExecLote, setFormExecLote] = useState({ fornecedor_id: "", data_pagamento_real: "", numero_documento_fiscal: "" })
   const [arquivoNfLote, setArquivoNfLote] = useState<File | null>(null)
   const [salvandoLote, setSalvandoLote] = useState(false)
+  const [sendingType, setSendingType] = useState<string | null>(null)
 
   const toggleSelectParcela = (id: string) => {
     setSelectedParcelas((prev) => {
@@ -235,45 +179,70 @@ export default function LembretesPage() {
     })
   }
 
-  const toggleSelectAllParcelas = () => {
-    const parcelasPendentes = parcelas.filter((p) => p.status !== "PAGO")
-    if (selectedParcelas.size === parcelasPendentes.length && parcelasPendentes.length > 0) {
-      setSelectedParcelas(new Set())
-    } else {
-      setSelectedParcelas(new Set(parcelasPendentes.map((p) => p.id)))
-    }
-  }
-
-  const selecionarParcelasPorCriterio = (criterio: "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes") => {
+  // Contadores para os botões de filtro
+  const contadores = useMemo(() => {
     const hojeStr = getTodaySaoPaulo()
-    const selecionados = parcelas.filter((p) => {
-      if (p.status === "PAGO") return false
+    let atrasados3d = 0
+    let vencidos = 0
+    let hoje = 0
+    let semana = 0
+    let mes = 0
+
+    parcelas.forEach((p) => {
+      if (p.status === "PAGO") return
       const dias = diasRestantesSaoPaulo(p.data_vencimento)
-      if (criterio === "atrasados3d") {
-        return dias <= -3
-      }
-      if (criterio === "vencidos") {
-        return dias < 0 || p.status === "ATRASADO"
-      }
-      if (criterio === "hoje") {
-        return p.data_vencimento === hojeStr
-      }
-      if (criterio === "semana") {
-        return dias >= 0 && dias <= 7
-      }
-      if (criterio === "mes") {
-        return dias >= 0 && dias <= 30
-      }
-      return false
+      if (dias <= -3) atrasados3d++
+      if (dias < 0 || p.status === "ATRASADO") vencidos++
+      if (p.data_vencimento === hojeStr) hoje++
+      if (dias >= 0 && dias <= 7) semana++
+      if (dias >= 0 && dias <= 30) mes++
     })
 
-    if (selecionados.length === 0) {
-      toast.info("Nenhuma parcela pendente encontrada para este período.")
-      return
-    }
+    const totalPendentes = parcelas.filter((p) => p.status !== "PAGO").length
+    return { atrasados3d, vencidos, hoje, semana, mes, total: totalPendentes }
+  }, [parcelas])
 
-    setSelectedParcelas(new Set(selecionados.map((p) => p.id)))
-    toast.success(`${selecionados.length} parcela(s) selecionada(s)!`)
+  // Parcelas filtradas pelo filtro rápido de período ativo
+  const parcelasExibidas = useMemo(() => {
+    if (filtroPeriodo === "todos") return parcelas
+    const hojeStr = getTodaySaoPaulo()
+    return parcelas.filter((p) => {
+      if (p.status === "PAGO") return false
+      const dias = diasRestantesSaoPaulo(p.data_vencimento)
+      if (filtroPeriodo === "atrasados3d") return dias <= -3
+      if (filtroPeriodo === "vencidos") return dias < 0 || p.status === "ATRASADO"
+      if (filtroPeriodo === "hoje") return p.data_vencimento === hojeStr
+      if (filtroPeriodo === "semana") return dias >= 0 && dias <= 7
+      if (filtroPeriodo === "mes") return dias >= 0 && dias <= 30
+      return true
+    })
+  }, [parcelas, filtroPeriodo])
+
+  // Parcelas pendentes da visualização atual
+  const parcelasVisiveisPendentes = useMemo(() => {
+    return parcelasExibidas.filter((p) => p.status !== "PAGO")
+  }, [parcelasExibidas])
+
+  // Verifica se todas as pendentes visíveis estão selecionadas
+  const todasVisiveisSelecionadas = useMemo(() => {
+    if (parcelasVisiveisPendentes.length === 0) return false
+    return parcelasVisiveisPendentes.every((p) => selectedParcelas.has(p.id))
+  }, [parcelasVisiveisPendentes, selectedParcelas])
+
+  const toggleSelectVisiveis = () => {
+    if (todasVisiveisSelecionadas) {
+      setSelectedParcelas((prev) => {
+        const next = new Set(prev)
+        parcelasVisiveisPendentes.forEach((p) => next.delete(p.id))
+        return next
+      })
+    } else {
+      setSelectedParcelas((prev) => {
+        const next = new Set(prev)
+        parcelasVisiveisPendentes.forEach((p) => next.add(p.id))
+        return next
+      })
+    }
   }
 
   const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
@@ -340,21 +309,6 @@ export default function LembretesPage() {
     }
   }
 
-  // Lembretes avulsos
-  const [lembretesRaw, setLembretesRaw] = useState<LembreteAvulso[]>([])
-  const [loadingLembretes, setLoadingLembretes] = useState(true)
-  const [openNovoLembrete, setOpenNovoLembrete] = useState(false)
-  const [formLembrete, setFormLembrete] = useState({
-    titulo: "", descricao: "", data_vencimento: "", projeto_id: "",
-    valor: "", notificar_email: false, email_destino: "",
-  })
-  const [salvandoLembrete, setSavingLembrete] = useState(false)
-  const [sendingType, setSendingType] = useState<string | null>(null)
-
-  const lembretes = useMemo(() => {
-    return lembretesRaw.filter((l) => temAcessoAoProjeto(l.projeto_id))
-  }, [lembretesRaw, temAcessoAoProjeto])
-
   async function handleSendSummary(type: "morning" | "evening") {
     setSendingType(type)
     try {
@@ -372,184 +326,19 @@ export default function LembretesPage() {
     }
   }
 
-  const carregarLembretes = useCallback(async () => {
-    setLoadingLembretes(true)
-    try {
-      const data = await mroscService.getLembretesAvulsos(filtroProjeto || undefined)
-      setLembretesRaw(data)
-    } catch {
-      // tabela pode não existir ainda — silencioso
-    } finally {
-      setLoadingLembretes(false)
-    }
-  }, [filtroProjeto])
-
-  useEffect(() => { carregarLembretes() }, [carregarLembretes])
-
-  async function salvarLembrete() {
-    if (!formLembrete.titulo || !formLembrete.data_vencimento) {
-      toast.error("Título e data são obrigatórios")
-      return
-    }
-    setSavingLembrete(true)
-    try {
-      await mroscService.createLembreteAvulso({
-        titulo: formLembrete.titulo,
-        descricao: formLembrete.descricao || null,
-        data_vencimento: formLembrete.data_vencimento,
-        projeto_id: formLembrete.projeto_id || null,
-        valor: formLembrete.valor ? parseCurrency(formLembrete.valor) : null,
-        notificar_email: formLembrete.notificar_email,
-        email_destino: formLembrete.email_destino || null,
-      })
-      toast.success("Lembrete criado!")
-      setOpenNovoLembrete(false)
-      setFormLembrete({ titulo: "", descricao: "", data_vencimento: "", projeto_id: "", valor: "", notificar_email: false, email_destino: "" })
-      carregarLembretes()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao criar lembrete")
-    } finally {
-      setSavingLembrete(false)
-    }
-  }
-
-  async function concluirLembrete(id: string) {
-    try {
-      await mroscService.updateLembreteAvulso(id, { status: "CONCLUIDO" })
-      setLembretesRaw(prev => prev.map(l => l.id === id ? { ...l, status: "CONCLUIDO" } : l))
-      toast.success("Lembrete concluído!")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
-    }
-  }
-
-  async function excluirLembrete(id: string) {
-    try {
-      await mroscService.deleteLembreteAvulso(id)
-      setLembretesRaw(prev => prev.filter(l => l.id !== id))
-      setSelectedLembretes(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
-      })
-      toast.success("Lembrete excluído.")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
-    }
-  }
-
-  // Seleção e Ações em Lote de Lembretes Avulsos
-  const [selectedLembretes, setSelectedLembretes] = useState<Set<string>>(new Set())
-  const [salvandoLoteLembretes, setSalvandoLoteLembretes] = useState(false)
-
-  const toggleSelectLembrete = (id: string) => {
-    setSelectedLembretes(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleSelectAllLembretes = () => {
-    if (selectedLembretes.size === lembretes.length && lembretes.length > 0) {
-      setSelectedLembretes(new Set())
-    } else {
-      setSelectedLembretes(new Set(lembretes.map(l => l.id)))
-    }
-  }
-
-  // Seletores inteligentes temporais
-  const selecionarPorCriterio = (criterio: "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes") => {
-    const hojeStr = getTodaySaoPaulo()
-    const selecionados = lembretes.filter((l) => {
-      const dias = diasRestantesSaoPaulo(l.data_vencimento)
-      if (criterio === "atrasados3d") {
-        return l.status === "PENDENTE" && dias <= -3
-      }
-      if (criterio === "vencidos") {
-        return l.status === "PENDENTE" && dias < 0
-      }
-      if (criterio === "hoje") {
-        return l.status === "PENDENTE" && l.data_vencimento === hojeStr
-      }
-      if (criterio === "semana") {
-        return l.status === "PENDENTE" && dias >= 0 && dias <= 7
-      }
-      if (criterio === "mes") {
-        return l.status === "PENDENTE" && dias >= 0 && dias <= 30
-      }
-      return false
-    })
-
-    if (selecionados.length === 0) {
-      toast.info("Nenhum lembrete pendente encontrado para este período.")
-      return
-    }
-
-    setSelectedLembretes(new Set(selecionados.map((l) => l.id)))
-    toast.success(`${selecionados.length} lembrete(s) selecionado(s)!`)
-  }
-
-  const selectedLembretesObjs = lembretes.filter(l => selectedLembretes.has(l.id))
-  const totalValorLoteLembretes = selectedLembretesObjs.reduce((acc, l) => acc + (l.valor || 0), 0)
-
-  async function concluirLoteLembretes() {
-    if (selectedLembretesObjs.length === 0) return
-    setSalvandoLoteLembretes(true)
-    try {
-      for (const l of selectedLembretesObjs) {
-        if (l.status !== "CONCLUIDO") {
-          await mroscService.updateLembreteAvulso(l.id, { status: "CONCLUIDO" })
-        }
-      }
-      setLembretesRaw(prev =>
-        prev.map(l => (selectedLembretes.has(l.id) ? { ...l, status: "CONCLUIDO" } : l))
-      )
-      toast.success(`${selectedLembretesObjs.length} lembrete(s) concluído(s) com sucesso!`)
-      setSelectedLembretes(new Set())
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao concluir lembretes em lote")
-    } finally {
-      setSalvandoLoteLembretes(false)
-    }
-  }
-
-  async function excluirLoteLembretes() {
-    if (selectedLembretesObjs.length === 0) return
-    setSalvandoLoteLembretes(true)
-    try {
-      for (const l of selectedLembretesObjs) {
-        await mroscService.deleteLembreteAvulso(l.id)
-      }
-      setLembretesRaw(prev => prev.filter(l => !selectedLembretes.has(l.id)))
-      toast.success(`${selectedLembretesObjs.length} lembrete(s) excluído(s) com sucesso!`)
-      setSelectedLembretes(new Set())
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao excluir lembretes em lote")
-    } finally {
-      setSalvandoLoteLembretes(false)
-    }
-  }
-
-  // Agrupamentos de parcelas
+  // Agrupamentos baseados nas parcelas filtradas para exibição
   const hoje = getTodaySaoPaulo()
-  const atrasadas = parcelas.filter(p => p.status === "ATRASADO")
-  const deHoje = parcelas.filter(p => p.data_vencimento === hoje && p.status !== "PAGO")
-  const proximos7 = parcelas.filter(p => {
+  const atrasadas = parcelasExibidas.filter(p => p.status === "ATRASADO" || (diasRestantesSaoPaulo(p.data_vencimento) < 0 && p.status !== "PAGO"))
+  const deHoje = parcelasExibidas.filter(p => p.data_vencimento === hoje && p.status !== "PAGO")
+  const proximos7 = parcelasExibidas.filter(p => {
     const dias = diasRestantesSaoPaulo(p.data_vencimento)
     return dias > 0 && dias <= 7 && p.status !== "PAGO"
   })
-  const proximos30 = parcelas.filter(p => {
+  const proximos30 = parcelasExibidas.filter(p => {
     const dias = diasRestantesSaoPaulo(p.data_vencimento)
     return dias > 7 && dias <= 30 && p.status !== "PAGO"
   })
   const vigencia = alertas.filter(a => a.tipo === "TERMO_ADITIVO")
-
-  // Lembretes avulsos pendentes/atrasados
-  const lembretesPendentes = lembretes.filter(l => l.status === "PENDENTE" && diasRestantesSaoPaulo(l.data_vencimento) >= 0)
-  const lembretesAtrasados = lembretes.filter(l => l.status === "PENDENTE" && diasRestantesSaoPaulo(l.data_vencimento) < 0)
-  const lembretesConcluidos = lembretes.filter(l => l.status === "CONCLUIDO")
 
   return (
     <SidebarProvider>
@@ -585,51 +374,101 @@ export default function LembretesPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
+          {/* Topo: Filtro por projeto e Disparo de Resumo WhatsApp */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
+              <div className="w-72">
+                <Select value={filtroProjeto} onValueChange={(v: string | null) => setFiltroProjeto(v === "todos" || !v ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os projetos">
+                      {(val) => {
+                        if (!val || val === "todos") return "Todos os projetos"
+                        const p = projetos.find((item) => item.id === val)
+                        return p?.nome ?? val
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os projetos</SelectItem>
+                    {projetos.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          {/* Filtro por projeto */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <Label className="text-sm text-muted-foreground shrink-0">Filtrar por projeto:</Label>
-            <div className="w-72">
-              <Select value={filtroProjeto} onValueChange={(v: string | null) => setFiltroProjeto(v === "todos" || !v ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos os projetos">
-                    {(val) => {
-                      if (!val || val === "todos") return "Todos os projetos"
-                      const p = projetos.find((item) => item.id === val)
-                      return p?.nome ?? val
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os projetos</SelectItem>
-                  {projetos.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendSummary("morning")}
+                disabled={sendingType !== null}
+                className="gap-1.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                title="Disparar resumo das contas que vencem hoje via WhatsApp"
+              >
+                {sendingType === "morning" ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <SunIcon className="size-3.5 text-amber-500" />
+                )}
+                {sendingType === "morning" ? "Enviando..." : "Enviar Resumo de Hoje"}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendSummary("evening")}
+                disabled={sendingType !== null}
+                className="gap-1.5 text-xs text-indigo-700 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
+                title="Disparar resumo antecipado do dia seguinte via WhatsApp"
+              >
+                {sendingType === "evening" ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <MoonIcon className="size-3.5 text-indigo-500" />
+                )}
+                {sendingType === "evening" ? "Enviando..." : "Enviar Resumo de Amanhã"}
+              </Button>
             </div>
           </div>
 
-          {/* Cards resumo */}
+          {/* Cards resumo de Parcelas */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Card className="border-red-200 bg-red-50">
+            <Card
+              className={`border-red-200 bg-red-50 cursor-pointer transition-all hover:ring-2 hover:ring-red-400 ${filtroPeriodo === "vencidos" ? "ring-2 ring-red-500" : ""}`}
+              onClick={() => setFiltroPeriodo(f => f === "vencidos" ? "todos" : "vencidos")}
+              title="Clique para filtrar apenas parcelas atrasadas"
+            >
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground">Parcelas atrasadas</p>
-                <p className="text-2xl font-bold text-red-600">{atrasadas.length}</p>
+                <p className="text-2xl font-bold text-red-600">{contadores.vencidos}</p>
               </CardContent>
             </Card>
-            <Card className="border-amber-200 bg-amber-50">
+
+            <Card
+              className={`border-amber-200 bg-amber-50 cursor-pointer transition-all hover:ring-2 hover:ring-amber-400 ${filtroPeriodo === "hoje" ? "ring-2 ring-amber-500" : ""}`}
+              onClick={() => setFiltroPeriodo(f => f === "hoje" ? "todos" : "hoje")}
+              title="Clique para filtrar apenas parcelas que vencem hoje"
+            >
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground">Vencem hoje</p>
-                <p className="text-2xl font-bold text-amber-600">{deHoje.length}</p>
+                <p className="text-2xl font-bold text-amber-600">{contadores.hoje}</p>
               </CardContent>
             </Card>
-            <Card>
+
+            <Card
+              className={`cursor-pointer transition-all hover:ring-2 hover:ring-primary/40 ${filtroPeriodo === "semana" ? "ring-2 ring-primary" : ""}`}
+              onClick={() => setFiltroPeriodo(f => f === "semana" ? "todos" : "semana")}
+              title="Clique para filtrar parcelas dos próximos 7 dias"
+            >
               <CardContent className="pt-4 pb-3">
-                <p className="text-xs text-muted-foreground">Lembretes avulsos</p>
-                <p className="text-2xl font-bold">{lembretesAtrasados.length + lembretesPendentes.length}</p>
+                <p className="text-xs text-muted-foreground">Esta semana (7 dias)</p>
+                <p className="text-2xl font-bold text-foreground">{contadores.semana}</p>
               </CardContent>
             </Card>
+
             <Card>
               <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground">Alertas vigência</p>
@@ -638,424 +477,224 @@ export default function LembretesPage() {
             </Card>
           </div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="parcelas">
-            <div className="flex items-center justify-between">
-              <TabsList>
-                <TabsTrigger value="parcelas">
-                  Parcelas
-                  {(atrasadas.length + deHoje.length + proximos7.length) > 0 && (
-                    <Badge variant="destructive" className="ml-1.5 size-5 rounded-full p-0 flex items-center justify-center text-[10px]">
-                      {atrasadas.length + deHoje.length + proximos7.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="lembretes">
-                  Lembretes
-                  {(lembretesAtrasados.length + lembretesPendentes.length) > 0 && (
-                    <Badge variant="secondary" className="ml-1.5 size-5 rounded-full p-0 flex items-center justify-center text-[10px]">
-                      {lembretesAtrasados.length + lembretesPendentes.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSendSummary("morning")}
-                  disabled={sendingType !== null}
-                  className="gap-1.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-                  title="Disparar resumo das contas que vencem hoje via WhatsApp"
-                >
-                  {sendingType === "morning" ? (
-                    <Loader2Icon className="size-3.5 animate-spin" />
-                  ) : (
-                    <SunIcon className="size-3.5 text-amber-500" />
-                  )}
-                  {sendingType === "morning" ? "Enviando..." : "Enviar Resumo de Hoje"}
-                </Button>
+          {/* Barra de Ações em Lote */}
+          {selectedParcelas.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2.5">
+                <Badge className="bg-emerald-600 text-white font-mono text-xs">
+                  {selectedParcelas.size} selecionada(s)
+                </Badge>
+                <span className="text-xs font-semibold text-foreground font-mono">
+                  Total: {formatBRL(totalValorLote)}
+                </span>
+              </div>
 
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
                   size="sm"
-                  onClick={() => handleSendSummary("evening")}
-                  disabled={sendingType !== null}
-                  className="gap-1.5 text-xs text-indigo-700 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
-                  title="Disparar resumo antecipado do dia seguinte via WhatsApp"
+                  onClick={abrirModalLote}
+                  className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
                 >
-                  {sendingType === "evening" ? (
-                    <Loader2Icon className="size-3.5 animate-spin" />
-                  ) : (
-                    <MoonIcon className="size-3.5 text-indigo-500" />
-                  )}
-                  {sendingType === "evening" ? "Enviando..." : "Enviar Resumo de Amanhã"}
+                  <CheckCircleIcon className="size-3.5" />
+                  Executar / Quitar Selecionadas ({selectedParcelas.size})
                 </Button>
-
-                <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
-                  <PlusIcon className="size-4 mr-1" /> Novo Lembrete
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedParcelas(new Set())}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Desmarcar
                 </Button>
               </div>
             </div>
+          )}
 
-            {/* Tab Parcelas */}
-            <TabsContent value="parcelas" className="mt-4 space-y-4">
-              {/* Barra de Ações em Lote */}
-              {selectedParcelas.size > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2.5">
-                    <Badge className="bg-emerald-600 text-white font-mono text-xs">
-                      {selectedParcelas.size} selecionada(s)
-                    </Badge>
-                    <span className="text-xs font-semibold text-foreground font-mono">
-                      Total: {formatBRL(totalValorLote)}
-                    </span>
-                  </div>
+          {/* Barra de Filtros Rápidos por Período */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+                <FilterIcon className="size-3" />
+                Filtrar por Período:
+              </span>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={abrirModalLote}
-                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
-                    >
-                      <CheckCircleIcon className="size-3.5" />
-                      Executar / Quitar Selecionadas ({selectedParcelas.size})
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedParcelas(new Set())}
-                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Desmarcar
-                    </Button>
-                  </div>
-                </div>
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "todos" ? "default" : "outline"}
+                onClick={() => setFiltroPeriodo("todos")}
+                className="text-xs h-7 px-2.5 gap-1.5"
+              >
+                Todos
+                <Badge variant={filtroPeriodo === "todos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.total}
+                </Badge>
+              </Button>
+
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "atrasados3d" ? "destructive" : "outline"}
+                onClick={() => setFiltroPeriodo(f => f === "atrasados3d" ? "todos" : "atrasados3d")}
+                className={`text-xs h-7 px-2.5 gap-1.5 ${
+                  filtroPeriodo === "atrasados3d"
+                    ? ""
+                    : "border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
+                }`}
+                title="Filtrar parcelas pendentes com mais de 3 dias de atraso"
+              >
+                🔴 Atrasados (+3 dias)
+                <Badge variant={filtroPeriodo === "atrasados3d" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.atrasados3d}
+                </Badge>
+              </Button>
+
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "vencidos" ? "destructive" : "outline"}
+                onClick={() => setFiltroPeriodo(f => f === "vencidos" ? "todos" : "vencidos")}
+                className={`text-xs h-7 px-2.5 gap-1.5 ${
+                  filtroPeriodo === "vencidos"
+                    ? ""
+                    : "border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                }`}
+                title="Filtrar todas as parcelas já vencidas"
+              >
+                ⚠️ Todos Vencidos
+                <Badge variant={filtroPeriodo === "vencidos" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.vencidos}
+                </Badge>
+              </Button>
+
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "hoje" ? "default" : "outline"}
+                onClick={() => setFiltroPeriodo(f => f === "hoje" ? "todos" : "hoje")}
+                className="text-xs h-7 px-2.5 gap-1.5"
+                title="Filtrar parcelas que vencem hoje"
+              >
+                📅 Vencem Hoje
+                <Badge variant={filtroPeriodo === "hoje" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.hoje}
+                </Badge>
+              </Button>
+
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "semana" ? "default" : "outline"}
+                onClick={() => setFiltroPeriodo(f => f === "semana" ? "todos" : "semana")}
+                className="text-xs h-7 px-2.5 gap-1.5"
+                title="Filtrar parcelas dos próximos 7 dias"
+              >
+                📆 Esta Semana
+                <Badge variant={filtroPeriodo === "semana" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.semana}
+                </Badge>
+              </Button>
+
+              <Button
+                size="sm"
+                variant={filtroPeriodo === "mes" ? "default" : "outline"}
+                onClick={() => setFiltroPeriodo(f => f === "mes" ? "todos" : "mes")}
+                className="text-xs h-7 px-2.5 gap-1.5"
+                title="Filtrar parcelas dos próximos 30 dias"
+              >
+                🗓️ Próximos 30 dias
+                <Badge variant={filtroPeriodo === "mes" ? "secondary" : "outline"} className="text-[10px] h-4 px-1 rounded">
+                  {contadores.mes}
+                </Badge>
+              </Button>
+            </div>
+
+            {/* Marcar todas as parcelas filtradas */}
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              {parcelasVisiveisPendentes.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={toggleSelectVisiveis}
+                  className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <CheckIcon className="size-3 text-emerald-600" />
+                  {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
+                </Button>
               )}
+            </div>
+          </div>
 
-              {/* Barra de utilitários: Seleção rápida por data / período de Parcelas */}
-              {!loading && parcelas.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-semibold text-muted-foreground mr-1">
-                      Seleção Rápida:
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarParcelasPorCriterio("atrasados3d")}
-                      className="text-xs h-7 px-2.5 gap-1 border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
-                      title="Selecionar parcelas vencidas há 3 dias ou mais"
-                    >
-                      🔴 Atrasados (+3 dias)
-                    </Button>
+          {/* Conteúdo principal de Parcelas */}
+          {loading && <p className="text-muted-foreground text-sm">Carregando parcelas...</p>}
+          {!loading && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-6">
+                {/* Seções de acordo com os grupos das parcelas filtradas */}
+                <GrupoSection
+                  titulo={filtroPeriodo === "atrasados3d" ? "🔴 Atrasados (+3 dias)" : "⚠️ Atrasados"}
+                  parcelas={atrasadas}
+                  onExecutar={abrirModal}
+                  selectedParcelas={selectedParcelas}
+                  onToggleSelect={toggleSelectParcela}
+                />
+                <GrupoSection
+                  titulo="📅 Vencem hoje"
+                  parcelas={deHoje}
+                  onExecutar={abrirModal}
+                  selectedParcelas={selectedParcelas}
+                  onToggleSelect={toggleSelectParcela}
+                />
+                <GrupoSection
+                  titulo="📆 Próximos 7 dias"
+                  parcelas={proximos7}
+                  onExecutar={abrirModal}
+                  selectedParcelas={selectedParcelas}
+                  onToggleSelect={toggleSelectParcela}
+                />
+                <GrupoSection
+                  titulo="🗓️ Próximos 30 dias"
+                  parcelas={proximos30}
+                  onExecutar={abrirModal}
+                  selectedParcelas={selectedParcelas}
+                  onToggleSelect={toggleSelectParcela}
+                />
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarParcelasPorCriterio("vencidos")}
-                      className="text-xs h-7 px-2.5 gap-1 border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-                      title="Selecionar todas as parcelas já vencidas"
-                    >
-                      ⚠️ Todos Vencidos
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarParcelasPorCriterio("hoje")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar parcelas que vencem hoje"
-                    >
-                      📅 Vencem Hoje
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarParcelasPorCriterio("semana")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar parcelas dos próximos 7 dias"
-                    >
-                      📆 Esta Semana
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarParcelasPorCriterio("mes")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar parcelas dos próximos 30 dias"
-                    >
-                      🗓️ Próximos 30 dias
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={toggleSelectAllParcelas}
-                      className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
-                    >
-                      <CheckIcon className="size-3 text-emerald-600" />
-                      {selectedParcelas.size === parcelas.filter(p => p.status !== "PAGO").length && parcelas.some(p => p.status !== "PAGO")
-                        ? "Desmarcar Todas"
-                        : "Marcar Todas"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {loading && <p className="text-muted-foreground text-sm">Carregando...</p>}
-              {!loading && (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-6">
-                    <GrupoSection
-                      titulo="⚠️ Atrasados"
-                      parcelas={atrasadas}
-                      onExecutar={abrirModal}
-                      selectedParcelas={selectedParcelas}
-                      onToggleSelect={toggleSelectParcela}
-                    />
-                    <GrupoSection
-                      titulo="📅 Vencem hoje"
-                      parcelas={deHoje}
-                      onExecutar={abrirModal}
-                      selectedParcelas={selectedParcelas}
-                      onToggleSelect={toggleSelectParcela}
-                    />
-                    <GrupoSection
-                      titulo="📆 Próximos 7 dias"
-                      parcelas={proximos7}
-                      onExecutar={abrirModal}
-                      selectedParcelas={selectedParcelas}
-                      onToggleSelect={toggleSelectParcela}
-                    />
-                    <GrupoSection
-                      titulo="🗓️ Próximos 30 dias"
-                      parcelas={proximos30}
-                      onExecutar={abrirModal}
-                      selectedParcelas={selectedParcelas}
-                      onToggleSelect={toggleSelectParcela}
-                    />
-                    {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
-                      <p className="text-muted-foreground text-sm">Nenhum pagamento pendente nos próximos 30 dias.</p>
-                    )}
-                  </div>
-
-                  {vigencia.length > 0 && (
-                    <Card className="border-orange-200 bg-orange-50 h-fit">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-orange-700">⏰ Alertas de Vigência — Termo Aditivo</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {vigencia.map(a => (
-                          <div key={a.id} className="rounded-md border border-orange-200 bg-white p-3">
-                            <p className="font-medium text-sm">{a.projeto_nome}</p>
-                            <p className="text-xs text-orange-700 font-semibold mt-0.5">{a.titulo}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
-                            <p className="text-xs text-muted-foreground">Vigência até: {formatDate(a.data_referencia)}</p>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Tab Lembretes avulsos */}
-            <TabsContent value="lembretes" className="mt-4 space-y-4">
-              {/* Barra de Ações em Lote para Lembretes */}
-              {selectedLembretes.size > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-emerald-50/90 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg shadow-xs animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2.5">
-                    <Badge className="bg-emerald-600 text-white font-mono text-xs">
-                      {selectedLembretes.size} selecionado(s)
-                    </Badge>
-                    {totalValorLoteLembretes > 0 && (
-                      <span className="text-xs font-semibold text-foreground font-mono">
-                        Total: {formatBRL(totalValorLoteLembretes)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={concluirLoteLembretes}
-                      disabled={salvandoLoteLembretes}
-                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 font-medium shadow-xs"
-                    >
-                      <CheckCircleIcon className="size-3.5" />
-                      {salvandoLoteLembretes ? "Concluindo..." : `Concluir Selecionados (${selectedLembretes.size})`}
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={excluirLoteLembretes}
-                      disabled={salvandoLoteLembretes}
-                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
-                    >
-                      <TrashIcon className="size-3.5" />
-                      Excluir ({selectedLembretes.size})
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedLembretes(new Set())}
-                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Desmarcar
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Barra de utilitários: Seleção rápida por data / período */}
-              {!loadingLembretes && lembretes.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 rounded-lg border bg-muted/20">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-semibold text-muted-foreground mr-1">
-                      Seleção Rápida:
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarPorCriterio("atrasados3d")}
-                      className="text-xs h-7 px-2.5 gap-1 border-red-300 dark:border-red-900 text-red-600 hover:bg-red-500/10"
-                      title="Selecionar pendentes vencidos há 3 dias ou mais"
-                    >
-                      🔴 Atrasados (+3 dias)
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarPorCriterio("vencidos")}
-                      className="text-xs h-7 px-2.5 gap-1 border-amber-300 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-                      title="Selecionar todos os pendentes já vencidos"
-                    >
-                      ⚠️ Todos Vencidos
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarPorCriterio("hoje")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar pendentes que vencem hoje"
-                    >
-                      📅 Vencem Hoje
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarPorCriterio("semana")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar pendentes dos próximos 7 dias"
-                    >
-                      📆 Esta Semana
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => selecionarPorCriterio("mes")}
-                      className="text-xs h-7 px-2.5 gap-1 hover:bg-muted"
-                      title="Selecionar pendentes dos próximos 30 dias"
-                    >
-                      🗓️ Próximos 30 dias
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={toggleSelectAllLembretes}
-                      className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
-                    >
-                      <CheckIcon className="size-3 text-emerald-600" />
-                      {selectedLembretes.size === lembretes.length && lembretes.length > 0
-                        ? "Desmarcar Todos"
-                        : "Marcar Todos"}
-                    </Button>
-                    <span className="text-[11px] text-muted-foreground">
-                      ({lembretes.length} lembretes)
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {loadingLembretes && <p className="text-muted-foreground text-sm">Carregando lembretes...</p>}
-              {!loadingLembretes && (
-                <div className="space-y-6">
-                  {lembretesAtrasados.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">⚠️ Atrasados</h3>
-                      {lembretesAtrasados.map(l => (
-                        <LembreteCard
-                          key={l.id}
-                          lembrete={l}
-                          onConcluir={concluirLembrete}
-                          onExcluir={excluirLembrete}
-                          isSelected={selectedLembretes.has(l.id)}
-                          onToggleSelect={toggleSelectLembrete}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {lembretesPendentes.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">📋 Pendentes</h3>
-                      {lembretesPendentes.map(l => (
-                        <LembreteCard
-                          key={l.id}
-                          lembrete={l}
-                          onConcluir={concluirLembrete}
-                          onExcluir={excluirLembrete}
-                          isSelected={selectedLembretes.has(l.id)}
-                          onToggleSelect={toggleSelectLembrete}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {lembretesConcluidos.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">✅ Concluídos</h3>
-                      {lembretesConcluidos.map(l => (
-                        <LembreteCard
-                          key={l.id}
-                          lembrete={l}
-                          onConcluir={concluirLembrete}
-                          onExcluir={excluirLembrete}
-                          isSelected={selectedLembretes.has(l.id)}
-                          onToggleSelect={toggleSelectLembrete}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {lembretes.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
-                      <BellIcon className="size-10 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">Nenhum lembrete avulso criado ainda.</p>
-                      <Button size="sm" onClick={() => setOpenNovoLembrete(true)}>
-                        <PlusIcon className="size-4 mr-1" /> Criar primeiro lembrete
+                {atrasadas.length + deHoje.length + proximos7.length + proximos30.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center gap-2 rounded-lg border border-dashed bg-muted/10 p-6">
+                    <p className="text-sm font-medium text-foreground">Nenhuma parcela pendente encontrada.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {filtroPeriodo !== "todos"
+                        ? "Não há contas em aberto para o período selecionado. Tente clicar em 'Todos'."
+                        : "Não há contas em aberto nos próximos 60 dias para o projeto selecionado."}
+                    </p>
+                    {filtroPeriodo !== "todos" && (
+                      <Button size="sm" variant="outline" onClick={() => setFiltroPeriodo("todos")} className="mt-2 text-xs">
+                        Ver Todas as Parcelas
                       </Button>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Coluna da direita: Alertas de Vigência de Termo Aditivo */}
+              {vigencia.length > 0 && (
+                <Card className="border-orange-200 bg-orange-50 h-fit">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-orange-700">⏰ Alertas de Vigência — Termo Aditivo</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {vigencia.map(a => (
+                      <div key={a.id} className="rounded-md border border-orange-200 bg-white p-3">
+                        <p className="font-medium text-sm">{a.projeto_nome}</p>
+                        <p className="text-xs text-orange-700 font-semibold mt-0.5">{a.titulo}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
+                        <p className="text-xs text-muted-foreground">Vigência até: {formatDate(a.data_referencia)}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
 
-        {/* Modal executar pagamento */}
+        {/* Modal executar pagamento individual */}
         <Dialog open={!!parcelaSelecionada} onOpenChange={o => !o && setParcelaSelecionada(null)}>
           <DialogContent>
             <DialogHeader>
@@ -1166,75 +805,6 @@ export default function LembretesPage() {
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal novo lembrete */}
-        <Dialog open={openNovoLembrete} onOpenChange={setOpenNovoLembrete}>
-          <DialogContent className="sm:max-w-[480px]">
-            <DialogHeader>
-              <DialogTitle>Novo Lembrete</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Título *</Label>
-                <Input placeholder="Ex: Renovar contrato, Entregar relatório..." value={formLembrete.titulo} onChange={e => setFormLembrete(f => ({ ...f, titulo: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição</Label>
-                <Textarea placeholder="Detalhes adicionais..." value={formLembrete.descricao} onChange={e => setFormLembrete(f => ({ ...f, descricao: e.target.value }))} rows={2} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Data de Vencimento *</Label>
-                  <Input type="date" value={formLembrete.data_vencimento} onChange={e => setFormLembrete(f => ({ ...f, data_vencimento: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor (opcional)</Label>
-                  <Input type="text" inputMode="numeric" placeholder="0,00" value={formLembrete.valor} onChange={e => setFormLembrete(f => ({ ...f, valor: maskCurrency(e.target.value) }))} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Projeto (opcional)</Label>
-                <Select value={formLembrete.projeto_id} onValueChange={(v: string | null) => setFormLembrete(f => ({ ...f, projeto_id: v === "nenhum" || !v ? "" : v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Nenhum">
-                      {(val) => {
-                        if (!val || val === "nenhum") return "Nenhum"
-                        const p = projetos.find((item) => item.id === val)
-                        return p?.nome ?? val
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nenhum">Nenhum</SelectItem>
-                    {projetos.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formLembrete.notificar_email}
-                    onChange={e => setFormLembrete(f => ({ ...f, notificar_email: e.target.checked }))}
-                    className="size-4 rounded"
-                  />
-                  Notificar por e-mail
-                </Label>
-                {formLembrete.notificar_email && (
-                  <Input type="email" placeholder="email@exemplo.com" value={formLembrete.email_destino} onChange={e => setFormLembrete(f => ({ ...f, email_destino: e.target.value }))} />
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenNovoLembrete(false)}>Cancelar</Button>
-              <Button onClick={salvarLembrete} disabled={salvandoLembrete}>
-                {salvandoLembrete ? "Salvando..." : "Criar Lembrete"}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 

@@ -8,7 +8,6 @@ import {
   ClockIcon,
   CheckCircle2Icon,
   ArrowRightIcon,
-  CalendarIcon,
   RefreshCwIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,38 +18,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useParcelas } from "@/hooks/use-parcelas"
-import { mroscService } from "@/lib/api/mrosc-service"
 import { formatDate, formatCurrency, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
-import type { LembreteAvulso, ParcelaComRelacoes } from "@/lib/types"
 
 export function LembretesPopover() {
   const [open, setOpen] = React.useState(false)
-  const [lembretesAvulsos, setLembretesAvulsos] = React.useState<LembreteAvulso[]>([])
-  const [loadingLembretes, setLoadingLembretes] = React.useState(false)
-
   const { data: parcelas, loading: loadingParcelas, refetch } = useParcelas({ proximosDias: 30 })
-
-  const carregarLembretes = React.useCallback(async () => {
-    try {
-      setLoadingLembretes(true)
-      const data = await mroscService.getLembretesAvulsos()
-      setLembretesAvulsos(data.filter((l) => l.status === "PENDENTE"))
-    } catch {
-      setLembretesAvulsos([])
-    } finally {
-      setLoadingLembretes(false)
-    }
-  }, [])
-
-  React.useEffect(() => {
-    carregarLembretes()
-  }, [carregarLembretes])
 
   const hoje = getTodaySaoPaulo()
 
   // Agrupamentos
   const atrasadas = React.useMemo(
-    () => parcelas.filter((p) => p.status === "ATRASADO"),
+    () => parcelas.filter((p) => p.status === "ATRASADO" || (diasRestantesSaoPaulo(p.data_vencimento) < 0 && p.status !== "PAGO")),
     [parcelas]
   )
 
@@ -68,15 +46,8 @@ export function LembretesPopover() {
     [parcelas]
   )
 
-  const totalPendentes =
-    atrasadas.length + deHoje.length + proximosDias.length + lembretesAvulsos.length
-
+  const totalPendentes = atrasadas.length + deHoje.length + proximosDias.length
   const temUrgente = atrasadas.length > 0 || deHoje.length > 0
-
-  const handleRecarregar = () => {
-    refetch()
-    carregarLembretes()
-  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -122,7 +93,7 @@ export function LembretesPopover() {
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {totalPendentes === 0
                   ? "Nenhuma pendência para hoje"
-                  : `${totalPendentes} item(ns) requer atenção`}
+                  : `${totalPendentes} pagamento(s) requer atenção`}
               </p>
             </div>
           </div>
@@ -132,13 +103,11 @@ export function LembretesPopover() {
               variant="ghost"
               size="icon"
               className="size-7 text-muted-foreground hover:text-foreground"
-              onClick={handleRecarregar}
+              onClick={() => refetch()}
               title="Atualizar lista"
             >
               <RefreshCwIcon
-                className={`size-3.5 ${
-                  loadingParcelas || loadingLembretes ? "animate-spin" : ""
-                }`}
+                className={`size-3.5 ${loadingParcelas ? "animate-spin" : ""}`}
               />
             </Button>
             {totalPendentes > 0 && (
@@ -161,7 +130,7 @@ export function LembretesPopover() {
               </div>
               <p className="text-xs font-medium text-foreground">Tudo em dia!</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Nenhum pagamento ou lembrete pendente nos próximos 7 dias.
+                Nenhum pagamento pendente nos próximos 7 dias.
               </p>
             </div>
           ) : (
@@ -234,35 +203,6 @@ export function LembretesPopover() {
                   </div>
                 </div>
               ))}
-
-              {/* Lembretes Avulsos */}
-              {lembretesAvulsos.map((l) => (
-                <div
-                  key={`avulso-${l.id}`}
-                  className="group flex flex-col gap-1 rounded-md p-2 text-xs transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-950/20 border border-blue-200/40 bg-blue-50/20 dark:bg-blue-950/10"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-blue-950 dark:text-blue-200 flex items-center gap-1 truncate">
-                      <CalendarIcon className="size-3 text-blue-600 shrink-0" />
-                      {l.titulo}
-                    </span>
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0 text-blue-700 dark:text-blue-300 border-blue-300">
-                      Lembrete
-                    </Badge>
-                  </div>
-                  {l.descricao && (
-                    <p className="text-[11px] text-muted-foreground truncate">{l.descricao}</p>
-                  )}
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono mt-0.5">
-                    <span>Vencimento: {formatDate(l.data_vencimento)}</span>
-                    {l.valor && (
-                      <span className="font-semibold text-foreground">
-                        {formatCurrency(Number(l.valor))}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
             </>
           )}
         </div>
@@ -274,7 +214,7 @@ export function LembretesPopover() {
             onClick={() => setOpen(false)}
             className="w-full flex items-center justify-center gap-1.5 py-1 text-xs font-medium text-primary hover:underline"
           >
-            <span>Ver painel completo de lembretes</span>
+            <span>Ver painel completo de pagamentos</span>
             <ArrowRightIcon className="size-3.5" />
           </Link>
         </div>
