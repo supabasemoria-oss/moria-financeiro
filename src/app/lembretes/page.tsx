@@ -64,7 +64,7 @@ const MACRO_CATEGORIAS: { id: TipoRubrica; label: string; icon: string }[] = [
 type FiltroPeriodo = "todos" | "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes"
 
 // ---------------------------------------------------------------------------
-// GrupoSection — lista parcelas por grupo com suporte a seleção múltipla
+// GrupoSection — lista parcelas por grupo em grid compacto de 2 colunas
 // ---------------------------------------------------------------------------
 function GrupoSection({
   titulo,
@@ -82,49 +82,70 @@ function GrupoSection({
   if (parcelas.length === 0) return null
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{titulo}</h3>
-      {parcelas.map((p) => {
-        const dias = diasRestantes(p.data_vencimento)
-        const atrasado = p.status === "ATRASADO" || dias < 0
-        const isSelected = selectedParcelas?.has(p.id) || false
-        return (
-          <div
-            key={p.id}
-            className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-              isSelected
-                ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30"
-                : atrasado
-                ? "border-red-200 bg-red-50 dark:bg-red-950/20"
-                : "border-border bg-card"
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              {onToggleSelect && (
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={() => onToggleSelect(p.id)}
-                  aria-label={`Selecionar ${p.descricao}`}
-                />
-              )}
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="font-medium text-sm truncate">{p.descricao}</span>
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>{p.projetos?.nome ?? "—"}</span>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={atrasado ? "destructive" : "outline"} className="text-xs">
-                    {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
-                  </Badge>
-                  <span className="text-xs font-semibold">{formatBRL(p.valor_previsto)}</span>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          {titulo}
+          <span className="text-[11px] font-normal text-muted-foreground/80">({parcelas.length})</span>
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {parcelas.map((p) => {
+          const dias = diasRestantes(p.data_vencimento)
+          const atrasado = p.status === "ATRASADO" || dias < 0
+          const isSelected = selectedParcelas?.has(p.id) || false
+          return (
+            <div
+              key={p.id}
+              className={`flex items-center justify-between rounded-lg border p-2.5 transition-all text-xs ${
+                isSelected
+                  ? "bg-emerald-500/10 border-emerald-500/50 dark:bg-emerald-950/30 ring-1 ring-emerald-500/40"
+                  : atrasado
+                  ? "border-red-200 bg-red-50/50 dark:bg-red-950/20 hover:border-red-300"
+                  : "border-border bg-card hover:border-border/80"
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {onToggleSelect && (
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => onToggleSelect(p.id)}
+                    aria-label={`Selecionar ${p.descricao}`}
+                    className="size-4 shrink-0"
+                  />
+                )}
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="font-semibold text-xs text-foreground truncate" title={p.descricao}>
+                    {p.descricao}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground truncate">
+                    {p.projetos?.nome ?? "Sem projeto"}
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Badge variant={atrasado ? "destructive" : "outline"} className="text-[10px] h-4 px-1.5 font-medium">
+                      {atrasado ? `Atrasado ${Math.abs(dias)}d` : formatDate(p.data_vencimento)}
+                    </Badge>
+                    <span className="text-xs font-bold font-mono text-foreground">
+                      {formatBRL(p.valor_previsto)}
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onExecutar(p)}
+                className="ml-2 h-7 px-2 text-[11px] shrink-0 font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                title="Registrar pagamento individual"
+              >
+                <CheckCircleIcon className="size-3 mr-1 text-emerald-600" />
+                Quitar
+              </Button>
             </div>
-            <Button size="sm" onClick={() => onExecutar(p)} className="ml-3 shrink-0">
-              <CheckCircleIcon className="size-4 mr-1" /> Executar
-            </Button>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -915,7 +936,29 @@ export default function LembretesPage() {
           {/* Conteúdo principal de Parcelas */}
           {loading && <p className="text-muted-foreground text-sm">Carregando parcelas...</p>}
           {!loading && (
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              {/* Alertas de Vigência de Termo Aditivo (se houver) */}
+              {vigencia.length > 0 && (
+                <Card className="border-orange-200 bg-orange-50/70">
+                  <CardHeader className="py-2.5 px-4">
+                    <CardTitle className="text-xs font-bold text-orange-700 flex items-center gap-1.5">
+                      <span>⏰</span> Alertas de Vigência — Termo Aditivo ({vigencia.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-2 px-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {vigencia.map((a) => (
+                      <div key={a.id} className="rounded-md border border-orange-200 bg-white p-2.5 text-xs">
+                        <p className="font-semibold text-foreground truncate">{a.projeto_nome}</p>
+                        <p className="text-[11px] text-orange-700 font-medium">{a.titulo}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{a.descricao}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono mt-1">Vigência até: {formatDate(a.data_referencia)}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Seções de Parcelas em Grid de 2 Colunas */}
               <div className="space-y-6">
                 {/* Se houver intervalo personalizado, exibe diretamente as parcelas do período */}
                 {(dataInicio || dataFim) ? (
@@ -986,25 +1029,6 @@ export default function LembretesPage() {
                   </div>
                 )}
               </div>
-
-              {/* Coluna da direita: Alertas de Vigência de Termo Aditivo */}
-              {vigencia.length > 0 && (
-                <Card className="border-orange-200 bg-orange-50 h-fit">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-orange-700">⏰ Alertas de Vigência — Termo Aditivo</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {vigencia.map(a => (
-                      <div key={a.id} className="rounded-md border border-orange-200 bg-white p-3">
-                        <p className="font-medium text-sm">{a.projeto_nome}</p>
-                        <p className="text-xs text-orange-700 font-semibold mt-0.5">{a.titulo}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{a.descricao}</p>
-                        <p className="text-xs text-muted-foreground">Vigência até: {formatDate(a.data_referencia)}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </div>
