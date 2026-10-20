@@ -278,6 +278,32 @@ export default function LembretesPage() {
     }
   }
 
+  const resetFiltros = () => {
+    setFiltroProjeto("")
+    setFiltroRubrica("")
+    setDataInicio("")
+    setDataFim("")
+    setFiltroPeriodo("todos")
+    setSelectedParcelas(new Set())
+  }
+
+  const temFiltroAtivo = !!(filtroProjeto || filtroRubrica || dataInicio || dataFim || filtroPeriodo !== "todos")
+
+  const textoFiltroAtivo = useMemo(() => {
+    if (dataInicio || dataFim) {
+      return `Intervalo: ${dataInicio ? formatDate(dataInicio) : "início"} até ${dataFim ? formatDate(dataFim) : "fim"}`
+    }
+    const map: Record<FiltroPeriodo, string> = {
+      todos: "Todos",
+      atrasados3d: "Atrasados (+3 dias)",
+      vencidos: "Todos Vencidos",
+      hoje: "Vencem Hoje",
+      semana: "Esta Semana",
+      mes: "Próximos 30 dias",
+    }
+    return map[filtroPeriodo] || "Todos"
+  }, [filtroPeriodo, dataInicio, dataFim])
+
   const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
   const totalValorLote = selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
 
@@ -407,80 +433,11 @@ export default function LembretesPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-6 p-6">
-          {/* Topo: Filtro por projeto, Categoria/Rubrica e Disparo de Resumo WhatsApp */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Filtro por projeto */}
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground shrink-0 font-medium">Projeto:</Label>
-                <div className="w-56">
-                  <Select
-                    value={filtroProjeto}
-                    onValueChange={(v: string | null) => {
-                      setFiltroProjeto(v === "todos" || !v ? "" : v)
-                      setFiltroRubrica("")
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Todos os projetos">
-                        {(val) => {
-                          if (!val || val === "todos") return "Todos os projetos"
-                          const p = projetos.find((item) => item.id === val)
-                          return p?.nome ?? val
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os projetos</SelectItem>
-                      {projetos.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Filtro por Categoria / Rubrica */}
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground shrink-0 font-medium">Categoria / Rubrica:</Label>
-                <div className="w-64">
-                  <Select
-                    value={filtroRubrica}
-                    onValueChange={(v: string | null) => setFiltroRubrica(v === "todas" || !v ? "" : v)}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Todas as categorias">
-                        {(val) => {
-                          if (!val || val === "todas") return "Todas as categorias"
-                          const r = rubricasDisponiveis.find((item) => item.id === val)
-                          return r ? `${r.tipo ? `[${r.tipo}] ` : ""}${r.descricao}` : val
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as categorias / rubricas</SelectItem>
-                      {rubricasDisponiveis.map(r => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.tipo ? `[${r.tipo}] ` : ""}{r.descricao}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {filtroRubrica && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setFiltroRubrica("")}
-                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  title="Limpar filtro de categoria"
-                >
-                  <XIcon className="size-3 mr-1" />
-                  Limpar categoria
-                </Button>
-              )}
+          {/* Topo: Disparo de Resumo WhatsApp */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Agenda de Parcelas e Obrigações</h2>
+              <p className="text-xs text-muted-foreground">Acompanhe os prazos de liquidação e execute pagamentos</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -594,15 +551,111 @@ export default function LembretesPage() {
             </div>
           )}
 
-          {/* Barra de Filtros Rápidos por Período e Range de Datas */}
-          <div className="flex flex-col gap-2.5 p-2.5 rounded-lg border bg-muted/20">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-                  <FilterIcon className="size-3" />
-                  Filtrar por Período:
-                </span>
+          {/* Card Principal de Central de Filtros Refatorada */}
+          <div className="bg-card border border-border rounded-xl p-4 shadow-2xs space-y-4">
+            {/* Cabeçalho dos Filtros */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/60">
+              <div>
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <span className="p-1 rounded-md bg-primary/10 text-primary">
+                    <FilterIcon className="size-3.5" />
+                  </span>
+                  Central de Filtros de Parcelas
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Filtre por projeto, categoria orçamentária ou recorte de vencimento
+                </p>
+              </div>
 
+              {temFiltroAtivo && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={resetFiltros}
+                  className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted gap-1 self-start sm:self-auto"
+                >
+                  <XIcon className="size-3.5" />
+                  Limpar Todos os Filtros
+                </Button>
+              )}
+            </div>
+
+            {/* NÍVEL 1: ESCOPO & VÍNCULO (Projeto & Categoria / Rubrica) */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                1. Escopo & Vínculo
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
+                {/* Dropdown Projeto */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-foreground">Projeto MROSC</Label>
+                  <Select
+                    value={filtroProjeto}
+                    onValueChange={(v: string | null) => {
+                      setFiltroProjeto(v === "todos" || !v ? "" : v)
+                      setFiltroRubrica("")
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs bg-background">
+                      <SelectValue placeholder="Todos os projetos (Geral)">
+                        {(val) => {
+                          if (!val || val === "todos") return "Todos os projetos (Geral)"
+                          const p = projetos.find((item) => item.id === val)
+                          return p?.nome ?? val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os projetos (Geral)</SelectItem>
+                      {projetos.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Dropdown Categoria / Rubrica */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-foreground">Categoria / Rubrica Orçamentária</Label>
+                  <Select
+                    value={filtroRubrica}
+                    onValueChange={(v: string | null) => setFiltroRubrica(v === "todas" || !v ? "" : v)}
+                  >
+                    <SelectTrigger className="h-8 text-xs bg-background">
+                      <SelectValue placeholder="Todas as categorias">
+                        {(val) => {
+                          if (!val || val === "todas") return "Todas as categorias"
+                          const r = rubricasDisponiveis.find((item) => item.id === val)
+                          return r ? `${r.tipo ? `[${r.tipo}] ` : ""}${r.descricao}` : val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as categorias / rubricas</SelectItem>
+                      {rubricasDisponiveis.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.tipo ? `[${r.tipo}] ` : ""}{r.descricao}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* NÍVEL 2: PRAZOS & LINHA DO TEMPO */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  2. Prazos & Linha do Tempo
+                </span>
+                <Badge variant="outline" className="text-[11px] font-medium bg-primary/10 text-primary border-primary/20">
+                  Exibindo: {textoFiltroAtivo}
+                </Badge>
+              </div>
+
+              {/* Pílulas de Seleção Rápida */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <Button
                   size="sm"
                   variant={!dataInicio && !dataFim && filtroPeriodo === "todos" ? "default" : "outline"}
@@ -625,7 +678,7 @@ export default function LembretesPage() {
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
-                    setFiltroPeriodo(f => f === "atrasados3d" ? "todos" : "atrasados3d")
+                    setFiltroPeriodo((f) => (f === "atrasados3d" ? "todos" : "atrasados3d"))
                   }}
                   className={`text-xs h-7 px-2.5 gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "atrasados3d"
@@ -646,7 +699,7 @@ export default function LembretesPage() {
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
-                    setFiltroPeriodo(f => f === "vencidos" ? "todos" : "vencidos")
+                    setFiltroPeriodo((f) => (f === "vencidos" ? "todos" : "vencidos"))
                   }}
                   className={`text-xs h-7 px-2.5 gap-1.5 ${
                     !dataInicio && !dataFim && filtroPeriodo === "vencidos"
@@ -667,7 +720,7 @@ export default function LembretesPage() {
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
-                    setFiltroPeriodo(f => f === "hoje" ? "todos" : "hoje")
+                    setFiltroPeriodo((f) => (f === "hoje" ? "todos" : "hoje"))
                   }}
                   className="text-xs h-7 px-2.5 gap-1.5"
                   title="Filtrar parcelas que vencem hoje"
@@ -684,7 +737,7 @@ export default function LembretesPage() {
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
-                    setFiltroPeriodo(f => f === "semana" ? "todos" : "semana")
+                    setFiltroPeriodo((f) => (f === "semana" ? "todos" : "semana"))
                   }}
                   className="text-xs h-7 px-2.5 gap-1.5"
                   title="Filtrar parcelas dos próximos 7 dias"
@@ -701,7 +754,7 @@ export default function LembretesPage() {
                   onClick={() => {
                     setDataInicio("")
                     setDataFim("")
-                    setFiltroPeriodo(f => f === "mes" ? "todos" : "mes")
+                    setFiltroPeriodo((f) => (f === "mes" ? "todos" : "mes"))
                   }}
                   className="text-xs h-7 px-2.5 gap-1.5"
                   title="Filtrar parcelas dos próximos 30 dias"
@@ -713,69 +766,66 @@ export default function LembretesPage() {
                 </Button>
               </div>
 
-              {/* Marcar todas as parcelas filtradas */}
-              <div className="flex items-center gap-2 self-end lg:self-auto shrink-0">
-                {parcelasVisiveisPendentes.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={toggleSelectVisiveis}
-                    className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
-                  >
-                    <CheckIcon className="size-3 text-emerald-600" />
-                    {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
-                  </Button>
-                )}
-              </div>
-            </div>
+              {/* Linha de Intervalo Customizado e Ação de Lote */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/40 mt-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                    <CalendarIcon className="size-3.5 text-muted-foreground" />
+                    Ou por Intervalo Específico:
+                  </span>
 
-            {/* Linha de Range de Datas Customizado */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40 text-xs">
-              <span className="font-semibold text-muted-foreground flex items-center gap-1 mr-1">
-                <CalendarIcon className="size-3.5 text-primary" />
-                Intervalo personalizado:
-              </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-muted-foreground">De</span>
+                    <Input
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
+                      className="h-7 w-36 text-xs bg-background"
+                    />
+                  </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground text-[11px]">De</span>
-                <Input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="h-7 w-36 text-xs bg-background"
-                />
-              </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-muted-foreground">Até</span>
+                    <Input
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      className="h-7 w-36 text-xs bg-background"
+                    />
+                  </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground text-[11px]">Até</span>
-                <Input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="h-7 w-36 text-xs bg-background"
-                />
-              </div>
-
-              {(dataInicio || dataFim) && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[11px] h-6 bg-primary/10 text-primary border-primary/30">
-                    {parcelasExibidas.length} parcela(s) no intervalo
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setDataInicio("")
-                      setDataFim("")
-                    }}
-                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
-                    title="Limpar intervalo de datas"
-                  >
-                    <XIcon className="size-3" />
-                    Limpar datas
-                  </Button>
+                  {(dataInicio || dataFim) && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setDataInicio("")
+                        setDataFim("")
+                      }}
+                      className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 gap-1"
+                      title="Limpar intervalo de datas"
+                    >
+                      <XIcon className="size-3" />
+                      Limpar datas
+                    </Button>
+                  )}
                 </div>
-              )}
+
+                {/* Marcar todas as parcelas filtradas */}
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  {parcelasVisiveisPendentes.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={toggleSelectVisiveis}
+                      className="text-xs h-7.5 px-3 gap-1.5 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    >
+                      <CheckIcon className="size-3.5 text-emerald-600" />
+                      {todasVisiveisSelecionadas ? "Desmarcar do Filtro" : "Marcar Todas do Filtro"}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
