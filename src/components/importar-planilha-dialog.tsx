@@ -51,6 +51,7 @@ import {
   sugerirMapeamentoXLS,
   sugerirMapeamentoPDF,
   vincularOuCriarInstituicaoEProjeto,
+  inferirMesesERecorrenciaRubrica,
   CAMPOS_SISTEMA,
   type MapeamentoColuna,
   type ResultadoMapeamento,
@@ -260,16 +261,28 @@ export function ImportarPlanilhaDialog({
       let criadas = 0
       let totalParcelasGeradas = 0
 
-      // 2. Criar rubricas com ciclo de pagamentos: RECORRENTE para diárias/meses > 1 com geração de parcelas mensais
+      // Calcular vigência estimada do projeto em meses (se datas estiverem presentes)
+      const projEncontrado = projetos.find((p) => p.id === targetProjetoId)
+      let vigenciaMesesProjeto = 12
+      if (projEncontrado?.data_inicio && projEncontrado?.data_fim) {
+        const d1 = new Date(projEncontrado.data_inicio + "T00:00:00")
+        const d2 = new Date(projEncontrado.data_fim + "T00:00:00")
+        const difMeses = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth())
+        if (difMeses > 0) vigenciaMesesProjeto = difMeses
+      }
+
+      // 2. Criar rubricas com ciclo inteligente MROSC (RH e Serviços Contínuos divididos nos meses reais)
       if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
         for (const rub of resultado.rubricas_detectadas) {
-          const meses =
-            rub.periodo_meses && rub.periodo_meses > 1
-              ? rub.periodo_meses
-              : rub.unidade?.toLowerCase().includes("mês") || rub.unidade?.toLowerCase().includes("mes")
-              ? Math.round(rub.quantidade)
-              : 1
-          const tipoPagamento = meses > 1 ? "RECORRENTE" : "UNICO"
+          const { tipoPagamento, numParcelas: meses } = inferirMesesERecorrenciaRubrica({
+            descricao: rub.descricao,
+            especificacao: rub.especificacao,
+            tipo: rub.tipo,
+            unidade: rub.unidade,
+            quantidade: rub.quantidade,
+            periodo_meses: rub.periodo_meses,
+            vigenciaMesesProjeto,
+          })
 
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
@@ -288,7 +301,7 @@ export function ImportarPlanilhaDialog({
           totalParcelasGeradas += meses
         }
       } else {
-        // Fallback para linhas mapeadas manualmente
+        // Fallback para linhas mapeadas manualmente com inteligência MROSC
         for (const item of linhasDado) {
           const obj: Record<string, string> = {} as Record<string, string>
           if ("previewObj" in item && item.previewObj) {
@@ -313,13 +326,13 @@ export function ImportarPlanilhaDialog({
             (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
           )
 
-          const isMensal =
-            obj.unidade?.toLowerCase().includes("mes") ||
-            obj.unidade?.toLowerCase().includes("mês")
-          const numParcelas =
-            isMensal && !isNaN(quantidade) && quantidade > 1
-              ? Math.round(quantidade)
-              : 1
+          const { tipoPagamento, numParcelas } = inferirMesesERecorrenciaRubrica({
+            descricao,
+            tipo: obj.tipo,
+            unidade: obj.unidade,
+            quantidade: isNaN(quantidade) ? 1 : quantidade,
+            vigenciaMesesProjeto,
+          })
 
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
@@ -330,7 +343,7 @@ export function ImportarPlanilhaDialog({
             quantidade: isNaN(quantidade) ? 1 : quantidade,
             unidade: obj.unidade?.trim() || "UN",
             valor_unitario: isNaN(valor_unitario) ? 0 : valor_unitario,
-            tipo_pagamento: numParcelas > 1 ? "RECORRENTE" : "UNICO",
+            tipo_pagamento: tipoPagamento,
             num_parcelas: numParcelas,
             frequencia_meses: 1,
             dia_vencimento: 10,

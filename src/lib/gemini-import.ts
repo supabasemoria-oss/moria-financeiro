@@ -58,6 +58,107 @@ export const CAMPOS_SISTEMA = [
   { campo: "valor_unitario", descricao: "Valor unitário em reais" },
 ]
 
+/**
+ * Motor de Inteligência Orçamentária MROSC:
+ * Identifica se uma rubrica é de prestação continuada (RH / Serviços Mensais) ou aquisição pontual de materiais,
+ * inferindo com precisão a quantidade de meses e evitando agrupamento indevido de salários em parcela única.
+ */
+export function inferirMesesERecorrenciaRubrica(params: {
+  descricao: string
+  especificacao?: string
+  tipo?: string
+  unidade?: string
+  quantidade?: number
+  periodo_meses?: number
+  vigenciaMesesProjeto?: number
+}): { tipoPagamento: "RECORRENTE" | "UNICO"; numParcelas: number } {
+  const descLower = (params.descricao || "").toLowerCase()
+  const especLower = (params.especificacao || "").toLowerCase()
+  const tipoUpper = (params.tipo || "").toUpperCase()
+  const unidadeLower = (params.unidade || "").toLowerCase()
+  const qtd = params.quantidade || 1
+
+  // 1. Materiais de consumo e bens físicos pontuais (NUNCA são recorrentes)
+  const isMaterialFisico =
+    tipoUpper === "MATERIAL" ||
+    /\b(apito|bola|bambole|bambolê|kimono|colchonete|cone|rede|colete|folder|banner|barreira|trofeu|troféu|medalha|uniforme|camisa|camiseta|kit|didatico|didático|placa|tenda|instrumento musical|pandeiro|agogô|agogo|berimbau)\b/i.test(
+      descLower
+    )
+
+  if (isMaterialFisico) {
+    return { tipoPagamento: "UNICO", numParcelas: 1 }
+  }
+
+  // 2. Cargos de RH e Serviços Continuados (OBRIGATORIAMENTE RECORRENTES no MROSC)
+  const isRH =
+    tipoUpper === "RH" ||
+    /\b(assistente|coordenad|monitor|instrutor|auxiliar|psicolog|psicólogo|articulador|pesquisad|estagiari|estagiário|educador|professor|recepcionista|secretaria|secretária|gerente|analista|agente)\b/i.test(
+      descLower
+    )
+
+  const isServicoContinuado =
+    tipoUpper === "SERVICO" &&
+    /\b(assessoria|contabil|contábil|juridic|jurídico|tecnica|técnica|social midia|mídia|comunicacao|comunicação|transporte|locacao|locação|veiculo|veículo|seguranca|segurança|limpeza|manutencao|manutenção)\b/i.test(
+      descLower
+    )
+
+  if (!isRH && !isServicoContinuado && !unidadeLower.includes("mes") && !unidadeLower.includes("mês")) {
+    return { tipoPagamento: "UNICO", numParcelas: 1 }
+  }
+
+  // 3. Determinar o número de meses da recorrência
+  let meses = params.periodo_meses && params.periodo_meses > 1 ? params.periodo_meses : 0
+
+  // Se a unidade textual for "Mês" e a quantidade for razoável (2 a 36 meses)
+  if (!meses && (unidadeLower.includes("mes") || unidadeLower.includes("mês"))) {
+    if (qtd >= 2 && qtd <= 36) {
+      meses = Math.round(qtd)
+    }
+  }
+
+  // Buscar na especificação ou descrição menção explícita a meses (ex: "14 meses", "12 meses", "x 14 meses")
+  if (!meses) {
+    const textoCompleto = `${descLower} ${especLower}`
+    const matchMeses = textoCompleto.match(/(\d+)\s*mes(?:es)?/i) || textoCompleto.match(/x\s*(\d+)\s*mes/i)
+    if (matchMeses) {
+      const parsed = parseInt(matchMeses[1], 10)
+      if (parsed >= 2 && parsed <= 36) {
+        meses = parsed
+      }
+    }
+  }
+
+  // Se a quantidade for múltipla de meses comuns (14, 12, 10, 8, 6)
+  if (!meses && qtd > 1) {
+    if (qtd >= 2 && qtd <= 36) {
+      meses = Math.round(qtd)
+    } else if (qtd % 14 === 0) {
+      meses = 14
+    } else if (qtd % 12 === 0) {
+      meses = 12
+    } else if (qtd % 8 === 0) {
+      meses = 8
+    } else if (qtd % 6 === 0) {
+      meses = 6
+    }
+  }
+
+  // Se o projeto tiver vigência identificada
+  if (!meses && params.vigenciaMesesProjeto && params.vigenciaMesesProjeto > 1) {
+    meses = params.vigenciaMesesProjeto
+  }
+
+  // Fallback seguro para RH / continuado: padrão 12 meses (nunca 1 parcela só!)
+  if (!meses || meses <= 1) {
+    meses = 12
+  }
+
+  return {
+    tipoPagamento: "RECORRENTE",
+    numParcelas: meses,
+  }
+}
+
 export function parseMoedaBR(val: unknown): number {
   if (typeof val === "number") return isNaN(val) ? 0 : val
   if (!val) return 0
@@ -322,6 +423,21 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
         const txt = String(row[colQtdPeriodo] || "")
         const match = txt.match(/(\d+)/)
         if (match) periodoMeses = parseInt(match[1], 10)
+      }
+
+      // Aplicação da Inteligência MROSC para inferir meses de prestação contínua
+      if (periodoMeses <= 1) {
+        const inferencia = inferirMesesERecorrenciaRubrica({
+          descricao: itemNome,
+          especificacao: especStr,
+          tipo,
+          unidade,
+          quantidade: qtd,
+          periodo_meses: periodoMeses,
+        })
+        if (inferencia.tipoPagamento === "RECORRENTE" && inferencia.numParcelas > 1) {
+          periodoMeses = inferencia.numParcelas
+        }
       }
 
       // Identificar o fornecedor vencedor cotado no Modelo A
