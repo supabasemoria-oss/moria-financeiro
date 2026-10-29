@@ -148,7 +148,29 @@ export const mroscService = {
     } else {
       projeto = await this.getProjeto(id)
     }
-    if (data_ordem_inicio !== undefined) {
+    if (data_ordem_inicio) {
+      await this.setOrdemInicioProjeto(id, data_ordem_inicio)
+      if (projeto) projeto.data_ordem_inicio = data_ordem_inicio
+
+      // Gerar automaticamente parcelas para rubricas do projeto que ainda não possuem cronograma
+      try {
+        const { data: rubricas } = await supabase.from('rubricas_orcamentarias').select('*').eq('projeto_id', id)
+        if (rubricas && rubricas.length > 0) {
+          const { data: parcelasExistentes } = await supabase.from('parcelas_pagamento').select('rubrica_id').eq('projeto_id', id)
+          const rubricasComParcelas = new Set((parcelasExistentes || []).map((p) => p.rubrica_id))
+          for (const rub of rubricas) {
+            if (!rubricasComParcelas.has(rub.id)) {
+              const parcelas = gerarParcelas(rub as Rubrica, data_ordem_inicio)
+              if (parcelas.length > 0) {
+                await supabase.from('parcelas_pagamento').insert(parcelas.map((p) => ({ ...p, rubrica_id: rub.id, projeto_id: id })))
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Aviso ao sincronizar parcelas da ordem de início:', e)
+      }
+    } else if (data_ordem_inicio !== undefined) {
       await this.setOrdemInicioProjeto(id, data_ordem_inicio)
       if (projeto) projeto.data_ordem_inicio = data_ordem_inicio
     }

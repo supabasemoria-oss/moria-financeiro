@@ -174,11 +174,17 @@ export default function ProjetosPage() {
 
     try {
       setSavingCreate(true)
+      let dataInicioFinal = createFormData.data_inicio
+      if (createFormData.data_ordem_inicio && createFormData.data_ordem_inicio < dataInicioFinal) {
+        dataInicioFinal = createFormData.data_ordem_inicio
+        toast.info("Início de vigência ajustado para coincidir com a Ordem de Início (Regra MROSC).")
+      }
+
       await mroscService.createProjeto({
         nome: createFormData.nome.trim(),
         instituicao_id: createFormData.instituicao_id,
         numero_termo: createFormData.numero_termo.trim() || null,
-        data_inicio: createFormData.data_inicio,
+        data_inicio: dataInicioFinal,
         data_fim: createFormData.data_fim,
         data_ordem_inicio: createFormData.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(createFormData.valor_total_aprovado),
@@ -269,11 +275,17 @@ export default function ProjetosPage() {
 
     try {
       setSavingEdit(true)
+      let dataInicioFinal = editFormData.data_inicio
+      if (editFormData.data_ordem_inicio && editFormData.data_ordem_inicio < dataInicioFinal) {
+        dataInicioFinal = editFormData.data_ordem_inicio
+        toast.info("Início de vigência ajustado para coincidir com a Ordem de Início (Regra MROSC).")
+      }
+
       await mroscService.updateProjeto(editingId, {
         nome: editFormData.nome.trim(),
         instituicao_id: editFormData.instituicao_id,
         numero_termo: editFormData.numero_termo.trim() || null,
-        data_inicio: editFormData.data_inicio,
+        data_inicio: dataInicioFinal,
         data_fim: editFormData.data_fim,
         data_ordem_inicio: editFormData.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(editFormData.valor_total_aprovado),
@@ -529,12 +541,32 @@ export default function ProjetosPage() {
                   <Input
                     id="data_ordem_inicio"
                     type="date"
+                    min={createFormData.data_inicio || undefined}
+                    max={createFormData.data_fim || undefined}
                     value={createFormData.data_ordem_inicio}
                     onChange={(e) => setCreateFormData({ ...createFormData, data_ordem_inicio: e.target.value })}
                   />
                   <span className="text-[11px] text-muted-foreground">
                     Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
                   </span>
+                  {createFormData.data_ordem_inicio && createFormData.data_inicio && createFormData.data_ordem_inicio < createFormData.data_inicio && (
+                    <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs mt-1">
+                      <AlertTriangleIcon className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                      <div className="flex-1 space-y-1">
+                        <p className="font-semibold text-[11px]">Inconsistência MROSC: Início da Vigência posterior à Ordem de Início</p>
+                        <p className="text-[11px] leading-tight text-muted-foreground">
+                          A Ordem de Início ({formatDate(createFormData.data_ordem_inicio)}) não pode ocorrer antes do Início de Vigência ({formatDate(createFormData.data_inicio)}). Pela Lei 13.019/2014, nenhuma despesa pode ser executada fora da vigência.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setCreateFormData((prev) => ({ ...prev, data_inicio: prev.data_ordem_inicio }))}
+                          className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 underline hover:no-underline cursor-pointer"
+                        >
+                          Ajustar Início de Vigência para {formatDate(createFormData.data_ordem_inicio)}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-2">
@@ -949,12 +981,32 @@ export default function ProjetosPage() {
                 <Input
                   id="edit_data_ordem"
                   type="date"
+                  min={editFormData.data_inicio || undefined}
+                  max={editFormData.data_fim || undefined}
                   value={editFormData.data_ordem_inicio}
                   onChange={(e) => setEditFormData({ ...editFormData, data_ordem_inicio: e.target.value })}
                 />
                 <span className="text-[11px] text-muted-foreground">
                   Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
                 </span>
+                {editFormData.data_ordem_inicio && editFormData.data_inicio && editFormData.data_ordem_inicio < editFormData.data_inicio && (
+                  <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs mt-1">
+                    <AlertTriangleIcon className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="font-semibold text-[11px]">Inconsistência MROSC: Início da Vigência posterior à Ordem de Início</p>
+                      <p className="text-[11px] leading-tight text-muted-foreground">
+                        A Ordem de Início ({formatDate(editFormData.data_ordem_inicio)}) não pode ocorrer antes do Início de Vigência ({formatDate(editFormData.data_inicio)}). Pela Lei 13.019/2014, nenhuma despesa pode ser executada fora da vigência.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setEditFormData((prev) => ({ ...prev, data_inicio: prev.data_ordem_inicio }))}
+                        className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 underline hover:no-underline cursor-pointer"
+                      >
+                        Ajustar Início de Vigência para {formatDate(editFormData.data_ordem_inicio)}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-2">

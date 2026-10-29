@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircleIcon } from "lucide-react"
+import { PlusCircleIcon, AlertTriangleIcon } from "lucide-react"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
+import { formatDate } from "@/lib/utils"
 import type { Projeto, Instituicao } from "@/lib/types"
 import { toast } from "sonner"
 import { CriarInstituicaoDialog } from "./criar-instituicao-dialog"
@@ -37,10 +38,16 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
     }
     setSaving(true)
     try {
+      let dataInicioFinal = form.data_inicio
+      if (form.data_ordem_inicio && form.data_ordem_inicio < dataInicioFinal) {
+        dataInicioFinal = form.data_ordem_inicio
+        toast.info("Início de vigência ajustado para coincidir com a Ordem de Início (Regra MROSC).")
+      }
+
       const novo = await mroscService.createProjeto({
         nome: form.nome, instituicao_id: form.instituicao_id,
         numero_termo: form.numero_termo || null,
-        data_inicio: form.data_inicio, data_fim: form.data_fim,
+        data_inicio: dataInicioFinal, data_fim: form.data_fim,
         data_ordem_inicio: form.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(form.valor_total_aprovado),
         status: form.status,
@@ -100,12 +107,32 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
                 <Input
                   id="pj-ordem"
                   type="date"
+                  min={form.data_inicio || undefined}
+                  max={form.data_fim || undefined}
                   value={form.data_ordem_inicio}
                   onChange={e => setForm(p => ({ ...p, data_ordem_inicio: e.target.value }))}
                 />
                 <span className="text-[11px] text-muted-foreground">
                   Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
                 </span>
+                {form.data_ordem_inicio && form.data_inicio && form.data_ordem_inicio < form.data_inicio && (
+                  <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs mt-1">
+                    <AlertTriangleIcon className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="font-semibold text-[11px]">Inconsistência MROSC: Início da Vigência posterior à Ordem de Início</p>
+                      <p className="text-[11px] leading-tight text-muted-foreground">
+                        A Ordem de Início ({formatDate(form.data_ordem_inicio)}) não pode ocorrer antes do Início de Vigência ({formatDate(form.data_inicio)}). Pela Lei 13.019/2014, nenhuma despesa pode ser executada fora da vigência.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, data_inicio: prev.data_ordem_inicio }))}
+                        className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 underline hover:no-underline cursor-pointer"
+                      >
+                        Ajustar Início de Vigência para {formatDate(form.data_ordem_inicio)}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label>Status</Label>
