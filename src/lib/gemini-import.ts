@@ -29,11 +29,14 @@ export interface RubricaSkillExtraida {
   descricao: string
   especificacao?: string
   tipo: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS"
+  /** Nº de postos/vagas/pessoas (ex: 16 monitores) — NÃO o total homem-mês */
   quantidade: number
   unidade: string
+  /** Salário/custo unitário mensal de 1 posto/item */
   valor_unitario: number
   valor_total: number
   codigo_natureza_despesa: string
+  /** Nº de meses de duração da rubrica (ex: 12) — extraído da memória de cálculo */
   periodo_meses?: number
   fornecedor_selecionado?: FornecedorIdentificado | null
 }
@@ -711,23 +714,76 @@ export async function vincularOuCriarInstituicaoEProjeto(
   return { instituicaoId, projetoId, instituicaoNome, projetoNome: nomeProjeto, criadoNovo }
 }
 
+/**
+ * Converte uma aba XLS em imagem base64 usando html2canvas para envio ao Gemini multimodal.
+ * Renderiza a tabela em um elemento DOM oculto para captura fiel da estrutura visual.
+ */
+async function xlsRowsToBase64Image(rows: string[][]): Promise<string | null> {
+  try {
+    const html2canvas = (await import("html2canvas")).default
+
+    // Construir HTML da tabela com as primeiras 80 linhas (limite visual razoável)
+    const maxLinhas = Math.min(rows.length, 80)
+    const tabelaHtml = rows
+      .slice(0, maxLinhas)
+      .map((row) => {
+        const cells = row.map((c) => `<td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis">${String(c ?? "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")
+        return `<tr>${cells}</tr>`
+      })
+      .join("")
+
+    const div = document.createElement("div")
+    div.style.cssText = "position:fixed;top:-9999px;left:-9999px;background:white;padding:8px;font-family:Arial,sans-serif"
+    div.innerHTML = `<table style="border-collapse:collapse;font-size:11px">${tabelaHtml}</table>`
+    document.body.appendChild(div)
+
+    const canvas = await html2canvas(div, {
+      backgroundColor: "#ffffff",
+      scale: 1.5,
+      useCORS: true,
+      logging: false,
+    })
+    document.body.removeChild(div)
+
+    const dataUrl = canvas.toDataURL("image/png")
+    return dataUrl.split(",")[1] // retorna só o base64 sem o prefixo
+  } catch {
+    return null
+  }
+}
+
 export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoMapeamento> {
+  const { gemini_api_key, gemini_model } = await getSettingsAsync()
+
+  // 1. Tentar renderizar a planilha como imagem e enviar ao Gemini multimodal (melhor qualidade)
+  if (gemini_api_key) {
+    const base64Img = await xlsRowsToBase64Image(rows)
+    if (base64Img) {
+      try {
+        const resultado = await interpretarImagemComGemini(base64Img, "image/png", gemini_api_key, gemini_model)
+        if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
+          return resultado
+        }
+      } catch {
+        // fallback para texto se falhar
+      }
+    }
+  }
+
+  // 2. Fallback: Skill MROSC baseada em regex (para modelos conhecidos)
   const skillResult = executarSkillMrosc(rows)
   if (skillResult && skillResult.rubricas_detectadas && skillResult.rubricas_detectadas.length > 0) {
     return skillResult
   }
 
-  const autoResult = tentarMapeamentoAutomatico(rows)
-  if (autoResult && autoResult.mapeamento.length > 0 && autoResult.preview.length > 0) {
-    return autoResult
-  }
-
-  const { gemini_api_key, gemini_model } = await getSettingsAsync()
+  // 3. Fallback: Gemini via texto serializado
   if (!gemini_api_key) {
+    const autoResult = tentarMapeamentoAutomatico(rows)
+    if (autoResult && autoResult.mapeamento.length > 0) return autoResult
     throw new Error("Chave de API do Gemini não configurada. Acesse Configurações para cadastrá-la.")
   }
 
-  const linhasParaEnviar = rows.slice(0, 60)
+  const linhasParaEnviar = rows.slice(0, 80)
   const tabela = linhasParaEnviar
     .map((row, i) => {
       const cellsNaoVazias = row.map((c, j) => (c ? `[${j}]=${c}` : "")).filter(Boolean)
@@ -736,43 +792,14 @@ export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoM
     .filter((l) => l.length > 4)
     .join("\n")
 
-  const prompt = `Você é um especialista em planilhas orçamentárias do terceiro setor brasileiro (MROSC Lei 13.019/2014 / Transferegov).
-Analise as linhas abaixo de uma planilha orçamentária no formato Lnum: [col_index]=valor.
-
-CAMPOS DO SISTEMA QUE QUEREMOS MAPEAR:
-${CAMPOS_SISTEMA.map((c) => `"${c.campo}": ${c.descricao}`).join("\n")}
-
-DIRETRIZES DA SKILL MROSC:
-- Identifique metadados institucionais (Proposta Nº, OSC proponente, CNPJ da entidade).
-- "descricao": coluna com nomes de cargos, serviços ou materiais.
-- "valor_unitario": coluna de MENOR VALOR COTADO ou cotação selecionada.
-- "quantidade": número de meses, diárias ou unidades.
-- "fornecedores": identifique fornecedores citados nas cotações (Razão Social, CNPJ).
-
-Retorne APENAS JSON válido com esta estrutura:
-{
-  "linha_cabecalho": <numero>,
-  "linhas_secao": [<numeros>],
-  "linhas_ignorar": [<numeros>],
-  "mapeamento": [
-    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>, "sugestao_ia": "<campo ou null>", "motivo_ia": "<motivo>"}
-  ],
-  "metadados": {
-    "proposta_numero": "<numero ou null>",
-    "osc_nome": "<nome ou null>",
-    "cnpj_osc": "<cnpj ou null>"
-  },
-  "fornecedores": [
-    {"razao_social_nome": "<nome>", "cpf_cnpj": "<cnpj>", "telefone": "<tel ou null>"}
-  ]
-}`
+  const prompt = buildPromptMROSC(tabela)
 
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+      generationConfig: { temperature: 0, maxOutputTokens: 8192 },
     }),
   })
 
@@ -790,16 +817,36 @@ Retorne APENAS JSON válido com esta estrutura:
   let resultado: ResultadoMapeamento
   try {
     resultado = JSON.parse(jsonMatch[0])
-    resultado.mapeamento = resultado.mapeamento.map((m) => ({
-      ...m,
-      sugestao_ia: m.sugestao_ia ?? m.campo_sistema,
-      motivo_ia: m.motivo_ia ?? "Sugerido pelo modelo Gemini",
-    }))
+    if (resultado.mapeamento) {
+      resultado.mapeamento = resultado.mapeamento.map((m) => ({
+        ...m,
+        sugestao_ia: m.sugestao_ia ?? m.campo_sistema,
+        motivo_ia: m.motivo_ia ?? "Sugerido pelo modelo Gemini",
+      }))
+    }
+    // Normalizar rubricas se vieram nesse caminho também
+    if (resultado.rubricas_detectadas) {
+      resultado.rubricas_detectadas = resultado.rubricas_detectadas.map((r: any) => ({
+        descricao: r.descricao || "",
+        especificacao: r.especificacao || undefined,
+        tipo: r.tipo || "SERVICO",
+        quantidade: Number(r.quantidade) || 1,
+        unidade: r.unidade || "UN",
+        valor_unitario: Number(r.valor_unitario) || 0,
+        valor_total: Number(r.valor_total) || 0,
+        codigo_natureza_despesa: r.codigo_natureza_despesa || "33903900",
+        periodo_meses: r.periodo_meses ? Number(r.periodo_meses) : undefined,
+        fornecedor_selecionado: null,
+      }))
+    }
   } catch {
     throw new Error("JSON inválido retornado pelo Gemini.")
   }
 
   if (!resultado.mapeamento || resultado.mapeamento.length === 0) {
+    if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
+      return resultado
+    }
     const auto = tentarMapeamentoAutomatico(rows)
     if (auto) return auto
     throw new Error("Não foi possível identificar as colunas da planilha.")
@@ -919,62 +966,170 @@ export async function sugerirMapeamentoPDF(file: File): Promise<ResultadoMapeame
   }
 
   const base64 = await fileToBase64(file)
+  return interpretarImagemComGemini(base64, file.type, gemini_api_key, gemini_model)
+}
 
-  const prompt = `Você é um especialista em planilhas orçamentárias do terceiro setor brasileiro (MROSC / Transferegov).
-Analise a tabela orçamentária neste documento e extraia as rubricas e dados da proposta.
+/**
+ * Motor principal de interpretação semântica MROSC via Gemini multimodal.
+ * Usado tanto para PDF quanto para imagem gerada a partir de XLS.
+ * Extrai rubricas_detectadas com memória de cálculo completa (postos, meses, salário unitário).
+ */
+async function interpretarImagemComGemini(
+  base64: string,
+  mimeType: string,
+  apiKey: string,
+  model: string
+): Promise<ResultadoMapeamento> {
+  const prompt = `Você é um Auditor Orçamentário especialista em planilhas do terceiro setor brasileiro (MROSC / Lei 13.019/2014 / Transferegov.br).
 
-CAMPOS DO SISTEMA:
-${CAMPOS_SISTEMA.map((c) => `"${c.campo}": ${c.descricao}`).join("\n")}
+Analise esta planilha orçamentária e extraia TODAS as rubricas com interpretação semântica completa da memória de cálculo.
 
-Retorne APENAS JSON válido com esta estrutura:
+## REGRAS CRÍTICAS DE INTERPRETAÇÃO
+
+### Para rubricas de RECURSOS HUMANOS (tipo: "RH"):
+A planilha frequentemente tem colunas separadas como: QUANTIDADE (nº de pessoas/postos) × PERÍODO (nº de meses) = TOTAL (homem-mês).
+Exemplo: "Monitor: 16 pessoas × 12 meses = 192 (total homem-mês), salário base R$ 1.700,00"
+- "quantidade": DEVE SER 16 (número de postos/pessoas), NÃO 192
+- "periodo_meses": DEVE SER 12 (número de meses)
+- "valor_unitario": DEVE SER 1700.00 (salário mensal de 1 pessoa)
+- "valor_total": 16 × 12 × 1700 = 326.400,00
+
+### Para MATERIAIS e BENS (tipo: "MATERIAL"):
+- "quantidade": número de unidades compradas
+- "periodo_meses": null (é compra pontual, não recorrente)
+- "valor_unitario": preço unitário do item
+- "valor_total": quantidade × valor_unitario
+
+### Para SERVIÇOS CONTÍNUOS (tipo: "SERVICO"):
+- "quantidade": número de serviços/contratos simultâneos
+- "periodo_meses": número de meses do contrato (ex: 12, 14)
+- "valor_unitario": valor mensal do serviço
+- "valor_total": quantidade × periodo_meses × valor_unitario
+
+### Para ENCARGOS/TRIBUTOS sobre RH:
+- tipo: "OUTROS"
+- Incluir apenas se o valor estiver explicitamente separado na planilha
+- "especificacao": mencionar o percentual (ex: "Encargos CLT 68,16%")
+
+## CAMPOS DO SISTEMA:
+- descricao: Nome do cargo, serviço ou material
+- tipo: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS"
+- quantidade: Nº de postos/vagas/unidades (NÃO o total homem-mês)
+- unidade: "Mês", "UN", "Serviço", "HR" etc.
+- valor_unitario: Custo unitário mensal (salário de 1 profissional ou preço unitário)
+- valor_total: Valor total aprovado para a rubrica
+- periodo_meses: Duração em meses (null para compras pontuais)
+- codigo_natureza_despesa: GND3 = 33903900 (padrão); RH CLT = 33903600; Material = 33903000; Tributo = 33904700
+
+## JSON RETORNADO:
+Retorne APENAS JSON válido com esta estrutura exata:
 {
   "linha_cabecalho": 0,
   "linhas_secao": [],
   "linhas_ignorar": [],
-  "mapeamento": [
-    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>, "sugestao_ia": "<campo ou null>", "motivo_ia": "<motivo>"}
-  ],
-  "preview": [
-    {"descricao": "...", "quantidade": "...", "valor_unitario": "...", "tipo": "..."}
-  ],
+  "mapeamento": [],
   "metadados": {
-    "proposta_numero": "<numero ou null>",
-    "osc_nome": "<nome ou null>",
-    "cnpj_osc": "<cnpj ou null>"
+    "proposta_numero": "<numero da proposta ou null>",
+    "osc_nome": "<nome da OSC proponente ou null>",
+    "cnpj_osc": "<CNPJ formatado XX.XXX.XXX/XXXX-XX ou null>",
+    "valor_total_estimado": <numero ou null>
   },
-  "fornecedores": []
+  "fornecedores": [
+    {"razao_social_nome": "<nome>", "cpf_cnpj": "<cnpj>", "telefone": null}
+  ],
+  "rubricas_detectadas": [
+    {
+      "descricao": "<nome do cargo/serviço/material>",
+      "especificacao": "<memória de cálculo ou justificativa resumida, se houver>",
+      "tipo": "<RH|SERVICO|MATERIAL|LOCACAO|OUTROS>",
+      "quantidade": <numero de postos/vagas/unidades — NUNCA o total homem-mês>,
+      "unidade": "<Mês|UN|Serviço|etc>",
+      "valor_unitario": <salário mensal de 1 profissional ou preço unitário — numero>,
+      "valor_total": <valor total da rubrica — numero>,
+      "periodo_meses": <numero de meses ou null se compra pontual>,
+      "codigo_natureza_despesa": "<codigo>"
+    }
+  ]
 }`
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }, { inline_data: { mime_type: file.type, data: base64 } }],
-        },
-      ],
-      generationConfig: { temperature: 0, maxOutputTokens: 8192 },
-    }),
-  })
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+      }),
+    }
+  )
 
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err?.error?.message ?? `Erro HTTP ${res.status}`)
+    const errData = await res.json()
+    throw new Error(errData?.error?.message ?? `Erro HTTP ${res.status}`)
   }
 
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
-  const resultado = JSON.parse(jsonMatch[0])
-  if (resultado.mapeamento) {
-    resultado.mapeamento = resultado.mapeamento.map((m: any) => ({
-      ...m,
-      sugestao_ia: m.sugestao_ia ?? m.campo_sistema,
-      motivo_ia: m.motivo_ia ?? "Extraído via visão de documento",
+
+  let resultado: ResultadoMapeamento
+  try {
+    resultado = JSON.parse(jsonMatch[0])
+  } catch {
+    throw new Error("JSON inválido retornado pelo Gemini.")
+  }
+
+  // Garantir estrutura mínima
+  if (!resultado.mapeamento) resultado.mapeamento = []
+  if (!resultado.linhas_secao) resultado.linhas_secao = []
+  if (!resultado.linhas_ignorar) resultado.linhas_ignorar = []
+  if (!resultado.linha_cabecalho) resultado.linha_cabecalho = 0
+
+  // Normalizar rubricas detectadas: garantir que periodo_meses e quantidade_postos estejam corretos
+  if (resultado.rubricas_detectadas) {
+    resultado.rubricas_detectadas = resultado.rubricas_detectadas.map((r: any) => {
+      const rub: RubricaSkillExtraida = {
+        descricao: r.descricao || "",
+        especificacao: r.especificacao || undefined,
+        tipo: r.tipo || "SERVICO",
+        quantidade: Number(r.quantidade) || 1,
+        unidade: r.unidade || "UN",
+        valor_unitario: Number(r.valor_unitario) || 0,
+        valor_total: Number(r.valor_total) || 0,
+        codigo_natureza_despesa: r.codigo_natureza_despesa || "33903900",
+        periodo_meses: r.periodo_meses ? Number(r.periodo_meses) : undefined,
+        fornecedor_selecionado: null,
+      }
+      // Sanidade: se valor_total é 0 mas temos os outros dados, recalcular
+      if (rub.valor_total === 0 && rub.valor_unitario > 0) {
+        const meses = rub.periodo_meses || 1
+        rub.valor_total = rub.quantidade * meses * rub.valor_unitario
+      }
+      return rub
+    })
+  }
+
+  // Gerar preview a partir das rubricas detectadas
+  if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 && resultado.preview?.length === 0) {
+    resultado.preview = resultado.rubricas_detectadas.slice(0, 5).map((r) => ({
+      descricao: r.descricao,
+      tipo: r.tipo,
+      quantidade: String(r.quantidade),
+      valor_unitario: String(r.valor_unitario),
+      periodo_meses: String(r.periodo_meses ?? ""),
+      valor_total: String(r.valor_total),
     }))
   }
+
   return resultado
 }
 
@@ -988,4 +1143,52 @@ async function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+function buildPromptMROSC(tabela: string): string {
+  return `Você é um especialista em planilhas orçamentárias do terceiro setor brasileiro (MROSC Lei 13.019/2014 / Transferegov).
+Analise as linhas abaixo de uma planilha orçamentária no formato Lnum: [col_index]=valor.
+
+CAMPOS DO SISTEMA QUE QUEREMOS MAPEAR:
+${CAMPOS_SISTEMA.map((c) => `"${c.campo}": ${c.descricao}`).join("\n")}
+
+DIRETRIZES:
+- Identifique metadados institucionais (Proposta Nº, OSC proponente, CNPJ da entidade).
+- "descricao": coluna com nomes de cargos, serviços ou materiais.
+- "valor_unitario": coluna de MENOR VALOR COTADO ou cotação selecionada.
+- "quantidade": número de meses, diárias ou unidades.
+- Para RH: "quantidade" deve ser o nº de pessoas/postos, "periodo_meses" o nº de meses.
+
+TABELA:
+${tabela}
+
+Retorne APENAS JSON válido com esta estrutura:
+{
+  "linha_cabecalho": <numero>,
+  "linhas_secao": [<numeros>],
+  "linhas_ignorar": [<numeros>],
+  "mapeamento": [
+    {"coluna_original": "<nome>", "campo_sistema": "<campo ou null>", "indice": <numero>, "sugestao_ia": "<campo ou null>", "motivo_ia": "<motivo>"}
+  ],
+  "metadados": {
+    "proposta_numero": "<numero ou null>",
+    "osc_nome": "<nome ou null>",
+    "cnpj_osc": "<cnpj ou null>"
+  },
+  "fornecedores": [
+    {"razao_social_nome": "<nome>", "cpf_cnpj": "<cnpj>", "telefone": "<tel ou null>"}
+  ],
+  "rubricas_detectadas": [
+    {
+      "descricao": "<nome>",
+      "tipo": "<RH|SERVICO|MATERIAL|LOCACAO|OUTROS>",
+      "quantidade": <postos/unidades>,
+      "unidade": "<Mês|UN|etc>",
+      "valor_unitario": <salario unitario>,
+      "valor_total": <total rubrica>,
+      "periodo_meses": <meses ou null>,
+      "codigo_natureza_despesa": "<codigo>"
+    }
+  ]
+}`
 }
