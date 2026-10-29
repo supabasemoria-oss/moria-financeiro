@@ -1022,17 +1022,20 @@ function ExecucaoContent() {
         {/* 4 Cards de KPI no Topo */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Orçamento Aprovado */}
-          <Card className="shadow-2xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Card className="shadow-2xs min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-5 pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
                 Orçamento Aprovado
               </CardTitle>
-              <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <WalletIcon className="size-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground font-mono">
+            <CardContent className="p-4 sm:p-5 pt-0">
+              <div
+                className="text-lg sm:text-xl xl:text-2xl font-bold tracking-tight tabular-nums text-foreground truncate block"
+                title={formatCurrency(kpis.totalAprovado)}
+              >
                 {formatCurrency(kpis.totalAprovado)}
               </div>
               <p className="text-[11px] text-muted-foreground mt-1 truncate">
@@ -1042,17 +1045,20 @@ function ExecucaoContent() {
           </Card>
 
           {/* Card 2: Total Executado / Pago */}
-          <Card className="shadow-2xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Card className="shadow-2xs min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-5 pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
                 Total Executado (Pago)
               </CardTitle>
-              <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
                 <CheckCircle2Icon className="size-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+            <CardContent className="p-4 sm:p-5 pt-0">
+              <div
+                className="text-lg sm:text-xl xl:text-2xl font-bold tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400 truncate block"
+                title={formatCurrency(kpis.totalPago)}
+              >
                 {formatCurrency(kpis.totalPago)}
               </div>
               <div className="flex items-center gap-2 mt-1">
@@ -1062,7 +1068,7 @@ function ExecucaoContent() {
                     style={{ width: `${Math.min(100, kpis.percentualExecutado)}%` }}
                   />
                 </div>
-                <span className="text-[11px] font-semibold text-muted-foreground font-mono">
+                <span className="text-[11px] font-semibold text-muted-foreground font-mono shrink-0">
                   {kpis.percentualExecutado.toFixed(1)}%
                 </span>
               </div>
@@ -1070,40 +1076,46 @@ function ExecucaoContent() {
           </Card>
 
           {/* Card 3: Contas a Pagar (Pendente) */}
-          <Card className="shadow-2xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Card className="shadow-2xs min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-5 pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
                 Contas a Pagar (Pendente)
               </CardTitle>
-              <div className="size-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+              <div className="size-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
                 <ClockIcon className="size-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
+            <CardContent className="p-4 sm:p-5 pt-0">
+              <div
+                className="text-lg sm:text-xl xl:text-2xl font-bold tracking-tight tabular-nums text-amber-600 dark:text-amber-400 truncate block"
+                title={formatCurrency(kpis.totalPendente)}
+              >
                 {formatCurrency(kpis.totalPendente)}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1 truncate">
                 {parcelasPendentesCount} obrigação(ões) aguardando quitação
               </p>
             </CardContent>
           </Card>
 
           {/* Card 4: Saldo Disponível em Caixa */}
-          <Card className="shadow-2xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Card className="shadow-2xs min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between p-4 sm:p-5 pb-2 space-y-0">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
                 Saldo Disponível
               </CardTitle>
-              <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+              <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
                 <DollarSignIcon className="size-4" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold font-mono ${kpis.saldoRemanescente < 0 ? "text-destructive" : "text-foreground"}`}>
+            <CardContent className="p-4 sm:p-5 pt-0">
+              <div
+                className={`text-lg sm:text-xl xl:text-2xl font-bold tracking-tight tabular-nums truncate block ${kpis.saldoRemanescente < 0 ? "text-destructive" : "text-foreground"}`}
+                title={formatCurrency(kpis.saldoRemanescente)}
+              >
                 {formatCurrency(kpis.saldoRemanescente)}
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1 truncate">
                 Saldo líquido disponível no projeto
               </p>
             </CardContent>
