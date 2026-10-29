@@ -200,7 +200,7 @@ export const mroscService = {
 
   // ── Comprovantes ─────────────────────────────────
   async getComprovantes(despesaId?: string): Promise<ComprovanteComDespesa[]> {
-    let q = supabase.from('comprovantes').select('*, despesas(*)')
+    let q = supabase.from('comprovantes').select('*, despesas(*, projetos(*))')
     if (despesaId) q = q.eq('despesa_id', despesaId) as typeof q
     const { data, error } = await q.order('created_at', { ascending: false })
     if (error) err(error.message)
@@ -296,6 +296,64 @@ export const mroscService = {
       status: 'PAGO', data_pagamento_real: dados.data_pagamento_real,
       despesa_id: (despesa as Despesa).id,
     }).eq('id', parcelaId).select().single()
+    if (uErr) err(uErr.message)
+    return updated as ParcelaPagamento
+  },
+
+  async executarParcelaRateada(
+    parcelaId: string,
+    pagamentos: Array<{
+      fornecedor_id: string
+      valor: number
+      data_pagamento_real: string
+      numero_documento_fiscal?: string
+      observacoes?: string
+      arquivo_nota_fiscal?: File | null
+    }>
+  ): Promise<ParcelaPagamento> {
+    const { data: parcela, error: pErr } = await supabase.from('parcelas_pagamento').select('*').eq('id', parcelaId).single()
+    if (pErr) err(pErr.message)
+    const p = parcela as ParcelaPagamento
+
+    let firstDespesaId: string | null = null
+
+    for (let i = 0; i < pagamentos.length; i++) {
+      const pag = pagamentos[i]
+      const desc = pagamentos.length > 1
+        ? `${p.descricao} (Item ${i + 1}/${pagamentos.length})`
+        : p.descricao
+
+      const { data: despesa, error: dErr } = await supabase.from('despesas').insert({
+        projeto_id: p.projeto_id,
+        rubrica_id: p.rubrica_id,
+        fornecedor_id: pag.fornecedor_id,
+        descricao: desc,
+        valor: pag.valor,
+        data_despesa: pag.data_pagamento_real,
+        data_pagamento: pag.data_pagamento_real,
+        status: 'PAGO',
+        numero_documento_fiscal: pag.numero_documento_fiscal ?? null,
+        observacoes: pag.observacoes ?? null,
+      }).select().single()
+
+      if (dErr) err(dErr.message)
+      if (i === 0 && despesa) firstDespesaId = (despesa as Despesa).id
+
+      if (pag.arquivo_nota_fiscal && despesa) {
+        try {
+          await this.uploadComprovante(pag.arquivo_nota_fiscal, (despesa as Despesa).id, 'NOTA_FISCAL')
+        } catch (uploadError) {
+          console.error('Erro ao fazer upload da nota fiscal no rateio:', uploadError)
+        }
+      }
+    }
+
+    const { data: updated, error: uErr } = await supabase.from('parcelas_pagamento').update({
+      status: 'PAGO',
+      data_pagamento_real: pagamentos[0]?.data_pagamento_real,
+      despesa_id: firstDespesaId,
+    }).eq('id', parcelaId).select().single()
+
     if (uErr) err(uErr.message)
     return updated as ParcelaPagamento
   },

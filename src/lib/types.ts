@@ -48,7 +48,7 @@ export type DespesaComRelacoes = Despesa & {
   fornecedores: Fornecedor | null
   comprovantes?: Comprovante[]
 }
-export type ComprovanteComDespesa = Comprovante & { despesas: Despesa | null }
+export type ComprovanteComDespesa = Comprovante & { despesas: (Despesa & { projetos?: Projeto | null }) | null }
 export type ParcelaComRelacoes = ParcelaPagamento & {
   rubricas_orcamentarias: Rubrica | null
   projetos: Projeto | null

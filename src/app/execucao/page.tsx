@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useRef, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   ReceiptIcon,
@@ -47,10 +47,14 @@ import { toast } from "sonner"
 
 function ExecucaoContent() {
   const { pode } = usePermissoes()
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const initialProjetoId = searchParams.get("projetoId") || ""
-  const initialRubricaId = searchParams.get("rubricaId") || ""
+  const initialProjetoId = searchParams.get("projetoId") || searchParams.get("projeto") || ""
+  const initialRubricaId = searchParams.get("rubricaId") || searchParams.get("rubrica") || ""
+  const initialFornecedorId = searchParams.get("fornecedorId") || searchParams.get("fornecedor") || ""
+  const initialStatus = searchParams.get("status") || "ALL"
   const initialParcelaId = searchParams.get("parcelaId") || ""
+  const initialTab = searchParams.get("tab") || "parcelas"
 
   // Dados principais
   const [projetos, setProjetos] = useState<Projeto[]>([])
@@ -59,16 +63,103 @@ function ExecucaoContent() {
   const [despesas, setDespesas] = useState<DespesaComRelacoes[]>([])
   const [parcelas, setParcelas] = useState<ParcelaComRelacoes[]>([])
 
-  // Filtros
-  const [filterProjeto, setFilterProjeto] = useState<string>(
-    initialProjetoId || "ALL"
-  )
+  // Filtros sincronizados
+  const [filterProjeto, setFilterProjeto] = useState<string>(initialProjetoId || "ALL")
   const [filterRubrica, setFilterRubrica] = useState<string>(initialRubricaId || "ALL")
-  const [filterFornecedor, setFilterFornecedor] = useState<string>("ALL")
-  const [filterStatus, setFilterStatus] = useState<string>("ALL")
+  const [filterFornecedor, setFilterFornecedor] = useState<string>(initialFornecedorId || "ALL")
+  const [filterStatus, setFilterStatus] = useState<string>(initialStatus || "ALL")
   const [searchTerm, setSearchTerm] = useState<string>("")
-  const [activeTab, setActiveTab] = useState<string>("parcelas")
+  const [activeTab, setActiveTab] = useState<string>(initialTab || "parcelas")
   const openedParcelaRef = useRef<string | null>(null)
+
+  // Sincronizar filtros na URL para persistência ao clicar em Voltar
+  function sincronizarURL(novos: {
+    projeto?: string
+    rubrica?: string
+    fornecedor?: string
+    status?: string
+    tab?: string
+  }) {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    if (novos.projeto !== undefined) {
+      if (novos.projeto && novos.projeto !== "ALL") params.set("projetoId", novos.projeto)
+      else params.delete("projetoId")
+    }
+    if (novos.rubrica !== undefined) {
+      if (novos.rubrica && novos.rubrica !== "ALL") params.set("rubricaId", novos.rubrica)
+      else params.delete("rubricaId")
+    }
+    if (novos.fornecedor !== undefined) {
+      if (novos.fornecedor && novos.fornecedor !== "ALL") params.set("fornecedorId", novos.fornecedor)
+      else params.delete("fornecedorId")
+    }
+    if (novos.status !== undefined) {
+      if (novos.status && novos.status !== "ALL") params.set("status", novos.status)
+      else params.delete("status")
+    }
+    if (novos.tab !== undefined) {
+      if (novos.tab && novos.tab !== "parcelas") params.set("tab", novos.tab)
+      else params.delete("tab")
+    }
+    const q = params.toString()
+    router.replace(q ? `?${q}` : window.location.pathname, { scroll: false })
+  }
+
+  function handleLimparFiltros() {
+    setFilterProjeto("ALL")
+    setFilterRubrica("ALL")
+    setFilterFornecedor("ALL")
+    setFilterStatus("ALL")
+    setSearchTerm("")
+    sincronizarURL({ projeto: "ALL", rubrica: "ALL", fornecedor: "ALL", status: "ALL" })
+    toast.info("Todos os filtros foram limpos.")
+  }
+
+  const temFiltroAtivo =
+    filterProjeto !== "ALL" ||
+    filterRubrica !== "ALL" ||
+    filterFornecedor !== "ALL" ||
+    filterStatus !== "ALL" ||
+    searchTerm.trim() !== ""
+
+  // Dialog Editar Parcela (Descrição)
+  const [openEditarParcela, setOpenEditarParcela] = useState(false)
+  const [parcelaParaEditar, setParcelaParaEditar] = useState<ParcelaComRelacoes | null>(null)
+  const [descricaoParcelaEdicao, setDescricaoParcelaEdicao] = useState("")
+
+  function handleAbrirEditarParcela(parcela: ParcelaComRelacoes) {
+    setParcelaParaEditar(parcela)
+    setDescricaoParcelaEdicao(parcela.descricao)
+    setOpenEditarParcela(true)
+  }
+
+  async function handleSalvarDescricaoParcela() {
+    if (!parcelaParaEditar) return
+    const novaDescricao = descricaoParcelaEdicao.trim()
+    if (!novaDescricao) {
+      toast.error("A descrição da parcela não pode ser vazia.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      await mroscService.updateParcela(parcelaParaEditar.id, {
+        descricao: novaDescricao,
+      })
+      toast.success("Descrição da parcela atualizada com sucesso!")
+      setOpenEditarParcela(false)
+      setParcelas((prev) =>
+        prev.map((p) => (p.id === parcelaParaEditar.id ? { ...p, descricao: novaDescricao } : p))
+      )
+      setParcelaParaEditar(null)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao atualizar parcela"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Estados de controle
   const [loading, setLoading] = useState(true)
@@ -105,16 +196,20 @@ function ExecucaoContent() {
     total_parcelas: "1",
   })
 
-  // Dialog Quitar Parcela
+  // Dialog Quitar Parcela (com suporte a múltiplos favorecidos / rateio e RH quantitativo)
   const [openQuitar, setOpenQuitar] = useState(false)
-  const [arquivoNfQuitar, setArquivoNfQuitar] = useState<File | null>(null)
   const [parcelaParaQuitar, setParcelaParaQuitar] = useState<ParcelaComRelacoes | null>(null)
-  const [quitarForm, setQuitarForm] = useState({
-    fornecedor_id: "",
-    data_pagamento_real: getTodaySaoPaulo(),
-    numero_documento_fiscal: "",
-    observacoes: "",
-  })
+  const [dataPagamentoQuitacao, setDataPagamentoQuitacao] = useState(getTodaySaoPaulo())
+  const [itensQuitacao, setItensQuitacao] = useState<
+    Array<{
+      id: string
+      fornecedor_id: string
+      valor: string
+      numero_documento_fiscal: string
+      observacoes: string
+      arquivo: File | null
+    }>
+  >([])
 
   // Ações em Lote (Batch) de Parcelas
   const [selectedParcelas, setSelectedParcelas] = useState<Set<string>>(new Set())
@@ -484,7 +579,6 @@ function ExecucaoContent() {
   // Abrir Modal de Quitar Parcela
   async function handleAbrirQuitar(parcela: ParcelaComRelacoes) {
     setParcelaParaQuitar(parcela)
-    setArquivoNfQuitar(null)
     let currentForns = fornecedores
     if (currentForns.length === 0) {
       try {
@@ -492,13 +586,55 @@ function ExecucaoContent() {
         setFornecedores(currentForns)
       } catch {}
     }
-    setQuitarForm({
-      fornecedor_id: currentForns[0]?.id || "",
-      data_pagamento_real: getTodaySaoPaulo(),
-      numero_documento_fiscal: "",
-      observacoes: "",
-    })
+    setDataPagamentoQuitacao(getTodaySaoPaulo())
+    setItensQuitacao([
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        fornecedor_id: currentForns[0]?.id || "",
+        valor: maskCurrency(String(Math.round(parcela.valor_previsto * 100))),
+        numero_documento_fiscal: "",
+        observacoes: "",
+        arquivo: null,
+      },
+    ])
     setOpenQuitar(true)
+  }
+
+  function handleAdicionarItemRateio() {
+    setItensQuitacao((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        fornecedor_id: fornecedores[0]?.id || "",
+        valor: "0,00",
+        numero_documento_fiscal: "",
+        observacoes: "",
+        arquivo: null,
+      },
+    ])
+  }
+
+  function handleRemoverItemRateio(id: string) {
+    if (itensQuitacao.length <= 1) {
+      toast.info("A parcela deve ter ao menos um pagamento para ser liquidada.")
+      return
+    }
+    setItensQuitacao((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  function handleAtualizarItemRateio(
+    id: string,
+    updates: Partial<{
+      fornecedor_id: string
+      valor: string
+      numero_documento_fiscal: string
+      observacoes: string
+      arquivo: File | null
+    }>
+  ) {
+    setItensQuitacao((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    )
   }
 
   // Auto-abrir parcela se parcelaId for fornecido na URL e for realmente pendente
@@ -512,28 +648,45 @@ function ExecucaoContent() {
     }
   }, [initialParcelaId, parcelas])
 
-  // Confirmar Quitação de Parcela (MROSC Liquidação)
+  // Confirmar Quitação de Parcela (MROSC Liquidação com Rateio / Multi-Credores)
   async function handleConfirmarQuitacao() {
-    if (!parcelaParaQuitar) return
-    if (!quitarForm.fornecedor_id) {
-      toast.error("Selecione o credor / fornecedor do pagamento.")
-      return
+    if (!parcelaParaQuitar || itensQuitacao.length === 0) return
+
+    for (let i = 0; i < itensQuitacao.length; i++) {
+      const it = itensQuitacao[i]
+      if (!it.fornecedor_id) {
+        toast.error(`Selecione o credor / beneficiário do pagamento ${i + 1}.`)
+        return
+      }
+      const val = parseCurrency(it.valor)
+      if (val <= 0) {
+        toast.error(`Informe um valor maior que zero para o pagamento ${i + 1}.`)
+        return
+      }
     }
 
     try {
       setSaving(true)
-      await mroscService.executarParcela(parcelaParaQuitar.id, {
-        fornecedor_id: quitarForm.fornecedor_id,
-        data_pagamento_real: quitarForm.data_pagamento_real,
-        numero_documento_fiscal: quitarForm.numero_documento_fiscal || undefined,
-        observacoes: quitarForm.observacoes || undefined,
-        arquivo_nota_fiscal: arquivoNfQuitar,
-      })
-      toast.success("Parcela quitada com sucesso! Despesa registrada no livro caixa.")
+      const pagamentosPayload = itensQuitacao.map((it) => ({
+        fornecedor_id: it.fornecedor_id,
+        valor: parseCurrency(it.valor),
+        data_pagamento_real: dataPagamentoQuitacao,
+        numero_documento_fiscal: it.numero_documento_fiscal || undefined,
+        observacoes: it.observacoes || undefined,
+        arquivo_nota_fiscal: it.arquivo,
+      }))
+
+      await mroscService.executarParcelaRateada(parcelaParaQuitar.id, pagamentosPayload)
+
+      toast.success(
+        itensQuitacao.length > 1
+          ? `Parcela quitada com sucesso! ${itensQuitacao.length} pagamentos registrados no Livro Caixa.`
+          : "Parcela quitada com sucesso! Despesa registrada no Livro Caixa."
+      )
       setOpenQuitar(false)
       setParcelaParaQuitar(null)
-      setArquivoNfQuitar(null)
-      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus)
+      setItensQuitacao([])
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao quitar parcela"
       toast.error(msg)
@@ -968,20 +1121,26 @@ function ExecucaoContent() {
                 </div>
 
                 {/* Filtro Projeto */}
-                <div className="w-56">
+                <div className="w-full sm:w-64 md:w-72 max-w-full min-w-0">
                   <Select
                     value={filterProjeto}
                     onValueChange={(val) => {
                       const v = val ?? "ALL"
                       setFilterProjeto(v)
+                      sincronizarURL({ projeto: v })
                     }}
                   >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
                       <SelectValue placeholder="Projeto">
                         {(val) => {
                           if (!val || val === "ALL") return "Todos os Projetos"
                           const p = projetos.find((item) => item.id === val)
-                          return p?.nome ?? val
+                          const nome = p?.nome ?? val
+                          return (
+                            <span className="truncate block max-w-[210px] sm:max-w-[220px]" title={nome}>
+                              {nome}
+                            </span>
+                          )
                         }}
                       </SelectValue>
                     </SelectTrigger>
@@ -997,17 +1156,26 @@ function ExecucaoContent() {
                 </div>
 
                 {/* Filtro Rubrica */}
-                <div className="w-56">
+                <div className="w-full sm:w-64 md:w-72 max-w-full min-w-0">
                   <Select
                     value={filterRubrica}
-                    onValueChange={(val) => setFilterRubrica(val ?? "ALL")}
+                    onValueChange={(val) => {
+                      const v = val ?? "ALL"
+                      setFilterRubrica(v)
+                      sincronizarURL({ rubrica: v })
+                    }}
                   >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
                       <SelectValue placeholder="Rubrica">
                         {(val) => {
                           if (!val || val === "ALL") return "Todas as Rubricas"
                           const r = rubricas.find((item) => item.id === val)
-                          return r ? `${r.codigo_natureza_despesa} - ${r.descricao}` : val
+                          const texto = r ? `${r.codigo_natureza_despesa} - ${r.descricao}` : val
+                          return (
+                            <span className="truncate block max-w-[210px] sm:max-w-[220px]" title={texto}>
+                              {texto}
+                            </span>
+                          )
                         }}
                       </SelectValue>
                     </SelectTrigger>
@@ -1028,7 +1196,7 @@ function ExecucaoContent() {
                 {filterRubrica !== "ALL" && (
                   <Badge
                     variant="secondary"
-                    className="h-8 px-2.5 gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-normal"
+                    className="h-8 px-2.5 gap-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-normal shrink-0"
                   >
                     <span>
                       Rubrica:{" "}
@@ -1038,7 +1206,10 @@ function ExecucaoContent() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => setFilterRubrica("ALL")}
+                      onClick={() => {
+                        setFilterRubrica("ALL")
+                        sincronizarURL({ rubrica: "ALL" })
+                      }}
                       className="ml-0.5 hover:text-destructive font-bold text-xs"
                       title="Limpar filtro de rubrica"
                     >
@@ -1048,14 +1219,26 @@ function ExecucaoContent() {
                 )}
 
                 {/* Filtro Fornecedor */}
-                <div className="w-52">
-                  <Select value={filterFornecedor} onValueChange={(val) => setFilterFornecedor(val ?? "ALL")}>
-                    <SelectTrigger className="h-8 text-xs">
+                <div className="w-full sm:w-52 md:w-56 max-w-full min-w-0">
+                  <Select
+                    value={filterFornecedor}
+                    onValueChange={(val) => {
+                      const v = val ?? "ALL"
+                      setFilterFornecedor(v)
+                      sincronizarURL({ fornecedor: v })
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
                       <SelectValue placeholder="Fornecedor">
                         {(val) => {
                           if (!val || val === "ALL") return "Todos os Fornecedores"
                           const f = fornecedores.find((item) => item.id === val)
-                          return f?.razao_social_nome ?? val
+                          const nome = f?.razao_social_nome ?? val
+                          return (
+                            <span className="truncate block max-w-[180px]" title={nome}>
+                              {nome}
+                            </span>
+                          )
                         }}
                       </SelectValue>
                     </SelectTrigger>
@@ -1071,9 +1254,16 @@ function ExecucaoContent() {
                 </div>
 
                 {/* Filtro Status */}
-                <div className="w-44">
-                  <Select value={filterStatus} onValueChange={(val) => setFilterStatus(val ?? "ALL")}>
-                    <SelectTrigger className="h-8 text-xs">
+                <div className="w-full sm:w-44 max-w-full min-w-0">
+                  <Select
+                    value={filterStatus}
+                    onValueChange={(val) => {
+                      const v = val ?? "ALL"
+                      setFilterStatus(v)
+                      sincronizarURL({ status: v })
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
                       <SelectValue placeholder="Status">
                         {(val) => {
                           if (!val || val === "ALL") return "A Pagar (Pendentes)"
@@ -1094,6 +1284,21 @@ function ExecucaoContent() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Botão Limpar Filtros */}
+                {temFiltroAtivo && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLimparFiltros}
+                    className="h-8 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/40 gap-1.5 px-2.5 shrink-0"
+                    title="Resetar todos os filtros para a exibição padrão"
+                  >
+                    <FilterIcon className="size-3" />
+                    Limpar Filtros
+                  </Button>
+                )}
               </div>
 
               {/* Busca Textual */}
@@ -1111,7 +1316,14 @@ function ExecucaoContent() {
         </Card>
 
         {/* Abas de Execução Financeira */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <Tabs
+          value={activeTab}
+          onValueChange={(val) => {
+            setActiveTab(val)
+            sincronizarURL({ tab: val })
+          }}
+          className="space-y-4"
+        >
           <TabsList className="bg-muted p-1 rounded-lg">
             <TabsTrigger value="parcelas" className="gap-2 text-xs">
               <CalendarDaysIcon className="size-3.5" />
@@ -1343,10 +1555,22 @@ function ExecucaoContent() {
                             </TableCell>
 
                             <TableCell className="text-xs max-w-[240px]">
-                              <div className="font-medium text-foreground truncate">
-                                {parcela.descricao}
+                              <div className="flex items-center gap-1.5 group">
+                                <span className="font-medium text-foreground truncate" title={parcela.descricao}>
+                                  {parcela.descricao}
+                                </span>
+                                {pode("despesas_lancar") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAbrirEditarParcela(parcela)}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    title="Editar descrição da parcela"
+                                  >
+                                    <PencilIcon className="size-3" />
+                                  </button>
+                                )}
                               </div>
-                              <div className="text-[11px] text-muted-foreground truncate">
+                              <div className="text-[11px] text-muted-foreground truncate" title={parcela.projetos?.nome || ""}>
                                 {parcela.projetos?.nome || "Projeto"}
                               </div>
                             </TableCell>
@@ -1432,6 +1656,18 @@ function ExecucaoContent() {
                                       />
                                     )}
                                   </>
+                                )}
+
+                                {pode("despesas_lancar") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleAbrirEditarParcela(parcela)}
+                                    className="size-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    title="Editar descrição da parcela"
+                                  >
+                                    <PencilIcon className="size-3.5" />
+                                  </Button>
                                 )}
 
                                 {pode("despesas_excluir") && (
@@ -1659,30 +1895,97 @@ function ExecucaoContent() {
       </div>
 
       {/* ==================================================== */}
-      {/* DIALOG 1: QUITAR PARCELA                            */}
+      {/* DIALOG 0: EDITAR DESCRIÇÃO DA PARCELA              */}
+      {/* ==================================================== */}
+      <Dialog open={openEditarParcela} onOpenChange={setOpenEditarParcela}>
+        <DialogContent className="w-[95vw] sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Editar Descrição da Obrigação</DialogTitle>
+            <DialogDescription>
+              Modifique o texto identificador desta parcela para manter o cronograma alinhado ao plano de trabalho.
+            </DialogDescription>
+          </DialogHeader>
+
+          {parcelaParaEditar && (
+            <div className="grid gap-3 py-3">
+              <div className="bg-muted/40 p-2.5 rounded-md border text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Rubrica:</span>
+                  <span className="font-semibold text-foreground font-mono">
+                    {parcelaParaEditar.rubricas_orcamentarias?.codigo_natureza_despesa} - {parcelaParaEditar.rubricas_orcamentarias?.descricao}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor Previsto:</span>
+                  <span className="font-bold text-emerald-600 font-mono">
+                    {formatCurrency(parcelaParaEditar.valor_previsto)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Vencimento:</span>
+                  <span>{formatDate(parcelaParaEditar.data_vencimento)}</span>
+                </div>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="descricao_parcela_input">Descrição da Obrigação / Parcela *</Label>
+                <Input
+                  id="descricao_parcela_input"
+                  value={descricaoParcelaEdicao}
+                  onChange={(e) => setDescricaoParcelaEdicao(e.target.value)}
+                  placeholder="Ex: Coordenador Geral - Pagamento Agosto/2026"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenEditarParcela(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSalvarDescricaoParcela}
+              disabled={saving}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              {saving ? "Salvando..." : "Salvar Alteração"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* DIALOG 1: QUITAR PARCELA (COM RATEIO & MULTI-CREDOR)*/}
       {/* ==================================================== */}
       <Dialog open={openQuitar} onOpenChange={setOpenQuitar}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-[620px] max-h-[92vh] overflow-y-auto overflow-x-hidden min-w-0">
           <DialogHeader>
             <DialogTitle>Quitar Pagamento da Parcela</DialogTitle>
             <DialogDescription>
-              Informe o credor e dados do documento fiscal para liquidar e registrar a despesa no livro caixa.
+              Informe os credores, valores e documentos fiscais para liquidar e registrar as despesas no Livro Caixa.
             </DialogDescription>
           </DialogHeader>
 
           {parcelaParaQuitar && (
-            <div className="bg-muted/50 p-3 rounded-lg border text-xs space-y-1 my-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Obrigação:</span>
-                <span className="font-semibold text-foreground">{parcelaParaQuitar.descricao}</span>
+            <div className="bg-muted/50 p-3 rounded-lg border text-xs space-y-1.5 my-1">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-muted-foreground shrink-0">Obrigação:</span>
+                <span className="font-semibold text-foreground text-right">{parcelaParaQuitar.descricao}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Valor Previsto:</span>
-                <span className="font-bold text-emerald-600 font-mono">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Rubrica Orçamentária:</span>
+                <span className="font-mono text-emerald-600 font-semibold">
+                  {parcelaParaQuitar.rubricas_orcamentarias?.codigo_natureza_despesa} - {parcelaParaQuitar.rubricas_orcamentarias?.descricao}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Valor Previsto Total:</span>
+                <span className="font-bold text-emerald-600 font-mono text-sm">
                   {formatCurrency(parcelaParaQuitar.valor_previsto)}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Vencimento Original:</span>
                 <span>{formatDate(parcelaParaQuitar.data_vencimento)}</span>
               </div>
@@ -1691,47 +1994,142 @@ function ExecucaoContent() {
 
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">
-              <Label htmlFor="quitar_fornecedor">Fornecedor / Credor Beneficiário *</Label>
-              <SelectComCriar
-                id="quitar_fornecedor"
-                value={quitarForm.fornecedor_id}
-                onValueChange={(val) => setQuitarForm((prev) => ({ ...prev, fornecedor_id: val }))}
-                opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
-                placeholder="Selecione o credor..."
-                labelCriar="Cadastrar novo fornecedor"
-                onClickCriar={() => setOpenFornecedor(true)}
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="quitar_data">Data do Pagamento *</Label>
+              <Label htmlFor="quitar_data_geral">Data do Pagamento *</Label>
               <Input
-                id="quitar_data"
+                id="quitar_data_geral"
                 type="date"
-                value={quitarForm.data_pagamento_real}
-                onChange={(e) => setQuitarForm((prev) => ({ ...prev, data_pagamento_real: e.target.value }))}
+                value={dataPagamentoQuitacao}
+                onChange={(e) => setDataPagamentoQuitacao(e.target.value)}
               />
             </div>
 
-            <CampoNotaFiscal
-              numero={quitarForm.numero_documento_fiscal}
-              onNumeroChange={(val) => setQuitarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
-              arquivo={arquivoNfQuitar}
-              onArquivoChange={setArquivoNfQuitar}
-              labelNumero="Nº Nota Fiscal / Recibo (Opcional)"
-              placeholderNumero="Ex: NF 10423"
-              idInput="quitar_nf_file"
-            />
+            {/* Lista de Pagamentos / Rateio por Credor */}
+            <div className="space-y-3 mt-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Credores / Comprovantes de Liquidação ({itensQuitacao.length})
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAdicionarItemRateio}
+                  className="h-7 text-xs text-emerald-700 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1"
+                >
+                  <PlusIcon className="size-3" />
+                  + Adicionar Credor / Recibo
+                </Button>
+              </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="quitar_obs">Observações / Forma de Pagamento</Label>
-              <Input
-                id="quitar_obs"
-                placeholder="Ex: TED / Pix efetuado na conta bancária vinculada"
-                value={quitarForm.observacoes}
-                onChange={(e) => setQuitarForm((prev) => ({ ...prev, observacoes: e.target.value }))}
-              />
+              {itensQuitacao.map((item, idx) => (
+                <div key={item.id} className="p-3 rounded-lg border bg-card space-y-3 relative">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <span className="size-5 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-[11px] font-bold">
+                        {idx + 1}
+                      </span>
+                      {itensQuitacao.length > 1 ? `Favorecido ${idx + 1}` : "Favorecido Principal"}
+                    </span>
+                    {itensQuitacao.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoverItemRateio(item.id)}
+                        className="size-6 text-muted-foreground hover:text-destructive"
+                        title="Remover este favorecido"
+                      >
+                        <Trash2Icon className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className="text-xs">Fornecedor / Credor Beneficiário *</Label>
+                    <SelectComCriar
+                      id={`quitar_forn_${item.id}`}
+                      value={item.fornecedor_id}
+                      onValueChange={(val) => handleAtualizarItemRateio(item.id, { fornecedor_id: val })}
+                      opcoes={fornecedores.map((f) => ({ id: f.id, label: f.razao_social_nome }))}
+                      placeholder="Selecione o credor..."
+                      labelCriar="Cadastrar novo fornecedor"
+                      onClickCriar={() => setOpenFornecedor(true)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Valor deste Pagamento (R$) *</Label>
+                      <Input
+                        type="text"
+                        value={item.valor}
+                        onChange={(e) => handleAtualizarItemRateio(item.id, { valor: maskCurrency(e.target.value) })}
+                        placeholder="0,00"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Nº Nota Fiscal / Recibo</Label>
+                      <Input
+                        type="text"
+                        value={item.numero_documento_fiscal}
+                        onChange={(e) => handleAtualizarItemRateio(item.id, { numero_documento_fiscal: e.target.value })}
+                        placeholder="Ex: NF 798 ou Recibo 01"
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <CampoNotaFiscal
+                    numero={item.numero_documento_fiscal}
+                    onNumeroChange={(val) => handleAtualizarItemRateio(item.id, { numero_documento_fiscal: val })}
+                    arquivo={item.arquivo}
+                    onArquivoChange={(f) => handleAtualizarItemRateio(item.id, { arquivo: f })}
+                    labelNumero=""
+                    placeholderNumero=""
+                    idInput={`quitar_file_${item.id}`}
+                  />
+                </div>
+              ))}
             </div>
+
+            {/* Totalizador de Quitação vs Previsto */}
+            {(() => {
+              const totalInformado = itensQuitacao.reduce((acc, it) => acc + parseCurrency(it.valor), 0)
+              const valorPrevisto = parcelaParaQuitar?.valor_previsto || 0
+              const diferenca = valorPrevisto - totalInformado
+              const bateu = Math.abs(diferenca) < 0.01
+
+              return (
+                <div
+                  className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                    bateu
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                      : diferenca > 0
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300"
+                      : "bg-destructive/10 border-destructive/30 text-destructive"
+                  }`}
+                >
+                  <div>
+                    <span className="font-semibold">Total a Liquidar: </span>
+                    <span className="font-mono font-bold text-sm">{formatCurrency(totalInformado)}</span>
+                    <span className="text-muted-foreground ml-1">de {formatCurrency(valorPrevisto)}</span>
+                  </div>
+                  <div className="font-semibold">
+                    {bateu ? (
+                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2Icon className="size-3.5" />
+                        Valor 100% Coberto
+                      </span>
+                    ) : diferenca > 0 ? (
+                      <span>Saldo residual: {formatCurrency(diferenca)}</span>
+                    ) : (
+                      <span>Excede previsto em {formatCurrency(Math.abs(diferenca))}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           <DialogFooter>
@@ -1743,7 +2141,7 @@ function ExecucaoContent() {
               disabled={saving}
               className="bg-emerald-600 hover:bg-emerald-500 text-white"
             >
-              {saving ? "Registrando..." : "Confirmar Quitação"}
+              {saving ? "Registrando..." : `Confirmar Quitação (${itensQuitacao.length} pagamento${itensQuitacao.length > 1 ? "s" : ""})`}
             </Button>
           </DialogFooter>
         </DialogContent>

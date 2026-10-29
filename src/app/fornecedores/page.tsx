@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { UsersIcon, PlusIcon, Trash2Icon, CreditCardIcon, LandmarkIcon } from "lucide-react"
+import { UsersIcon, PlusIcon, Trash2Icon, CreditCardIcon, LandmarkIcon, PencilIcon } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,17 +24,74 @@ export default function FornecedoresPage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [openEditar, setOpenEditar] = useState(false)
+  const [fornecedorEditando, setFornecedorEditando] = useState<Fornecedor | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [formData, setFormData] = useState({
     razao_social_nome: "",
     cpf_cnpj: "",
-    tipo_chave_pix: "CNPJ" as const,
+    tipo_chave_pix: "CNPJ" as "CPF" | "CNPJ" | "EMAIL" | "TELEFONE" | "ALEATORIA",
     chave_pix: "",
     banco: "",
     agencia: "",
     conta: "",
   })
+
+  const [editFormData, setEditFormData] = useState({
+    razao_social_nome: "",
+    cpf_cnpj: "",
+    tipo_chave_pix: "CNPJ" as "CPF" | "CNPJ" | "EMAIL" | "TELEFONE" | "ALEATORIA",
+    chave_pix: "",
+    banco: "",
+    agencia: "",
+    conta: "",
+  })
+
+  function handleAbrirEditar(forn: Fornecedor) {
+    setFornecedorEditando(forn)
+    setEditFormData({
+      razao_social_nome: forn.razao_social_nome,
+      cpf_cnpj: forn.cpf_cnpj,
+      tipo_chave_pix: (forn.tipo_chave_pix as any) || "CNPJ",
+      chave_pix: forn.chave_pix || "",
+      banco: forn.banco || "",
+      agencia: forn.agencia || "",
+      conta: forn.conta || "",
+    })
+    setOpenEditar(true)
+  }
+
+  async function handleEditarSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!fornecedorEditando) return
+    if (!editFormData.razao_social_nome || !editFormData.cpf_cnpj) {
+      toast.error("Preencha o Nome/Razão Social e o CPF/CNPJ.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      await mroscService.updateFornecedor(fornecedorEditando.id, {
+        razao_social_nome: editFormData.razao_social_nome,
+        cpf_cnpj: editFormData.cpf_cnpj,
+        tipo_chave_pix: editFormData.tipo_chave_pix || null,
+        chave_pix: editFormData.chave_pix || null,
+        banco: editFormData.banco || null,
+        agencia: editFormData.agencia || null,
+        conta: editFormData.conta || null,
+      })
+      toast.success("Fornecedor atualizado com sucesso!")
+      setOpenEditar(false)
+      setFornecedorEditando(null)
+      loadData()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido"
+      toast.error("Erro ao atualizar fornecedor: " + msg)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function loadData() {
     try {
@@ -303,24 +360,38 @@ export default function FornecedoresPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {pode("fornecedores_gerenciar") && (
-                        <ConfirmDialog
-                          title="Excluir fornecedor?"
-                          description="Despesas vinculadas a este fornecedor impedem a exclusão. Esta ação não pode ser desfeita."
-                          confirmLabel="Excluir"
-                          onConfirm={() => handleDelete(forn.id)}
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:bg-destructive/10"
-                              aria-label="Excluir"
-                            >
-                              <Trash2Icon className="size-4" />
-                            </Button>
-                          }
-                        />
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {pode("fornecedores_gerenciar") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleAbrirEditar(forn)}
+                            className="size-8 text-muted-foreground hover:text-foreground"
+                            aria-label="Editar"
+                            title="Editar dados cadastrais e bancários"
+                          >
+                            <PencilIcon className="size-4" />
+                          </Button>
+                        )}
+                        {pode("fornecedores_gerenciar") && (
+                          <ConfirmDialog
+                            title="Excluir fornecedor?"
+                            description="Despesas vinculadas a este fornecedor impedem a exclusão. Esta ação não pode ser desfeita."
+                            confirmLabel="Excluir"
+                            onConfirm={() => handleDelete(forn.id)}
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 text-destructive hover:bg-destructive/10"
+                                aria-label="Excluir"
+                              >
+                                <Trash2Icon className="size-4" />
+                              </Button>
+                            }
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -329,6 +400,126 @@ export default function FornecedoresPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* DIALOG DE EDIÇÃO DE FORNECEDOR */}
+      <Dialog open={openEditar} onOpenChange={setOpenEditar}>
+        <DialogContent className="sm:max-w-[520px]">
+          <form onSubmit={handleEditarSubmit}>
+            <DialogHeader>
+              <DialogTitle>Editar Fornecedor ou Prestador</DialogTitle>
+              <DialogDescription>
+                Atualize os dados cadastrais, dados bancários e chave Pix do credor.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_razao_social_nome">Razão Social ou Nome Completo *</Label>
+                <Input
+                  id="edit_razao_social_nome"
+                  required
+                  placeholder="Ex: Papelaria Central Ltda ou João da Silva"
+                  value={editFormData.razao_social_nome}
+                  onChange={(e) => setEditFormData({ ...editFormData, razao_social_nome: e.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="edit_cpf_cnpj">CPF ou CNPJ *</Label>
+                <Input
+                  id="edit_cpf_cnpj"
+                  required
+                  placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                  value={editFormData.cpf_cnpj}
+                  onChange={(e) => setEditFormData({ ...editFormData, cpf_cnpj: maskCpfCnpj(e.target.value) })}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_tipo_chave_pix">Tipo Chave Pix</Label>
+                  <Select
+                    value={editFormData.tipo_chave_pix}
+                    onValueChange={(val: any) => {
+                      if (val) setEditFormData((prev) => ({ ...prev, tipo_chave_pix: val }))
+                    }}
+                  >
+                    <SelectTrigger id="edit_tipo_chave_pix">
+                      <SelectValue>
+                        {(val) => {
+                          const labels: Record<string, string> = {
+                            CNPJ: "CNPJ",
+                            CPF: "CPF",
+                            EMAIL: "E-mail",
+                            TELEFONE: "Telefone",
+                            ALEATORIA: "Aleatória",
+                          }
+                          return (val && labels[val]) ? labels[val] : val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CNPJ">CNPJ</SelectItem>
+                      <SelectItem value="CPF">CPF</SelectItem>
+                      <SelectItem value="EMAIL">E-mail</SelectItem>
+                      <SelectItem value="TELEFONE">Telefone</SelectItem>
+                      <SelectItem value="ALEATORIA">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid col-span-2 gap-2">
+                  <Label htmlFor="edit_chave_pix">Chave Pix</Label>
+                  <Input
+                    id="edit_chave_pix"
+                    placeholder="Chave Pix para transferência"
+                    value={editFormData.chave_pix}
+                    onChange={(e) => setEditFormData({ ...editFormData, chave_pix: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_banco">Banco</Label>
+                  <Input
+                    id="edit_banco"
+                    placeholder="Ex: BB / Itaú"
+                    value={editFormData.banco}
+                    onChange={(e) => setEditFormData({ ...editFormData, banco: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_agencia">Agência</Label>
+                  <Input
+                    id="edit_agencia"
+                    placeholder="0000"
+                    value={editFormData.agencia}
+                    onChange={(e) => setEditFormData({ ...editFormData, agencia: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_conta">Conta Corrente</Label>
+                  <Input
+                    id="edit_conta"
+                    placeholder="00000-0"
+                    value={editFormData.conta}
+                    onChange={(e) => setEditFormData({ ...editFormData, conta: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpenEditar(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                {saving ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   )
 }

@@ -20,6 +20,7 @@ import {
   XIcon,
   Building2Icon,
   TrendingUpIcon,
+  LayersIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -63,6 +64,36 @@ function formatYearMonth(ym: string): string {
   return `${monthName.charAt(0).toUpperCase() + monthName.slice(1).replace(".", "")}/${y.slice(2)}`
 }
 
+export function classificarSecaoPlanilha(rubrica: { descricao: string; codigo_natureza_despesa?: string; tipo?: string }): {
+  id: string
+  titulo: string
+  badgeCor: string
+} {
+  const d = (rubrica.descricao || "").toLowerCase()
+  const c = rubrica.codigo_natureza_despesa || ""
+  const t = rubrica.tipo || ""
+
+  if (d.includes("encargo") || d.includes("inss") || d.includes("fgts") || d.includes("pis")) {
+    return { id: "ENCARGOS", titulo: "Encargos Sociais", badgeCor: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30" }
+  }
+  if (t === "RH" || c.startsWith("339036") || d.includes("coordenador") || d.includes("instrutor") || d.includes("monitor") || d.includes("articulador") || d.includes("psicólogo") || d.includes("assistente")) {
+    return { id: "RH", titulo: "Recursos Humanos", badgeCor: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30" }
+  }
+  if (d.includes("uniforme") || d.includes("camisa") || d.includes("colete") || d.includes("calçado") || d.includes("agasalho")) {
+    return { id: "UNIFORMES", titulo: "Uniformes", badgeCor: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" }
+  }
+  if (d.includes("divulga") || d.includes("banner") || d.includes("panfleto") || d.includes("comunicação") || d.includes("identificação") || d.includes("placa") || d.includes("folder")) {
+    return { id: "DIVULGACAO", titulo: "Identificação e Divulgação", badgeCor: "bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/30" }
+  }
+  if (d.includes("bola") || d.includes("cone") || d.includes("apito") || d.includes("colchonete") || d.includes("corda") || d.includes("rede") || d.includes("esport") || d.includes("bambolê") || d.includes("barreira")) {
+    return { id: "ESPORTIVO", titulo: "Material Esportivo", badgeCor: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" }
+  }
+  if (t === "SERVICO" || c.startsWith("339039") || d.includes("assessoria") || d.includes("contábil") || d.includes("jurídic") || d.includes("sistema") || d.includes("transferegov")) {
+    return { id: "SERVICOS", titulo: "Serviços Especializados", badgeCor: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30" }
+  }
+  return { id: "OUTROS", titulo: "Outros Materiais", badgeCor: "bg-muted text-muted-foreground border-border" }
+}
+
 function OrcamentoContent() {
   const { pode } = usePermissoes()
   const searchParams = useSearchParams()
@@ -82,6 +113,7 @@ function OrcamentoContent() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filtroPeriodo, setFiltroPeriodo] = useState<string>("ALL")
   const [filtroTipo, setFiltroTipo] = useState<string>("ALL")
+  const [filtroSecao, setFiltroSecao] = useState<string>("ALL")
   const [filtroSaldo, setFiltroSaldo] = useState<string>("ALL")
   const [visaoAtiva, setVisaoAtiva] = useState<"cards" | "grade">("cards")
 
@@ -211,6 +243,12 @@ function OrcamentoContent() {
         return false
       }
 
+      // 2.1 Filtro de Seção da Planilha MROSC
+      if (filtroSecao !== "ALL") {
+        const secao = classificarSecaoPlanilha(rubrica)
+        if (secao.id !== filtroSecao) return false
+      }
+
       // 3. Filtro de Saldo / Execução
       const totalGastoDespesas = (rubrica.despesas || [])
         .filter((d) => d.status === "PAGO")
@@ -251,7 +289,7 @@ function OrcamentoContent() {
 
       return true
     })
-  }, [rubricas, searchTerm, filtroTipo, filtroSaldo, filtroPeriodo, selectedProjetoId, projetos, weekRange, currentYearMonth, nextYearMonth])
+  }, [rubricas, searchTerm, filtroTipo, filtroSecao, filtroSaldo, filtroPeriodo, selectedProjetoId, projetos, weekRange, currentYearMonth, nextYearMonth])
 
   // Desembolso no Período Selecionado
   const { totalPrevistoPeriodo, totalPagoPeriodo, qtdParcelasPeriodo } = useMemo(() => {
@@ -291,12 +329,17 @@ function OrcamentoContent() {
   }, [filteredRubricas, filtroPeriodo, weekRange, currentYearMonth, nextYearMonth])
 
   const hasFiltrosAtivos =
-    searchTerm.trim() !== "" || filtroPeriodo !== "ALL" || filtroTipo !== "ALL" || filtroSaldo !== "ALL"
+    searchTerm.trim() !== "" ||
+    filtroPeriodo !== "ALL" ||
+    filtroTipo !== "ALL" ||
+    filtroSecao !== "ALL" ||
+    filtroSaldo !== "ALL"
 
   function limparFiltros() {
     setSearchTerm("")
     setFiltroPeriodo("ALL")
     setFiltroTipo("ALL")
+    setFiltroSecao("ALL")
     setFiltroSaldo("ALL")
   }
 
@@ -807,9 +850,9 @@ function OrcamentoContent() {
 
         {/* BARRA DE FILTROS E PESQUISA */}
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-3.5 shadow-2xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {/* 1. Busca Textual */}
-            <div className="relative lg:col-span-2">
+            <div className="relative md:col-span-2 lg:col-span-2">
               <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por descrição, natureza, tipo ou projeto..."
@@ -828,7 +871,41 @@ function OrcamentoContent() {
               )}
             </div>
 
-            {/* 2. Filtro Temporal (Cronograma) */}
+            {/* 2. Filtro de Seção da Planilha MROSC */}
+            <div>
+              <Select value={filtroSecao} onValueChange={(v) => v && setFiltroSecao(v)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <LayersIcon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Seção: Todas">
+                    {(val: string | null) => {
+                      if (!val || val === "ALL") return "Seção: Todas"
+                      const secoesMap: Record<string, string> = {
+                        RH: "Recursos Humanos",
+                        ENCARGOS: "Encargos Sociais",
+                        UNIFORMES: "Uniformes",
+                        DIVULGACAO: "Identificação / Divulgação",
+                        ESPORTIVO: "Material Esportivo",
+                        SERVICOS: "Serviços Especializados",
+                        OUTROS: "Outros Materiais",
+                      }
+                      return secoesMap[val] ? `Seção: ${secoesMap[val]}` : `Seção: ${val}`
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas as Seções MROSC</SelectItem>
+                  <SelectItem value="RH">Recursos Humanos</SelectItem>
+                  <SelectItem value="ENCARGOS">Encargos Sociais</SelectItem>
+                  <SelectItem value="UNIFORMES">Uniformes</SelectItem>
+                  <SelectItem value="DIVULGACAO">Identificação e Divulgação</SelectItem>
+                  <SelectItem value="ESPORTIVO">Material Esportivo</SelectItem>
+                  <SelectItem value="SERVICOS">Serviços Especializados</SelectItem>
+                  <SelectItem value="OUTROS">Outros Materiais</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 3. Filtro Temporal (Cronograma) */}
             <div>
               <Select value={filtroPeriodo} onValueChange={(v) => v && setFiltroPeriodo(v)}>
                 <SelectTrigger className="h-9 text-xs">
@@ -857,7 +934,7 @@ function OrcamentoContent() {
               </Select>
             </div>
 
-            {/* 3. Filtro de Natureza / Tipo MROSC */}
+            {/* 4. Filtro de Natureza / Tipo MROSC */}
             <div>
               <Select value={filtroTipo} onValueChange={(v) => v && setFiltroTipo(v)}>
                 <SelectTrigger className="h-9 text-xs">
@@ -887,7 +964,7 @@ function OrcamentoContent() {
               </Select>
             </div>
 
-            {/* 4. Filtro de Situação / Saldo */}
+            {/* 5. Filtro de Situação / Saldo */}
             <div>
               <Select value={filtroSaldo} onValueChange={(v) => v && setFiltroSaldo(v)}>
                 <SelectTrigger className="h-9 text-xs">
@@ -944,6 +1021,12 @@ function OrcamentoContent() {
                     <Badge variant="secondary" className="text-[11px] gap-1 h-5 px-1.5">
                       Tipo: {filtroTipo}
                       <XIcon className="size-3 cursor-pointer" onClick={() => setFiltroTipo("ALL")} />
+                    </Badge>
+                  )}
+                  {filtroSecao !== "ALL" && (
+                    <Badge variant="secondary" className="text-[11px] gap-1 h-5 px-1.5">
+                      Seção: {filtroSecao}
+                      <XIcon className="size-3 cursor-pointer" onClick={() => setFiltroSecao("ALL")} />
                     </Badge>
                   )}
                   {filtroSaldo !== "ALL" && (
@@ -1042,6 +1125,14 @@ function OrcamentoContent() {
                         <span className="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                           {rubrica.codigo_natureza_despesa}
                         </span>
+                        {(() => {
+                          const secao = classificarSecaoPlanilha(rubrica)
+                          return (
+                            <Badge variant="outline" className={`text-[10px] font-medium border ${secao.badgeCor}`}>
+                              {secao.titulo}
+                            </Badge>
+                          )
+                        })()}
                         {selectedProjetoId === "ALL" && rubrica.projetos && (
                           <Badge variant="secondary" className="text-[10px] font-normal truncate max-w-[140px]">
                             {rubrica.projetos.nome}
@@ -1252,13 +1343,23 @@ function OrcamentoContent() {
                       <TableRow key={rubrica.id} className="hover:bg-muted/30">
                         {/* Identificação da Rubrica */}
                         <TableCell className="sticky left-0 bg-card hover:bg-muted/30 font-medium">
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-1">
                             <span className="font-semibold text-foreground line-clamp-1">
                               {rubrica.descricao}
                             </span>
-                            <span className="font-mono text-[10px] text-muted-foreground">
-                              {rubrica.codigo_natureza_despesa} • {rubrica.quantidade} {rubrica.unidade}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                {rubrica.codigo_natureza_despesa} • {rubrica.quantidade} {rubrica.unidade}
+                              </span>
+                              {(() => {
+                                const secao = classificarSecaoPlanilha(rubrica)
+                                return (
+                                  <Badge variant="outline" className={`text-[9px] py-0 px-1 font-medium ${secao.badgeCor}`}>
+                                    {secao.titulo}
+                                  </Badge>
+                                )
+                              })()}
+                            </div>
                           </div>
                         </TableCell>
 

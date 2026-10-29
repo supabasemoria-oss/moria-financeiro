@@ -7,6 +7,7 @@ import {
   UploadCloudIcon,
   FileTextIcon,
   ExternalLinkIcon,
+  FilterIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { usePermissoes } from "@/hooks/use-permissoes"
+import type { Projeto } from "@/lib/types"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -29,6 +31,8 @@ function ComprovantesContent() {
 
   const [comprovantes, setComprovantes] = useState<any[]>([])
   const [despesas, setDespesas] = useState<any[]>([])
+  const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [filtroProjeto, setFiltroProjeto] = useState<string>("ALL")
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -40,12 +44,14 @@ function ComprovantesContent() {
   async function loadData() {
     try {
       setLoading(true)
-      const [compData, despData] = await Promise.all([
+      const [compData, despData, projData] = await Promise.all([
         mroscService.getComprovantes(),
         mroscService.getDespesas(),
+        mroscService.getProjetos(),
       ])
       setComprovantes(compData)
       setDespesas(despData)
+      setProjetos(projData)
       if (despData.length > 0 && !selectedDespesaId) {
         setSelectedDespesaId(despData[0].id)
       }
@@ -224,81 +230,138 @@ function ComprovantesContent() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Repositório Digital de Comprovantes</CardTitle>
-          <CardDescription className="text-xs">
-            Documentos organizados e preparados para prestação de contas no Transferegov.
-          </CardDescription>
+        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-semibold">Repositório Digital de Comprovantes</CardTitle>
+            <CardDescription className="text-xs">
+              Documentos organizados e preparados para prestação de contas no Transferegov.
+            </CardDescription>
+          </div>
+
+          {/* Filtro por Projeto */}
+          <div className="flex items-center gap-2">
+            <FilterIcon className="size-3.5 text-muted-foreground shrink-0" />
+            <div className="w-56 sm:w-64 max-w-full">
+              <Select value={filtroProjeto} onValueChange={(val) => setFiltroProjeto(val ?? "ALL")}>
+                <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
+                  <SelectValue placeholder="Filtrar por projeto">
+                    {(val) => {
+                      if (!val || val === "ALL") return "Todos os Projetos"
+                      const p = projetos.find((item) => item.id === val)
+                      const nome = p?.nome ?? val
+                      return (
+                        <span className="truncate block max-w-[190px]" title={nome}>
+                          {nome}
+                        </span>
+                      )
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos os Projetos</SelectItem>
+                  {projetos.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {filtroProjeto !== "ALL" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFiltroProjeto("ALL")}
+                className="h-8 text-xs text-muted-foreground hover:text-destructive px-2"
+                title="Limpar filtro de projeto"
+              >
+                Limpar
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Carregando repositório...</div>
-          ) : comprovantes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <FileCheckIcon className="size-10 text-muted-foreground/40 mb-3" />
-              <p className="text-sm font-medium">Nenhum comprovante anexado</p>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">
-                Faça o upload dos arquivos digitais para manter a auditoria fiscal 100% regular.
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Arquivo</TableHead>
-                  <TableHead>Tipificação</TableHead>
-                  <TableHead>Despesa Relacionada</TableHead>
-                  <TableHead>Projeto</TableHead>
-                  <TableHead>Data Anexo</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {comprovantes.map((comp) => (
-                  <TableRow key={comp.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <FileTextIcon className="size-4 text-emerald-600 shrink-0" />
-                        <span className="truncate max-w-[200px] text-xs font-semibold">{comp.file_name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {tipoLabelMap[comp.tipo_documento] || comp.tipo_documento}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {comp.despesas ? (
-                        <div>
-                          <div className="font-medium">{comp.despesas.descricao}</div>
-                          <div className="text-muted-foreground font-mono">{formatCurrency(comp.despesas.valor)}</div>
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {comp.despesas?.projetos?.nome || "-"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
-                      {formatDate(comp.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => handleViewOrDownload(comp.storage_path, comp.file_name)}
-                      >
-                        <ExternalLinkIcon className="size-3" />
-                        Abrir
-                      </Button>
-                    </TableCell>
+          ) : (() => {
+            const comprovantesFiltrados = comprovantes.filter((comp) => {
+              if (filtroProjeto === "ALL") return true
+              return comp.despesas?.projeto_id === filtroProjeto
+            })
+
+            if (comprovantesFiltrados.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <FileCheckIcon className="size-10 text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-medium">Nenhum comprovante encontrado</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">
+                    {filtroProjeto !== "ALL"
+                      ? "Não há comprovantes anexados para o projeto selecionado."
+                      : "Faça o upload dos arquivos digitais para manter a auditoria fiscal 100% regular."}
+                  </p>
+                </div>
+              )
+            }
+
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead>Tipificação</TableHead>
+                    <TableHead>Despesa Relacionada</TableHead>
+                    <TableHead>Projeto</TableHead>
+                    <TableHead>Data Anexo</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                </TableHeader>
+                <TableBody>
+                  {comprovantesFiltrados.map((comp) => (
+                    <TableRow key={comp.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <FileTextIcon className="size-4 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[200px] text-xs font-semibold">{comp.file_name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {tipoLabelMap[comp.tipo_documento] || comp.tipo_documento}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {comp.despesas ? (
+                          <div>
+                            <div className="font-medium">{comp.despesas.descricao}</div>
+                            <div className="text-muted-foreground font-mono">{formatCurrency(comp.despesas.valor)}</div>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {comp.despesas?.projetos?.nome || "-"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {formatDate(comp.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => handleViewOrDownload(comp.storage_path, comp.file_name)}
+                        >
+                          <ExternalLinkIcon className="size-3" />
+                          Abrir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          })()}
         </CardContent>
       </Card>
     </div>

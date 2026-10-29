@@ -59,7 +59,7 @@ export function CampoNotaFiscal({
         />
       </div>
 
-      <div className="rounded-lg border border-dashed p-2.5 bg-muted/20">
+      <div className="rounded-lg border border-dashed p-2.5 bg-muted/20 min-w-0 max-w-full overflow-hidden">
         <input
           ref={fileInputRef}
           type="file"
@@ -71,16 +71,16 @@ export function CampoNotaFiscal({
         />
 
         {arquivo ? (
-          <div className="flex items-center justify-between gap-2 bg-background p-2 rounded-md border text-xs">
-            <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center justify-between gap-2 bg-background p-2 rounded-md border text-xs min-w-0 max-w-full overflow-hidden">
+            <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
               <div className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
                 <FileTextIcon className="size-4" />
               </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground truncate text-xs">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="font-medium text-foreground truncate text-xs block max-w-full" title={arquivo.name}>
                   {arquivo.name}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground truncate">
                   {(arquivo.size / 1024).toFixed(1)} KB • Arquivo pronto para anexar
                 </p>
               </div>
