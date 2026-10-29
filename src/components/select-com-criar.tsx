@@ -20,7 +20,7 @@ export function SelectComCriar({ value, onValueChange, opcoes, placeholder, labe
   return (
     <div className="grid gap-1">
       <Select value={value} onValueChange={v => v && onValueChange(v)} disabled={disabled}>
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={placeholder ?? "Selecione..."}>
             {(val: string | null) => (val ? opcoes.find(o => o.id === val)?.label : null) || placeholder || "Selecione..."}
           </SelectValue>

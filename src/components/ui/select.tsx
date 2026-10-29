@@ -109,9 +109,9 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
   searchable = true,
   searchPlaceholder = "Buscar opção...",
   ...props
@@ -130,7 +130,16 @@ function SelectContent({
     return React.Children.count(children)
   }, [children])
 
-  const deveExibirBusca = searchable && totalItens >= 4
+  const deveExibirBusca = searchable && totalItens > 1
+
+  React.useEffect(() => {
+    if (deveExibirBusca) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [deveExibirBusca])
 
   const itensFiltrados = React.useMemo(() => {
     if (!deveExibirBusca || !searchQuery.trim()) {
@@ -170,6 +179,7 @@ function SelectContent({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
+                    if (e.key === "Escape") return
                     e.stopPropagation()
                   }}
                   onClick={(e) => e.stopPropagation()}
