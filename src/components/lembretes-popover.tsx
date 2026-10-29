@@ -19,10 +19,27 @@ import {
 } from "@/components/ui/popover"
 import { useParcelas } from "@/hooks/use-parcelas"
 import { formatDate, formatCurrency, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
+import { getCategoriasLembretesAsync } from "@/lib/settings"
 
 export function LembretesPopover() {
   const [open, setOpen] = React.useState(false)
-  const { data: parcelas, loading: loadingParcelas, refetch } = useParcelas({ proximosDias: 30 })
+  const { data: rawParcelas, loading: loadingParcelas, refetch } = useParcelas({ proximosDias: 30 })
+  const [categoriasAtivas, setCategoriasAtivas] = React.useState<Set<string>>(new Set(["RH"]))
+
+  React.useEffect(() => {
+    getCategoriasLembretesAsync().then((cats) => {
+      const ativas = cats.filter((c) => c.geraLembrete).map((c) => c.id)
+      setCategoriasAtivas(new Set(ativas))
+    })
+  }, [])
+
+  // Filtrar parcelas apenas pelas categorias configuradas para gerar lembretes
+  const parcelas = React.useMemo(() => {
+    return rawParcelas.filter((p) => {
+      const tipo = p.rubricas_orcamentarias?.tipo || "OUTROS"
+      return categoriasAtivas.has(tipo)
+    })
+  }, [rawParcelas, categoriasAtivas])
 
   const hoje = getTodaySaoPaulo()
 

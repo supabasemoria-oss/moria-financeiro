@@ -14,6 +14,10 @@ import {
   UploadIcon,
   UsersIcon,
   MessageSquareIcon,
+  BellIcon,
+  PlusIcon,
+  Trash2Icon,
+  TagIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { WhatsAppConnectCard } from "@/components/whatsapp-connect-card"
@@ -29,6 +33,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -43,7 +56,10 @@ import {
   saveSettings,
   uploadSystemLogo,
   testGeminiConnection,
+  getCategoriasLembretesAsync,
+  saveCategoriasLembretes,
 } from "@/lib/settings"
+import type { CategoriaLembrete } from "@/lib/types"
 import { useSystemSettings } from "@/contexts/system-context"
 
 interface GeminiModel {
@@ -76,6 +92,17 @@ export default function ConfiguracoesPage() {
     message: string
   } | null>(null)
 
+  // Categorias de Lembretes
+  const [categorias, setCategorias] = useState<CategoriaLembrete[]>([])
+  const [loadingCategorias, setLoadingCategorias] = useState(true)
+  const [savingCategorias, setSavingCategorias] = useState(false)
+  const [openNovaCategoria, setOpenNovaCategoria] = useState(false)
+  const [novaCategoriaForm, setNovaCategoriaForm] = useState({
+    label: "",
+    icon: "📁",
+    geraLembrete: true,
+  })
+
   useEffect(() => {
     getSettingsAsync().then((s) => {
       setNomeSistema(s.nome_sistema)
@@ -88,7 +115,84 @@ export default function ConfiguracoesPage() {
         fetchModels(s.gemini_api_key)
       }
     })
+
+    getCategoriasLembretesAsync()
+      .then(setCategorias)
+      .finally(() => setLoadingCategorias(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleToggleGeraLembrete(id: string) {
+    setCategorias((prev) =>
+      prev.map((cat) => (cat.id === id ? { ...cat, geraLembrete: !cat.geraLembrete } : cat))
+    )
+  }
+
+  async function handleSalvarCategorias() {
+    setSavingCategorias(true)
+    try {
+      await saveCategoriasLembretes(categorias)
+      toast.success("Categorias e regras de lembretes salvas com sucesso!")
+    } catch {
+      toast.error("Erro ao salvar categorias de lembretes.")
+    } finally {
+      setSavingCategorias(false)
+    }
+  }
+
+  async function handleCriarCategoria(e: React.FormEvent) {
+    e.preventDefault()
+    const labelTrim = novaCategoriaForm.label.trim()
+    if (!labelTrim) {
+      toast.error("Informe o nome da categoria.")
+      return
+    }
+
+    // Gerar ID canônico sem acentos em caixa alta
+    const idGerado = labelTrim
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "")
+      .slice(0, 20) || `CAT_${Date.now()}`
+
+    if (categorias.some((c) => c.id === idGerado)) {
+      toast.error(`Já existe uma categoria com o identificador ID '${idGerado}'.`)
+      return
+    }
+
+    const nova: CategoriaLembrete = {
+      id: idGerado,
+      label: labelTrim,
+      icon: novaCategoriaForm.icon.trim() || "📁",
+      geraLembrete: novaCategoriaForm.geraLembrete,
+      isDefault: false,
+    }
+
+    const listaAtualizada = [...categorias, nova]
+    setCategorias(listaAtualizada)
+    setOpenNovaCategoria(false)
+    setNovaCategoriaForm({ label: "", icon: "📁", geraLembrete: true })
+
+    try {
+      await saveCategoriasLembretes(listaAtualizada)
+      toast.success(`Categoria '${labelTrim}' (ID: ${idGerado}) criada com sucesso!`)
+    } catch {
+      toast.error("Erro ao salvar nova categoria.")
+    }
+  }
+
+  async function handleExcluirCategoria(id: string) {
+    const listaAtualizada = categorias.filter((c) => c.id !== id)
+    setCategorias(listaAtualizada)
+    try {
+      await saveCategoriasLembretes(listaAtualizada)
+      toast.success("Categoria removida com sucesso.")
+    } catch {
+      toast.error("Erro ao remover categoria.")
+    }
+  }
 
   async function handleSalvarIdentidade(e: React.FormEvent) {
     e.preventDefault()
@@ -224,6 +328,10 @@ export default function ConfiguracoesPage() {
             <UsersIcon className="size-4" />
             Usuários & Acessos
           </TabsTrigger>
+          <TabsTrigger value="lembretes" className="gap-2 px-3.5 py-2 text-xs font-medium cursor-pointer">
+            <BellIcon className="size-4" />
+            Lembretes & Categorias
+          </TabsTrigger>
           <TabsTrigger value="ia" className="gap-2 px-3.5 py-2 text-xs font-medium cursor-pointer">
             <BotIcon className="size-4" />
             Inteligência Artificial (Gemini)
@@ -347,6 +455,202 @@ export default function ConfiguracoesPage() {
         {/* TAB 2: USUÁRIOS & ACESSOS */}
         <TabsContent value="usuarios" className="space-y-6 focus-visible:outline-hidden">
           <UsuariosManager />
+        </TabsContent>
+
+        {/* TAB: LEMBRETES & CATEGORIAS */}
+        <TabsContent value="lembretes" className="space-y-6 focus-visible:outline-hidden">
+          <Card className="border-border">
+            <CardHeader className="pb-3 border-b">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                    <BellIcon className="size-4.5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      Categorias com Geração de Lembretes
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Configure quais tipos de parcela/rubrica geram lembretes na agenda, alertas no topo e resumos automáticos.
+                    </CardDescription>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => setOpenNovaCategoria(true)}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs self-start sm:self-auto shrink-0"
+                >
+                  <PlusIcon className="size-3.5" />
+                  Nova Categoria
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-6 space-y-6">
+              <div className="rounded-lg border bg-muted/30 p-3.5 flex items-start gap-3">
+                <TagIcon className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-semibold text-foreground">
+                    Vinculação por Identificador Canônico (ID):
+                  </p>
+                  <p>
+                    As parcelas são vinculadas a estas categorias por meio de IDs estruturados. Por padrão, a categoria <strong>Recursos Humanos (RH)</strong> está configurada para gerar lembretes obrigatórios. Marque ou desmarque para habilitar outras categorias conforme a necessidade da organização.
+                  </p>
+                </div>
+              </div>
+
+              {loadingCategorias ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Carregando categorias de despesa...
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {categorias.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
+                        cat.geraLembrete
+                          ? "bg-amber-500/5 border-amber-500/30 dark:bg-amber-500/10"
+                          : "bg-card border-border hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-2xl shrink-0 select-none">{cat.icon}</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground truncate">
+                              {cat.label}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className="font-mono text-[10px] px-1.5 py-0 h-4 shrink-0 bg-background"
+                            >
+                              ID: {cat.id}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {cat.geraLembrete ? "🔔 Gera lembretes na agenda e alertas" : "🔕 Não notifica lembretes"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0 ml-3">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+                          <Checkbox
+                            checked={cat.geraLembrete}
+                            onCheckedChange={() => handleToggleGeraLembrete(cat.id)}
+                            className="size-4"
+                          />
+                          <span className="hidden sm:inline text-xs text-muted-foreground">
+                            {cat.geraLembrete ? "Ativo" : "Inativo"}
+                          </span>
+                        </label>
+
+                        {!cat.isDefault && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleExcluirCategoria(cat.id)}
+                            className="size-7 text-destructive hover:bg-destructive/10"
+                            title="Excluir categoria customizada"
+                          >
+                            <Trash2Icon className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-4 border-t gap-3">
+                <Button
+                  onClick={handleSalvarCategorias}
+                  disabled={savingCategorias}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
+                >
+                  <SaveIcon className="size-4" />
+                  {savingCategorias ? "Salvando..." : "Salvar Configurações de Lembretes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Diálogo Criar Nova Categoria */}
+          <Dialog open={openNovaCategoria} onOpenChange={setOpenNovaCategoria}>
+            <DialogContent className="sm:max-w-[440px]">
+              <form onSubmit={handleCriarCategoria}>
+                <DialogHeader>
+                  <DialogTitle>Criar Nova Categoria de Despesa</DialogTitle>
+                  <DialogDescription>
+                    Cadastre uma nova macro-categoria para classificar rubricas, obrigações e controlar a geração de lembretes.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="cat_label">Nome da Categoria *</Label>
+                    <Input
+                      id="cat_label"
+                      required
+                      placeholder="Ex: Alimentação e Refeições"
+                      value={novaCategoriaForm.label}
+                      onChange={(e) => setNovaCategoriaForm({ ...novaCategoriaForm, label: e.target.value })}
+                    />
+                    {novaCategoriaForm.label.trim() && (
+                      <p className="text-[11px] font-mono text-muted-foreground">
+                        ID gerado: <span className="font-bold text-foreground">
+                          {novaCategoriaForm.label
+                            .toUpperCase()
+                            .normalize("NFD")
+                            .replace(/[\u0300-\u036f]/g, "")
+                            .replace(/[^A-Z0-9]/g, "_")
+                            .replace(/_+/g, "_")
+                            .replace(/^_|_$/g, "")
+                            .slice(0, 20)}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="cat_icon">Ícone / Emoji</Label>
+                      <Input
+                        id="cat_icon"
+                        placeholder="Ex: 🍽️, 🚗, 🏥"
+                        value={novaCategoriaForm.icon}
+                        onChange={(e) => setNovaCategoriaForm({ ...novaCategoriaForm, icon: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-end pb-1.5">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+                        <Checkbox
+                          checked={novaCategoriaForm.geraLembrete}
+                          onCheckedChange={(checked) =>
+                            setNovaCategoriaForm({ ...novaCategoriaForm, geraLembrete: !!checked })
+                          }
+                        />
+                        <span>Gerar Lembretes</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setOpenNovaCategoria(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                    Cadastrar Categoria
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* TAB 3: INTELIGÊNCIA ARTIFICIAL (GEMINI) */}

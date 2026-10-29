@@ -5,6 +5,7 @@ import { mroscService } from "@/lib/api/mrosc-service"
 import { calcularTodosAlertas } from "@/lib/alertas"
 import { recalcularStatus } from "@/lib/parcelas"
 import { usePermissoes } from "@/hooks/use-permissoes"
+import { getCategoriasLembretesAsync } from "@/lib/settings"
 import type { Alerta } from "@/lib/types"
 
 export function useAlertas() {
@@ -15,12 +16,21 @@ export function useAlertas() {
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      const [parcelasRaw, projetosRaw] = await Promise.all([
+      const [parcelasRaw, projetosRaw, categorias] = await Promise.all([
         mroscService.getParcelas(),
         mroscService.getProjetos(),
+        getCategoriasLembretesAsync(),
       ])
+      const idsAtivos = new Set(categorias.filter((c) => c.geraLembrete).map((c) => c.id))
+
       const projetos = projetosRaw.filter((p) => temAcessoAoProjeto(p.id))
-      const parcelas = recalcularStatus(parcelasRaw).filter((p) => temAcessoAoProjeto(p.projeto_id))
+      const parcelas = recalcularStatus(parcelasRaw)
+        .filter((p) => temAcessoAoProjeto(p.projeto_id))
+        .filter((p) => {
+          const tipo = p.rubricas_orcamentarias?.tipo || "OUTROS"
+          return idsAtivos.has(tipo)
+        })
+
       const result = calcularTodosAlertas(parcelas, projetos)
       setAlertas(result)
     } catch {

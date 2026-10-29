@@ -73,6 +73,14 @@ export interface ParcelaFilters {
 export type AlertaTipo = 'PARCELA_ATRASADA' | 'PARCELA_VENCENDO' | 'VIGENCIA_CRITICA' | 'TERMO_ADITIVO'
 export type NivelAlerta = 'URGENTE' | 'ATENCAO' | 'INFO'
 
+export interface CategoriaLembrete {
+  id: string
+  label: string
+  icon: string
+  geraLembrete: boolean
+  isDefault?: boolean
+}
+
 export interface Alerta {
   id: string
   tipo: AlertaTipo

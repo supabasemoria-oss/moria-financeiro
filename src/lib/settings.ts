@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import type { CategoriaLembrete } from '@/lib/types'
 
 export interface MoriaSettings {
   gemini_api_key: string
@@ -111,4 +112,84 @@ export async function testGeminiConnection(
     const msg = e instanceof Error ? e.message : "Erro desconhecido"
     return { ok: false, message: msg }
   }
+}
+
+// =========================================================================
+// Categorias de Lembretes & Alertas (Gerenciáveis via ID)
+// =========================================================================
+
+export const CATEGORIAS_PADRAO_LEMBRETES: CategoriaLembrete[] = [
+  { id: "RH", label: "Recursos Humanos (RH)", icon: "👥", geraLembrete: true, isDefault: true },
+  { id: "SERVICO", label: "Serviços de Terceiros", icon: "🛠️", geraLembrete: false, isDefault: true },
+  { id: "MATERIAL", label: "Compra de Materiais", icon: "📦", geraLembrete: false, isDefault: true },
+  { id: "LOCACAO", label: "Locações de Bens e Espaços", icon: "🏢", geraLembrete: false, isDefault: true },
+  { id: "OUTROS", label: "Outros / Encargos", icon: "📑", geraLembrete: false, isDefault: true },
+]
+
+let categoriasCache: CategoriaLembrete[] | null = null
+
+export async function getCategoriasLembretesAsync(): Promise<CategoriaLembrete[]> {
+  if (categoriasCache) return categoriasCache
+
+  if (typeof window !== "undefined") {
+    try {
+      const local = localStorage.getItem("moria_categorias_lembretes")
+      if (local) {
+        categoriasCache = JSON.parse(local)
+      }
+    } catch {}
+  }
+
+  try {
+    const { data, error } = await supabase.storage.from("logos").download("categorias_lembretes.json")
+    if (!error && data) {
+      const text = await data.text()
+      const parsed: CategoriaLembrete[] = JSON.parse(text)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        categoriasCache = parsed
+        if (typeof window !== "undefined") {
+          localStorage.setItem("moria_categorias_lembretes", JSON.stringify(parsed))
+        }
+        return parsed
+      }
+    }
+  } catch {}
+
+  if (!categoriasCache) {
+    categoriasCache = CATEGORIAS_PADRAO_LEMBRETES
+  }
+  return categoriasCache
+}
+
+export async function saveCategoriasLembretes(categorias: CategoriaLembrete[]): Promise<void> {
+  categoriasCache = categorias
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("moria_categorias_lembretes", JSON.stringify(categorias))
+    } catch {}
+  }
+
+  try {
+    const blob = new Blob([JSON.stringify(categorias, null, 2)], { type: "application/json" })
+    await supabase.storage.from("logos").upload("categorias_lembretes.json", blob, {
+      upsert: true,
+      cacheControl: "60",
+    })
+  } catch (err) {
+    console.warn("Aviso ao salvar categorias no Storage:", err)
+  }
+}
+
+export function getCategoriasLembretesSync(): CategoriaLembrete[] {
+  if (categoriasCache) return categoriasCache
+  if (typeof window !== "undefined") {
+    try {
+      const local = localStorage.getItem("moria_categorias_lembretes")
+      if (local) {
+        categoriasCache = JSON.parse(local)
+        return categoriasCache!
+      }
+    } catch {}
+  }
+  return CATEGORIAS_PADRAO_LEMBRETES
 }

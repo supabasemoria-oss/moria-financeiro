@@ -46,4 +46,8 @@ services/whatsapp/node_modules
 *.tsbuildinfo
 next-env.d.ts
 
+# supabase
+supabase/.temp/
+.temp/
+
 .env.local

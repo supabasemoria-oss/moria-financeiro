@@ -43,11 +43,12 @@ import {
   XIcon,
   ChevronDownIcon,
 } from "lucide-react"
-import type { ParcelaComRelacoes, Projeto, TipoRubrica } from "@/lib/types"
+import type { ParcelaComRelacoes, Projeto, TipoRubrica, CategoriaLembrete } from "@/lib/types"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { formatDate, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { RelogioHeader } from "@/components/relogio-header"
 import { LembretesPopover } from "@/components/lembretes-popover"
+import { getCategoriasLembretesAsync, CATEGORIAS_PADRAO_LEMBRETES } from "@/lib/settings"
 
 // ---------------------------------------------------------------------------
 // Helpers & Macro-Categorias
@@ -56,15 +57,6 @@ function formatBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 const diasRestantes = diasRestantesSaoPaulo
-
-// Macro-Categorias oficiais do MROSC
-const MACRO_CATEGORIAS: { id: TipoRubrica; label: string; icon: string }[] = [
-  { id: "MATERIAL", label: "Compra de Materiais", icon: "📦" },
-  { id: "SERVICO", label: "Serviços de Terceiros", icon: "🛠️" },
-  { id: "RH", label: "Recursos Humanos (RH)", icon: "👥" },
-  { id: "LOCACAO", label: "Locações", icon: "🏢" },
-  { id: "OUTROS", label: "Outros / Encargos", icon: "📑" },
-]
 
 // Tipos de Filtro Rápido de Período
 type FiltroPeriodo = "todos" | "atrasados3d" | "vencidos" | "hoje" | "semana" | "mes"
@@ -173,10 +165,22 @@ function GrupoSection({
 export default function LembretesPage() {
   const { temAcessoAoProjeto, isAdmin } = usePermissoes()
   const [filtroProjeto, setFiltroProjeto] = useState<string>("")
-  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<TipoRubrica>>(new Set())
+  const [categoriasDisponiveis, setCategoriasDisponiveis] = useState<CategoriaLembrete[]>(CATEGORIAS_PADRAO_LEMBRETES)
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<string>>(new Set(["RH"]))
   const [filtroPeriodo, setFiltroPeriodo] = useState<FiltroPeriodo>("todos")
   const [dataInicio, setDataInicio] = useState<string>("")
   const [dataFim, setDataFim] = useState<string>("")
+
+  // Carrega categorias configuradas e inicializa com as marcadas para gerar lembrete
+  useEffect(() => {
+    getCategoriasLembretesAsync().then((cats) => {
+      setCategoriasDisponiveis(cats)
+      const ativas = cats.filter((c) => c.geraLembrete).map((c) => c.id)
+      if (ativas.length > 0) {
+        setCategoriasSelecionadas(new Set(ativas))
+      }
+    })
+  }, [])
 
   const { data: rawParcelas, loading, refetch } = useParcelas({
     proximosDias: 365,
@@ -191,11 +195,11 @@ export default function LembretesPage() {
   }, [rawParcelas, temAcessoAoProjeto])
 
   // Alternar seleção de uma macro-categoria
-  const toggleCategoria = (tipo: TipoRubrica) => {
+  const toggleCategoria = (id: string) => {
     setCategoriasSelecionadas((prev) => {
       const next = new Set(prev)
-      if (next.has(tipo)) next.delete(tipo)
-      else next.add(tipo)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -204,32 +208,30 @@ export default function LembretesPage() {
     setCategoriasSelecionadas(new Set())
   }
 
+  const restaurarCategoriasPadrao = () => {
+    const ativas = categoriasDisponiveis.filter((c) => c.geraLembrete).map((c) => c.id)
+    setCategoriasSelecionadas(new Set(ativas.length > 0 ? ativas : ["RH"]))
+  }
+
   // Contadores por macro-categoria (baseados em todas as parcelas do projeto ativo)
   const contadoresCategoria = useMemo(() => {
-    const counts: Record<TipoRubrica, number> = {
-      MATERIAL: 0,
-      SERVICO: 0,
-      RH: 0,
-      LOCACAO: 0,
-      OUTROS: 0,
-    }
+    const counts: Record<string, number> = {}
+    categoriasDisponiveis.forEach((c) => {
+      counts[c.id] = 0
+    })
     parcelas.forEach((p) => {
       if (p.status === "PAGO") return
-      const tipo = (p.rubricas_orcamentarias?.tipo as TipoRubrica) || "OUTROS"
-      if (counts[tipo] !== undefined) {
-        counts[tipo]++
-      } else {
-        counts.OUTROS++
-      }
+      const tipo = p.rubricas_orcamentarias?.tipo || "OUTROS"
+      counts[tipo] = (counts[tipo] || 0) + 1
     })
     return counts
-  }, [parcelas])
+  }, [parcelas, categoriasDisponiveis])
 
   // Parcelas considerando as macro-categorias selecionadas (se nenhuma selecionada, considera todas)
   const parcelasBase = useMemo(() => {
     if (categoriasSelecionadas.size === 0) return parcelas
     return parcelas.filter((p) => {
-      const tipo = (p.rubricas_orcamentarias?.tipo as TipoRubrica) || "OUTROS"
+      const tipo = p.rubricas_orcamentarias?.tipo || "OUTROS"
       return categoriasSelecionadas.has(tipo)
     })
   }, [parcelas, categoriasSelecionadas])
@@ -374,7 +376,7 @@ export default function LembretesPage() {
 
     if (categoriasSelecionadas.size > 0) {
       const nomesCat = Array.from(categoriasSelecionadas)
-        .map((id) => MACRO_CATEGORIAS.find((c) => c.id === id)?.label || id)
+        .map((id) => categoriasDisponiveis.find((c) => c.id === id)?.label || id)
         .join(", ")
       partes.push(`Categorias: ${nomesCat}`)
     }
@@ -395,7 +397,7 @@ export default function LembretesPage() {
 
     if (partes.length === 0) return "Todos os pagamentos"
     return partes.join(" · ")
-  }, [categoriasSelecionadas, filtroPeriodo, dataInicio, dataFim])
+  }, [categoriasSelecionadas, categoriasDisponiveis, filtroPeriodo, dataInicio, dataFim])
 
   const selectedParcelasObjs = parcelas.filter((p) => selectedParcelas.has(p.id))
   const totalValorLote = selectedParcelasObjs.reduce((acc, p) => acc + (p.valor_previsto || 0), 0)
@@ -790,44 +792,59 @@ export default function LembretesPage() {
                     </span>
                     <ChevronDownIcon className="size-3 text-muted-foreground" />
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-64 p-2.5 space-y-1 text-xs">
+                  <PopoverContent align="start" className="w-72 p-2.5 space-y-1 text-xs">
                     <div className="flex items-center justify-between pb-1.5 border-b border-border px-1 font-semibold text-muted-foreground">
-                      <span>Filtrar Categorias</span>
-                      {categoriasSelecionadas.size > 0 ? (
+                      <span>Filtrar por Categoria</span>
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={limparCategorias}
-                          className="text-[11px] text-primary hover:underline font-normal"
+                          onClick={restaurarCategoriasPadrao}
+                          className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-normal"
+                          title="Focar nas categorias ativas para lembretes nas configurações"
                         >
-                          Marcar Todas
+                          Padrão (Config)
                         </button>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground font-normal">Todas ativas</span>
-                      )}
+                        <button
+                          type="button"
+                          onClick={categoriasSelecionadas.size === categoriasDisponiveis.length ? limparCategorias : () => setCategoriasSelecionadas(new Set(categoriasDisponiveis.map(c => c.id)))}
+                          className="text-[10px] text-primary hover:underline font-normal"
+                        >
+                          {categoriasSelecionadas.size === categoriasDisponiveis.length ? "Limpar" : "Todas"}
+                        </button>
+                      </div>
                     </div>
 
-                    {MACRO_CATEGORIAS.map((cat) => {
-                      const isChecked = categoriasSelecionadas.has(cat.id)
-                      const count = contadoresCategoria[cat.id] || 0
-                      return (
-                        <label
-                          key={cat.id}
-                          className="flex items-center justify-between p-1.5 hover:bg-muted rounded-md cursor-pointer transition-colors"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Checkbox
-                              checked={isChecked}
-                              onCheckedChange={() => toggleCategoria(cat.id)}
-                              className="size-3.5"
-                            />
-                            <span className="truncate">{cat.icon} {cat.label}</span>
-                          </div>
-                          <span className="font-mono text-muted-foreground text-[11px] ml-2 shrink-0">
-                            {count}
-                          </span>
-                        </label>
-                      )
-                    })}
+                    <div className="max-h-60 overflow-y-auto space-y-0.5 pt-1">
+                      {categoriasDisponiveis.map((cat) => {
+                        const isChecked = categoriasSelecionadas.has(cat.id)
+                        const count = contadoresCategoria[cat.id] || 0
+                        return (
+                          <label
+                            key={cat.id}
+                            className="flex items-center justify-between p-1.5 hover:bg-muted rounded-md cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => toggleCategoria(cat.id)}
+                                className="size-3.5"
+                              />
+                              <span className="truncate">{cat.icon} {cat.label}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                              {cat.geraLembrete && (
+                                <span className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold" title="Configurada para gerar lembretes">
+                                  🔔
+                                </span>
+                              )}
+                              <span className="font-mono text-muted-foreground text-[11px]">
+                                {count}
+                              </span>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
                   </PopoverContent>
                 </Popover>
 

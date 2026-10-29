@@ -45,7 +45,7 @@ export function gerarParcelas(rubrica: Rubrica, dataInicioProjeto: string): Omit
   })
 }
 
-export function recalcularStatus(parcelas: ParcelaPagamento[]): ParcelaPagamento[] {
+export function recalcularStatus<T extends ParcelaPagamento>(parcelas: T[]): T[] {
   return parcelas.map((p) => {
     if (p.status === 'PAGO' || p.status === 'CANCELADO') return p
     const dias = diffDias(p.data_vencimento)
