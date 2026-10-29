@@ -226,6 +226,32 @@ export const mroscService = {
     return data.publicUrl
   },
 
+  async getComprovanteUrl(storagePath: string): Promise<string> {
+    try {
+      const { data, error } = await supabase.storage.from('comprovantes').createSignedUrl(storagePath, 3600)
+      if (!error && data?.signedUrl) {
+        return data.signedUrl
+      }
+    } catch {
+      // Ignora erro e recorre ao getPublicUrl
+    }
+    return this.getComprovantePublicUrl(storagePath)
+  },
+
+  async deleteComprovante(comprovanteId: string, storagePath?: string): Promise<void> {
+    let path = storagePath
+    if (!path) {
+      const { data } = await supabase.from('comprovantes').select('storage_path').eq('id', comprovanteId).single()
+      path = data?.storage_path
+    }
+    if (path) {
+      const { error: storErr } = await supabase.storage.from('comprovantes').remove([path])
+      if (storErr) console.warn('Aviso ao remover arquivo do storage:', storErr.message)
+    }
+    const { error } = await supabase.from('comprovantes').delete().eq('id', comprovanteId)
+    if (error) err(error.message)
+  },
+
   // ── Parcelas ─────────────────────────────────────
   async getParcelas(filters?: ParcelaFilters): Promise<ParcelaComRelacoes[]> {
     let q = supabase.from('parcelas_pagamento').select('*, rubricas_orcamentarias(*), projetos(*), despesas(*)')

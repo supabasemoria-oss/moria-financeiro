@@ -20,6 +20,8 @@ import {
   AlertTriangleIcon,
   CalendarDaysIcon,
   Building2Icon,
+  ExternalLinkIcon,
+  FileTextIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -226,6 +228,8 @@ function ExecucaoContent() {
   const [openEditarDespesa, setOpenEditarDespesa] = useState(false)
   const [despesaParaEditar, setDespesaParaEditar] = useState<DespesaComRelacoes | null>(null)
   const [arquivoNfEditar, setArquivoNfEditar] = useState<File | null>(null)
+  const [comprovantesDaDespesaEditar, setComprovantesDaDespesaEditar] = useState<any[]>([])
+  const [deletingComprovanteId, setDeletingComprovanteId] = useState<string | null>(null)
   const [editarForm, setEditarForm] = useState({
     projeto_id: "",
     rubrica_id: "",
@@ -782,6 +786,7 @@ function ExecucaoContent() {
   async function handleAbrirEditarDespesa(despesa: DespesaComRelacoes) {
     setDespesaParaEditar(despesa)
     setArquivoNfEditar(null)
+    setComprovantesDaDespesaEditar(despesa.comprovantes || [])
     setEditarForm({
       projeto_id: despesa.projeto_id,
       rubrica_id: despesa.rubrica_id,
@@ -803,7 +808,51 @@ function ExecucaoContent() {
         console.error("Erro ao carregar rubricas para edição:", e)
       }
     }
+
+    try {
+      const comps = await mroscService.getComprovantes(despesa.id)
+      setComprovantesDaDespesaEditar(comps || [])
+    } catch (e) {
+      console.warn("Aviso ao buscar comprovantes da despesa:", e)
+    }
+
     setOpenEditarDespesa(true)
+  }
+
+  async function handleViewComprovante(storagePath: string) {
+    try {
+      const url = await mroscService.getComprovanteUrl(storagePath)
+      window.open(url, "_blank")
+    } catch {
+      const url = mroscService.getComprovantePublicUrl(storagePath)
+      window.open(url, "_blank")
+    }
+  }
+
+  async function handleExcluirComprovanteNaDespesa(comprovanteId: string, storagePath: string, fileName: string) {
+    if (!window.confirm(`Tem certeza que deseja excluir o anexo "${fileName}" deste lançamento?\nEsta ação removerá o arquivo permanentemente.`)) {
+      return
+    }
+    try {
+      setDeletingComprovanteId(comprovanteId)
+      await mroscService.deleteComprovante(comprovanteId, storagePath)
+      setComprovantesDaDespesaEditar((prev) => prev.filter((c) => c.id !== comprovanteId))
+      setDespesas((prev) =>
+        prev.map((d) => {
+          if (d.id === despesaParaEditar?.id) {
+            const novosComps = (d.comprovantes || []).filter((c) => c.id !== comprovanteId)
+            return { ...d, comprovantes: novosComps }
+          }
+          return d
+        })
+      )
+      toast.success(`Comprovante "${fileName}" removido com sucesso!`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao excluir comprovante"
+      toast.error(msg)
+    } finally {
+      setDeletingComprovanteId(null)
+    }
   }
 
   // Confirmar Edição de Despesa
@@ -2404,15 +2453,85 @@ function ExecucaoContent() {
                 </div>
               )}
 
-              <CampoNotaFiscal
-                numero={editarForm.numero_documento_fiscal}
-                onNumeroChange={(val) => setEditarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
-                arquivo={arquivoNfEditar}
-                onArquivoChange={setArquivoNfEditar}
-                labelNumero="Nº Nota Fiscal / Documento (Opcional)"
-                placeholderNumero="Ex: NF 10423"
-                idInput="edit_nf_file"
-              />
+              {/* Seção de Comprovantes Já Vinculados */}
+              <div className="space-y-2 p-3 rounded-lg border bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <FileTextIcon className="size-3.5 text-emerald-600" />
+                    Comprovantes / NFs Vinculadas ({comprovantesDaDespesaEditar.length})
+                  </Label>
+                  {comprovantesDaDespesaEditar.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Remova notas incorretas individualmente
+                    </span>
+                  )}
+                </div>
+
+                {comprovantesDaDespesaEditar.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2 text-center border border-dashed rounded-md">
+                    Nenhum comprovante anexado a este lançamento.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {comprovantesDaDespesaEditar.map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between p-2 rounded-md border bg-background text-xs gap-2"
+                      >
+                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                          <FileTextIcon className="size-4 text-emerald-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate text-foreground" title={c.file_name}>
+                              {c.file_name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {c.tipo_documento ? c.tipo_documento.replace(/_/g, " ") : "Documento"} • {formatDate(c.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[11px] gap-1"
+                            onClick={() => handleViewComprovante(c.storage_path)}
+                          >
+                            <ExternalLinkIcon className="size-3" />
+                            Abrir
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={deletingComprovanteId === c.id}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Excluir comprovante incorreto"
+                            onClick={() => handleExcluirComprovanteNaDespesa(c.id, c.storage_path, c.file_name)}
+                          >
+                            <Trash2Icon className="size-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Anexar Novo Arquivo / Substituição
+                </Label>
+                <CampoNotaFiscal
+                  numero={editarForm.numero_documento_fiscal}
+                  onNumeroChange={(val) => setEditarForm((prev) => ({ ...prev, numero_documento_fiscal: val }))}
+                  arquivo={arquivoNfEditar}
+                  onArquivoChange={setArquivoNfEditar}
+                  labelNumero="Nº Nota Fiscal / Documento (Opcional)"
+                  placeholderNumero="Ex: NF 10423"
+                  idInput="edit_nf_file"
+                />
+              </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="edit_obs">Observações</Label>

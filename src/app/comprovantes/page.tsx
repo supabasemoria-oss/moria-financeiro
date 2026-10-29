@@ -11,6 +11,7 @@ import {
   SearchIcon,
   XIcon,
   SlidersHorizontalIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,12 +36,14 @@ function ComprovantesContent() {
   const [comprovantes, setComprovantes] = useState<any[]>([])
   const [despesas, setDespesas] = useState<any[]>([])
   const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [filtroDespesaId, setFiltroDespesaId] = useState<string>(initialDespesaId)
   const [filtroProjeto, setFiltroProjeto] = useState<string>("ALL")
   const [filtroTipo, setFiltroTipo] = useState<string>("ALL")
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [selectedDespesaId, setSelectedDespesaId] = useState<string>(initialDespesaId)
   const [tipoDocumento, setTipoDocumento] = useState<any>("NOTA_FISCAL")
@@ -94,9 +97,31 @@ function ComprovantesContent() {
     }
   }
 
-  function handleViewOrDownload(storagePath: string, fileName: string) {
-    const url = mroscService.getComprovantePublicUrl(storagePath)
-    window.open(url, "_blank")
+  async function handleViewOrDownload(storagePath: string, fileName: string) {
+    try {
+      const url = await mroscService.getComprovanteUrl(storagePath)
+      window.open(url, "_blank")
+    } catch {
+      const url = mroscService.getComprovantePublicUrl(storagePath)
+      window.open(url, "_blank")
+    }
+  }
+
+  async function handleExcluirComprovante(id: string, storagePath: string, fileName: string) {
+    if (!window.confirm(`Tem certeza que deseja excluir o comprovante "${fileName}"?\nEsta ação removerá o arquivo permanentemente.`)) {
+      return
+    }
+    try {
+      setDeletingId(id)
+      await mroscService.deleteComprovante(id, storagePath)
+      toast.success(`Comprovante "${fileName}" excluído com sucesso!`)
+      loadData()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao excluir comprovante"
+      toast.error(msg)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const tipoLabelMap: Record<string, string> = {
@@ -110,8 +135,17 @@ function ComprovantesContent() {
     OUTRO: "Outro Documento",
   }
 
+  const despesaFiltrada = useMemo(() => {
+    if (!filtroDespesaId) return null
+    return despesas.find((d) => d.id === filtroDespesaId)
+  }, [despesas, filtroDespesaId])
+
   const comprovantesFiltrados = useMemo(() => {
     return comprovantes.filter((comp) => {
+      // 0. Filtro Despesa Específica (ex: via link da Execução Financeira)
+      if (filtroDespesaId && comp.despesa_id !== filtroDespesaId) {
+        return false
+      }
       // 1. Filtro Projeto
       if (filtroProjeto !== "ALL" && comp.despesas?.projeto_id !== filtroProjeto) {
         return false
@@ -140,11 +174,12 @@ function ComprovantesContent() {
       }
       return true
     })
-  }, [comprovantes, filtroProjeto, filtroTipo, searchTerm])
+  }, [comprovantes, filtroDespesaId, filtroProjeto, filtroTipo, searchTerm])
 
-  const hasFiltrosAtivos = filtroProjeto !== "ALL" || filtroTipo !== "ALL" || searchTerm.trim() !== ""
+  const hasFiltrosAtivos = filtroDespesaId !== "" || filtroProjeto !== "ALL" || filtroTipo !== "ALL" || searchTerm.trim() !== ""
 
   function limparFiltros() {
+    setFiltroDespesaId("")
     setFiltroProjeto("ALL")
     setFiltroTipo("ALL")
     setSearchTerm("")
@@ -273,6 +308,32 @@ function ComprovantesContent() {
         </Dialog>
         )}
       </div>
+
+      {filtroDespesaId && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 text-xs text-foreground">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileCheckIcon className="size-4 text-emerald-600 shrink-0" />
+            <span className="truncate">
+              Filtrando anexos da despesa:{" "}
+              <strong>
+                {despesaFiltrada
+                  ? `${despesaFiltrada.descricao}${despesaFiltrada.fornecedores?.razao_social_nome ? ` • ${despesaFiltrada.fornecedores.razao_social_nome}` : ""}`
+                  : filtroDespesaId}
+              </strong>
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 text-[11px] gap-1 self-start sm:self-auto shrink-0"
+            onClick={() => setFiltroDespesaId("")}
+          >
+            <XIcon className="size-3" />
+            Ver todos os comprovantes
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader className="pb-3 space-y-3">
@@ -438,15 +499,29 @@ function ComprovantesContent() {
                         {formatDate(comp.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => handleViewOrDownload(comp.storage_path, comp.file_name)}
-                        >
-                          <ExternalLinkIcon className="size-3" />
-                          Abrir
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => handleViewOrDownload(comp.storage_path, comp.file_name)}
+                          >
+                            <ExternalLinkIcon className="size-3" />
+                            Abrir
+                          </Button>
+                          {pode("comprovantes_anexar") && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deletingId === comp.id}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              title="Excluir comprovante"
+                              onClick={() => handleExcluirComprovante(comp.id, comp.storage_path, comp.file_name)}
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
