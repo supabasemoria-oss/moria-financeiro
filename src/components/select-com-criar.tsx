@@ -25,7 +25,9 @@ export function SelectComCriar({ value, onValueChange, opcoes, placeholder, labe
             {(val: string | null) => (val ? opcoes.find(o => o.id === val)?.label : null) || placeholder || "Selecione..."}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent
+          searchPlaceholder={placeholder ? `Buscar ${placeholder.toLowerCase().replace("selecione o ", "").replace("selecione a ", "").replace("selecione ", "")}...` : "Buscar..."}
+        >
           {opcoes.map(o => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>

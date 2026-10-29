@@ -4,7 +4,7 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
+import { ChevronDownIcon, CheckIcon, ChevronUpIcon, SearchIcon, XIcon } from "lucide-react"
 
 const Select = SelectPrimitive.Root
 
@@ -56,6 +56,54 @@ function SelectTrigger({
   )
 }
 
+function extrairTextoDoElemento(node: React.ReactNode): string {
+  if (typeof node === "string") return node
+  if (typeof node === "number") return String(node)
+  if (!node || typeof node !== "object") return ""
+  if (Array.isArray(node)) return node.map(extrairTextoDoElemento).join(" ")
+  if (React.isValidElement(node) && node.props) {
+    const props = node.props as { children?: React.ReactNode; label?: string; value?: string }
+    const partes: string[] = []
+    if (props.label) partes.push(String(props.label))
+    if (props.value) partes.push(String(props.value))
+    if (props.children) partes.push(extrairTextoDoElemento(props.children))
+    return partes.join(" ")
+  }
+  return ""
+}
+
+function filtrarFilhosSelect(children: React.ReactNode, query: string): React.ReactNode[] {
+  const term = query.trim().toLowerCase()
+  if (!term) return React.Children.toArray(children)
+
+  const resultado: React.ReactNode[] = []
+
+  React.Children.forEach(children, (child) => {
+    if (!child) return
+    if (React.isValidElement(child)) {
+      const childProps = child.props as any
+      if (childProps && childProps["data-slot"] === "select-group" && childProps.children) {
+        const subItems = filtrarFilhosSelect(childProps.children, query)
+        if (subItems.length > 0) {
+          resultado.push(React.cloneElement(child, { ...childProps, children: subItems } as any))
+        }
+        return
+      }
+
+      const texto = extrairTextoDoElemento(child).toLowerCase()
+      if (texto.includes(term)) {
+        resultado.push(child)
+      }
+    } else if (typeof child === "string" || typeof child === "number") {
+      if (String(child).toLowerCase().includes(term)) {
+        resultado.push(child)
+      }
+    }
+  })
+
+  return resultado
+}
+
 function SelectContent({
   className,
   children,
@@ -64,12 +112,35 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  searchable = true,
+  searchPlaceholder = "Buscar opção...",
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > & {
+    searchable?: boolean
+    searchPlaceholder?: string
+  }) {
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  const totalItens = React.useMemo(() => {
+    return React.Children.count(children)
+  }, [children])
+
+  const deveExibirBusca = searchable && totalItens >= 4
+
+  const itensFiltrados = React.useMemo(() => {
+    if (!deveExibirBusca || !searchQuery.trim()) {
+      return children
+    }
+    return filtrarFilhosSelect(children, searchQuery)
+  }, [children, searchQuery, deveExibirBusca])
+
+  const qtdFiltrada = React.Children.count(itensFiltrados)
+
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -83,11 +154,56 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn("relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn(
+            "relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) min-w-44 max-w-[90vw] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className
+          )}
           {...props}
         >
+          {deveExibirBusca && (
+            <div className="sticky top-0 z-20 bg-popover/95 backdrop-blur-xs p-1.5 border-b border-border">
+              <div className="relative flex items-center">
+                <SearchIcon className="absolute left-2 size-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation()
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder={searchPlaceholder}
+                  className="w-full pl-7 pr-7 py-1 text-xs bg-muted/50 rounded-md border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSearchQuery("")
+                      inputRef.current?.focus()
+                    }}
+                    className="absolute right-1.5 p-0.5 text-muted-foreground hover:text-foreground rounded"
+                    title="Limpar busca"
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.List>
+            {deveExibirBusca && searchQuery.trim() && qtdFiltrada === 0 ? (
+              <div className="py-6 px-3 text-center text-xs text-muted-foreground">
+                Nenhum resultado para &quot;{searchQuery}&quot;
+              </div>
+            ) : (
+              itensFiltrados
+            )}
+          </SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
