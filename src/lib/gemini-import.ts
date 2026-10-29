@@ -1090,9 +1090,11 @@ Retorne APENAS JSON válido com esta estrutura exata:
 
   // Garantir estrutura mínima
   if (!resultado.mapeamento) resultado.mapeamento = []
+  if (!resultado.preview) resultado.preview = []
   if (!resultado.linhas_secao) resultado.linhas_secao = []
   if (!resultado.linhas_ignorar) resultado.linhas_ignorar = []
   if (!resultado.linha_cabecalho) resultado.linha_cabecalho = 0
+  if (!resultado.fornecedores_detectados) resultado.fornecedores_detectados = []
 
   // Normalizar rubricas detectadas: garantir que periodo_meses e quantidade_postos estejam corretos
   if (resultado.rubricas_detectadas) {
@@ -1118,12 +1120,13 @@ Retorne APENAS JSON válido com esta estrutura exata:
     })
   }
 
-  // Gerar preview a partir das rubricas detectadas
-  if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 && resultado.preview?.length === 0) {
-    resultado.preview = resultado.rubricas_detectadas.slice(0, 5).map((r) => ({
+  // Gerar preview a partir das rubricas detectadas se estiver vazio
+  if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 && resultado.preview.length === 0) {
+    resultado.preview = resultado.rubricas_detectadas.slice(0, 10).map((r) => ({
       descricao: r.descricao,
       tipo: r.tipo,
       quantidade: String(r.quantidade),
+      unidade: r.unidade || "UN",
       valor_unitario: String(r.valor_unitario),
       periodo_meses: String(r.periodo_meses ?? ""),
       valor_total: String(r.valor_total),

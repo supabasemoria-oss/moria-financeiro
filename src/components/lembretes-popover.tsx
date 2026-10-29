@@ -28,7 +28,7 @@ export function LembretesPopover() {
 
   React.useEffect(() => {
     getCategoriasLembretesAsync().then((cats) => {
-      const ativas = cats.filter((c) => c.geraLembrete).map((c) => c.id)
+      const ativas = (cats || []).filter((c) => c.geraLembrete).map((c) => c.id)
       setCategoriasAtivas(new Set(ativas))
     })
   }, [])

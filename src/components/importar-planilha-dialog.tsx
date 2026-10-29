@@ -150,7 +150,7 @@ export function ImportarPlanilhaDialog({
       }
 
       setResultado(res)
-      setMapeamento(res.mapeamento)
+      setMapeamento(res.mapeamento || [])
 
       if (res.rubricas_detectadas && res.rubricas_detectadas.length > 0) {
         setAbaVisualizacao("pagamentos")
@@ -252,7 +252,7 @@ export function ImportarPlanilhaDialog({
                 ({ i }) =>
                   !linhasIgnorar.has(i) && i > resultado.linha_cabecalho
               )
-          : resultado.preview.map((p) => ({
+          : (resultado.preview || []).map((p) => ({
               row: [] as string[],
               i: -1,
               previewObj: p,
@@ -558,7 +558,7 @@ export function ImportarPlanilhaDialog({
                   )}
                   {resultado.rubricas_detectadas && (
                     <span>
-                      <strong className="text-foreground">Rubricas prontas:</strong> {resultado.rubricas_detectadas.length}
+                      <strong className="text-foreground">Rubricas prontas:</strong> {resultado.rubricas_detectadas.length || 0}
                     </span>
                   )}
                 </div>
@@ -704,7 +704,7 @@ export function ImportarPlanilhaDialog({
                     <SlidersHorizontalIcon className="size-3.5 text-blue-500" />
                     <span>Mapeamento de Colunas</span>
                     <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 text-muted-foreground font-semibold">
-                      {mapeamento.length}
+                      {mapeamento?.length || 0}
                     </span>
                   </button>
                 </div>
@@ -947,7 +947,7 @@ export function ImportarPlanilhaDialog({
             </div>
 
             {/* 5. Prévia de Rubricas */}
-            {resultado.preview.length > 0 && (
+            {(resultado.preview?.length || 0) > 0 && (
               <div>
                 <p className="text-xs font-medium mb-1.5 text-muted-foreground">
                   Prévia — amostra das primeiras rubricas a importar:
@@ -967,7 +967,7 @@ export function ImportarPlanilhaDialog({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {resultado.preview.map((row, i) => (
+                      {(resultado.preview || []).map((row, i) => (
                         <TableRow key={i}>
                           {CAMPOS_SISTEMA.map((c) => (
                             <TableCell
