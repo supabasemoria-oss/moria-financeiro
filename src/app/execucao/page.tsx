@@ -42,7 +42,7 @@ import { CriarRubricaDialog } from "@/components/dialogs/criar-rubrica-dialog"
 import { CampoNotaFiscal } from "@/components/campo-nota-fiscal"
 import { mroscService } from "@/lib/api/mrosc-service"
 import { usePermissoes } from "@/hooks/use-permissoes"
-import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento } from "@/lib/types"
+import type { Projeto, Rubrica, Fornecedor, Despesa, DespesaComRelacoes, ParcelaComRelacoes, ParcelaPagamento, ParcelaPagamentoUpdate } from "@/lib/types"
 import { formatCurrency, formatDate, formatCpfCnpj, getTodaySaoPaulo, diasRestantesSaoPaulo } from "@/lib/utils"
 import { maskCurrency, parseCurrency } from "@/lib/masks"
 import { toast } from "sonner"
@@ -125,34 +125,71 @@ function ExecucaoContent() {
     filterStatus !== "ALL" ||
     searchTerm.trim() !== ""
 
-  // Dialog Editar Parcela (Descrição)
+  // Dialog Editar Parcela (Número, Total, Vencimento, Valor, Descrição)
   const [openEditarParcela, setOpenEditarParcela] = useState(false)
   const [parcelaParaEditar, setParcelaParaEditar] = useState<ParcelaComRelacoes | null>(null)
   const [descricaoParcelaEdicao, setDescricaoParcelaEdicao] = useState("")
+  const [numeroParcelaEdicao, setNumeroParcelaEdicao] = useState<number>(1)
+  const [totalParcelasEdicao, setTotalParcelasEdicao] = useState<number>(1)
+  const [dataVencimentoEdicao, setDataVencimentoEdicao] = useState("")
+  const [valorPrevistoEdicao, setValorPrevistoEdicao] = useState("")
 
   function handleAbrirEditarParcela(parcela: ParcelaComRelacoes) {
     setParcelaParaEditar(parcela)
-    setDescricaoParcelaEdicao(parcela.descricao)
+    setDescricaoParcelaEdicao(parcela.descricao || "")
+    setNumeroParcelaEdicao(parcela.numero_parcela || 1)
+    setTotalParcelasEdicao(parcela.total_parcelas || 1)
+    setDataVencimentoEdicao(parcela.data_vencimento || "")
+    setValorPrevistoEdicao(maskCurrency(parcela.valor_previsto || 0))
     setOpenEditarParcela(true)
   }
 
-  async function handleSalvarDescricaoParcela() {
+  async function handleSalvarEdicaoParcela() {
     if (!parcelaParaEditar) return
     const novaDescricao = descricaoParcelaEdicao.trim()
     if (!novaDescricao) {
       toast.error("A descrição da parcela não pode ser vazia.")
       return
     }
+    const novoValor = parseCurrency(valorPrevistoEdicao)
+    if (novoValor <= 0) {
+      toast.error("O valor previsto deve ser maior que zero.")
+      return
+    }
+    if (!dataVencimentoEdicao) {
+      toast.error("Informe a data de vencimento.")
+      return
+    }
+    if (numeroParcelaEdicao < 1 || totalParcelasEdicao < 1 || numeroParcelaEdicao > totalParcelasEdicao) {
+      toast.error("O número da parcela deve ser válido (ex: 1 até total).")
+      return
+    }
 
     try {
       setSaving(true)
-      await mroscService.updateParcela(parcelaParaEditar.id, {
+      const payload: ParcelaPagamentoUpdate = {
         descricao: novaDescricao,
-      })
-      toast.success("Descrição da parcela atualizada com sucesso!")
+        numero_parcela: numeroParcelaEdicao,
+        total_parcelas: totalParcelasEdicao,
+        data_vencimento: dataVencimentoEdicao,
+        valor_previsto: novoValor,
+      }
+      await mroscService.updateParcela(parcelaParaEditar.id, payload)
+      toast.success("Parcela atualizada com sucesso!")
       setOpenEditarParcela(false)
       setParcelas((prev) =>
-        prev.map((p) => (p.id === parcelaParaEditar.id ? { ...p, descricao: novaDescricao } : p))
+        prev.map((p) =>
+          p.id === parcelaParaEditar.id
+            ? {
+                ...p,
+                descricao: novaDescricao,
+                numero_parcela: numeroParcelaEdicao,
+                total_parcelas: totalParcelasEdicao,
+                data_vencimento: dataVencimentoEdicao,
+                valor_previsto: novoValor,
+              }
+            : p
+        )
       )
       setParcelaParaEditar(null)
     } catch (e: unknown) {
@@ -1376,6 +1413,37 @@ function ExecucaoContent() {
           </CardContent>
         </Card>
 
+        {/* Banner Informativo se Projeto Selecionado Não Tiver Ordem de Início */}
+        {(() => {
+          if (filterProjeto === "ALL") return null
+          const pSel = projetos.find((p) => p.id === filterProjeto)
+          if (!pSel || pSel.data_ordem_inicio) return null
+          return (
+            <div className="rounded-xl border border-amber-300/80 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-950/30 p-4 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <AlertTriangleIcon className="size-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="text-sm font-semibold">
+                    Projeto em Fase Preparatória (Aguardando Ordem de Início)
+                  </h4>
+                  <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                    O cronograma e as parcelas a pagar deste projeto ficam ocultos no fluxo financeiro até que a <strong>Data da Ordem de Início (Marco Zero Financeiro)</strong> seja formalmente registrada.
+                  </p>
+                </div>
+              </div>
+              <Link href="/projetos">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-300 dark:border-amber-700 bg-white/80 dark:bg-amber-950/50 hover:bg-amber-100 text-amber-900 dark:text-amber-100 text-xs shrink-0"
+                >
+                  Definir Ordem de Início
+                </Button>
+              </Link>
+            </div>
+          )
+        })()}
+
         {/* Abas de Execução Financeira */}
         <Tabs
           value={activeTab}
@@ -1956,38 +2024,91 @@ function ExecucaoContent() {
       </div>
 
       {/* ==================================================== */}
-      {/* DIALOG 0: EDITAR DESCRIÇÃO DA PARCELA              */}
+      {/* DIALOG 0: EDITAR PARCELA DO CRONOGRAMA              */}
       {/* ==================================================== */}
       <Dialog open={openEditarParcela} onOpenChange={setOpenEditarParcela}>
-        <DialogContent className="w-[95vw] sm:max-w-[480px]">
+        <DialogContent className="w-[95vw] sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Editar Descrição da Obrigação</DialogTitle>
+            <DialogTitle>Editar Parcela do Cronograma</DialogTitle>
             <DialogDescription>
-              Modifique o texto identificador desta parcela para manter o cronograma alinhado ao plano de trabalho.
+              Ajuste o número da parcela, vencimento, valor previsto e descrição para alinhar ao plano de trabalho e à ordem de início.
             </DialogDescription>
           </DialogHeader>
 
           {parcelaParaEditar && (
-            <div className="grid gap-3 py-3">
+            <div className="grid gap-3 py-2">
               <div className="bg-muted/40 p-2.5 rounded-md border text-xs space-y-1">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Rubrica:</span>
-                  <span className="font-semibold text-foreground font-mono">
+                  <span className="font-semibold text-foreground font-mono truncate max-w-[280px]">
                     {parcelaParaEditar.rubricas_orcamentarias?.codigo_natureza_despesa} - {parcelaParaEditar.rubricas_orcamentarias?.descricao}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor Previsto:</span>
-                  <span className="font-bold text-emerald-600 font-mono">
-                    {formatCurrency(parcelaParaEditar.valor_previsto)}
-                  </span>
+                {parcelaParaEditar.projetos?.nome && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Projeto:</span>
+                    <span className="font-medium text-foreground truncate max-w-[280px]">
+                      {parcelaParaEditar.projetos.nome}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Número da Parcela / Total de Parcelas */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="numero_parcela_input">Número da Parcela *</Label>
+                  <Input
+                    id="numero_parcela_input"
+                    type="number"
+                    min={1}
+                    value={numeroParcelaEdicao}
+                    onChange={(e) => setNumeroParcelaEdicao(Math.max(1, parseInt(e.target.value) || 1))}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">Ex: 1, 2, 4 (posição)</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Vencimento:</span>
-                  <span>{formatDate(parcelaParaEditar.data_vencimento)}</span>
+
+                <div className="grid gap-1.5">
+                  <Label htmlFor="total_parcelas_input">Total de Parcelas *</Label>
+                  <Input
+                    id="total_parcelas_input"
+                    type="number"
+                    min={1}
+                    value={totalParcelasEdicao}
+                    onChange={(e) => setTotalParcelasEdicao(Math.max(1, parseInt(e.target.value) || 1))}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">Ex: 8 (total de meses)</p>
                 </div>
               </div>
 
+              {/* Data de Vencimento e Valor Previsto */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="data_vencimento_parcela_input">Data de Vencimento *</Label>
+                  <Input
+                    id="data_vencimento_parcela_input"
+                    type="date"
+                    value={dataVencimentoEdicao}
+                    onChange={(e) => setDataVencimentoEdicao(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label htmlFor="valor_previsto_parcela_input">Valor Previsto (R$) *</Label>
+                  <Input
+                    id="valor_previsto_parcela_input"
+                    value={valorPrevistoEdicao}
+                    onChange={(e) => setValorPrevistoEdicao(maskCurrency(e.target.value))}
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Descrição */}
               <div className="grid gap-1.5">
                 <Label htmlFor="descricao_parcela_input">Descrição da Obrigação / Parcela *</Label>
                 <Input
@@ -2006,11 +2127,11 @@ function ExecucaoContent() {
               Cancelar
             </Button>
             <Button
-              onClick={handleSalvarDescricaoParcela}
+              onClick={handleSalvarEdicaoParcela}
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
             >
-              {saving ? "Salvando..." : "Salvar Alteração"}
+              {saving ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </DialogFooter>
         </DialogContent>

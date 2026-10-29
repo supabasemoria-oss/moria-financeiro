@@ -18,7 +18,7 @@ interface Props {
   onCriado?: (p: Projeto) => void
 }
 
-const VAZIO = { nome: "", instituicao_id: "", numero_termo: "", data_inicio: "", data_fim: "", valor_total_aprovado: "", status: "EM_ANDAMENTO" as const }
+const VAZIO = { nome: "", instituicao_id: "", numero_termo: "", data_inicio: "", data_fim: "", data_ordem_inicio: "", valor_total_aprovado: "", status: "EM_ANDAMENTO" as const }
 
 export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
   const [saving, setSaving] = React.useState(false)
@@ -41,6 +41,7 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
         nome: form.nome, instituicao_id: form.instituicao_id,
         numero_termo: form.numero_termo || null,
         data_inicio: form.data_inicio, data_fim: form.data_fim,
+        data_ordem_inicio: form.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(form.valor_total_aprovado),
         status: form.status,
       })
@@ -91,6 +92,20 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2"><Label>Data Inicio *</Label><Input required type="date" value={form.data_inicio} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>
                 <div className="grid gap-2"><Label>Data Fim *</Label><Input required type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} /></div>
+              </div>
+              <div className="grid gap-1.5 p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20">
+                <Label htmlFor="pj-ordem" className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Data da Ordem de Início (Execução Financeira)
+                </Label>
+                <Input
+                  id="pj-ordem"
+                  type="date"
+                  value={form.data_ordem_inicio}
+                  onChange={e => setForm(p => ({ ...p, data_ordem_inicio: e.target.value }))}
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
+                </span>
               </div>
               <div className="grid gap-2">
                 <Label>Status</Label>

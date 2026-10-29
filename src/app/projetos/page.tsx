@@ -63,6 +63,7 @@ export default function ProjetosPage() {
     numero_termo: "",
     data_inicio: "",
     data_fim: "",
+    data_ordem_inicio: "",
     valor_total_aprovado: "",
     status: "EM_ANDAMENTO" as StatusProjeto,
   })
@@ -82,6 +83,7 @@ export default function ProjetosPage() {
     numero_termo: "",
     data_inicio: "",
     data_fim: "",
+    data_ordem_inicio: "",
     valor_total_aprovado: "",
     status: "EM_ANDAMENTO" as StatusProjeto,
   })
@@ -178,6 +180,7 @@ export default function ProjetosPage() {
         numero_termo: createFormData.numero_termo.trim() || null,
         data_inicio: createFormData.data_inicio,
         data_fim: createFormData.data_fim,
+        data_ordem_inicio: createFormData.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(createFormData.valor_total_aprovado),
         status: createFormData.status,
       })
@@ -188,6 +191,7 @@ export default function ProjetosPage() {
         numero_termo: "",
         data_inicio: "",
         data_fim: "",
+        data_ordem_inicio: "",
         valor_total_aprovado: "",
         status: "EM_ANDAMENTO",
       })
@@ -240,6 +244,7 @@ export default function ProjetosPage() {
       numero_termo: proj.numero_termo || "",
       data_inicio: proj.data_inicio || "",
       data_fim: proj.data_fim || "",
+      data_ordem_inicio: proj.data_ordem_inicio || "",
       valor_total_aprovado: proj.valor_total_aprovado ? maskCurrency(proj.valor_total_aprovado) : "",
       status: (proj.status as StatusProjeto) || "EM_ANDAMENTO",
     })
@@ -270,6 +275,7 @@ export default function ProjetosPage() {
         numero_termo: editFormData.numero_termo.trim() || null,
         data_inicio: editFormData.data_inicio,
         data_fim: editFormData.data_fim,
+        data_ordem_inicio: editFormData.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(editFormData.valor_total_aprovado),
         status: editFormData.status,
       })
@@ -514,6 +520,21 @@ export default function ProjetosPage() {
                       onChange={(e) => setCreateFormData({ ...createFormData, data_fim: e.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="grid gap-1.5 p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20">
+                  <Label htmlFor="data_ordem_inicio" className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    Data da Ordem de Início (Execução Financeira)
+                  </Label>
+                  <Input
+                    id="data_ordem_inicio"
+                    type="date"
+                    value={createFormData.data_ordem_inicio}
+                    onChange={(e) => setCreateFormData({ ...createFormData, data_ordem_inicio: e.target.value })}
+                  />
+                  <span className="text-[11px] text-muted-foreground">
+                    Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
+                  </span>
                 </div>
 
                 <div className="grid gap-2">
@@ -919,6 +940,21 @@ export default function ProjetosPage() {
                     onChange={(e) => setEditFormData({ ...editFormData, data_fim: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-1.5 p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20">
+                <Label htmlFor="edit_data_ordem" className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                  Data da Ordem de Início (Execução Financeira)
+                </Label>
+                <Input
+                  id="edit_data_ordem"
+                  type="date"
+                  value={editFormData.data_ordem_inicio}
+                  onChange={(e) => setEditFormData({ ...editFormData, data_ordem_inicio: e.target.value })}
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
+                </span>
               </div>
 
               <div className="grid gap-2">

@@ -46,32 +46,117 @@ export const mroscService = {
     if (error) err(error.message)
   },
 
-  // ?? Projetos ?????????????????????????????????????
+  // ── Gestão de Ordem de Início (Marco Zero Financeiro) ──
+  async getOrdensInicioMap(): Promise<Record<string, string>> {
+    const fallback: Record<string, string> = {
+      '7dbee6ff-142a-4862-ac8b-775399187fda': '2026-08-01',
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('moria_ordens_inicio')
+        if (local) {
+          const parsed = JSON.parse(local)
+          if (parsed && typeof parsed === 'object') return { ...fallback, ...parsed }
+        }
+      } catch {}
+    }
+    try {
+      const { data, error } = await supabase.storage.from('logos').download('projetos_ordem_inicio.json')
+      if (!error && data) {
+        const text = await data.text()
+        const parsed = JSON.parse(text)
+        if (parsed && typeof parsed === 'object') {
+          const merged = { ...fallback, ...parsed }
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('moria_ordens_inicio', JSON.stringify(merged))
+          }
+          return merged
+        }
+      }
+    } catch {}
+    return fallback
+  },
+
+  async setOrdemInicioProjeto(projetoId: string, dataOrdem: string | null): Promise<void> {
+    const map = await this.getOrdensInicioMap()
+    if (dataOrdem) {
+      map[projetoId] = dataOrdem
+    } else {
+      delete map[projetoId]
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('moria_ordens_inicio', JSON.stringify(map))
+      } catch {}
+    }
+    try {
+      const blob = new Blob([JSON.stringify(map, null, 2)], { type: 'application/json' })
+      await supabase.storage.from('logos').upload('projetos_ordem_inicio.json', blob, {
+        upsert: true,
+        cacheControl: '60',
+      })
+    } catch (e) {
+      console.warn('Aviso ao salvar ordens de início no Storage:', e)
+    }
+  },
+
+  // ── Projetos ─────────────────────────────────────
   async getProjetos(): Promise<ProjetoComInstituicao[]> {
-    const { data, error } = await supabase.from('projetos').select('*, instituicoes(*)').order('created_at', { ascending: false })
+    const [ordensMap, { data, error }] = await Promise.all([
+      this.getOrdensInicioMap(),
+      supabase.from('projetos').select('*, instituicoes(*)').order('created_at', { ascending: false }),
+    ])
     if (error) err(error.message)
-    return data as unknown as ProjetoComInstituicao[]
+    const list = (data || []).map((p: any) => ({
+      ...p,
+      data_ordem_inicio: ordensMap[p.id] || null,
+    }))
+    return list as unknown as ProjetoComInstituicao[]
   },
 
   async getProjeto(id: string): Promise<ProjetoComInstituicao | null> {
-    const { data, error } = await supabase.from('projetos').select('*, instituicoes(*)').eq('id', id).single()
-    if (error) return null
-    return data as unknown as ProjetoComInstituicao
+    const [ordensMap, { data, error }] = await Promise.all([
+      this.getOrdensInicioMap(),
+      supabase.from('projetos').select('*, instituicoes(*)').eq('id', id).single(),
+    ])
+    if (error || !data) return null
+    return {
+      ...(data as any),
+      data_ordem_inicio: ordensMap[id] || null,
+    } as unknown as ProjetoComInstituicao
   },
 
   async createProjeto(payload: ProjetoInsert): Promise<Projeto> {
-    const { data, error } = await supabase.from('projetos').insert(payload).select().single()
+    const { data_ordem_inicio, ...dbPayload } = payload
+    const { data, error } = await supabase.from('projetos').insert(dbPayload).select().single()
     if (error) err(error.message)
-    return data as Projeto
+    const projeto = data as Projeto
+    if (data_ordem_inicio) {
+      await this.setOrdemInicioProjeto(projeto.id, data_ordem_inicio)
+      projeto.data_ordem_inicio = data_ordem_inicio
+    }
+    return projeto
   },
 
   async updateProjeto(id: string, payload: Partial<ProjetoInsert>): Promise<Projeto> {
-    const { data, error } = await supabase.from('projetos').update(payload).eq('id', id).select().single()
-    if (error) err(error.message)
-    return data as Projeto
+    const { data_ordem_inicio, ...dbPayload } = payload
+    let projeto: Projeto | null = null
+    if (Object.keys(dbPayload).length > 0) {
+      const { data, error } = await supabase.from('projetos').update(dbPayload).eq('id', id).select().single()
+      if (error) err(error.message)
+      projeto = data as Projeto
+    } else {
+      projeto = await this.getProjeto(id)
+    }
+    if (data_ordem_inicio !== undefined) {
+      await this.setOrdemInicioProjeto(id, data_ordem_inicio)
+      if (projeto) projeto.data_ordem_inicio = data_ordem_inicio
+    }
+    return projeto!
   },
 
   async deleteProjeto(id: string): Promise<void> {
+    await this.setOrdemInicioProjeto(id, null)
     const { error } = await supabase.from('projetos').delete().eq('id', id)
     if (error) err(error.message)
   },
@@ -121,10 +206,10 @@ export const mroscService = {
     const { data, error } = await supabase.from('rubricas_orcamentarias').insert(insert).select().single()
     if (error) err(error.message)
     const rubrica = data as Rubrica
-    // Buscar projeto para data_inicio
-    const { data: proj } = await supabase.from('projetos').select('data_inicio').eq('id', rubrica.projeto_id).single()
-    if (proj) {
-      const parcelas = gerarParcelas(rubrica, proj.data_inicio)
+    // Buscar projeto para verificar Ordem de Início (marco zero financeiro)
+    const proj = await this.getProjeto(rubrica.projeto_id)
+    if (proj && proj.data_ordem_inicio) {
+      const parcelas = gerarParcelas(rubrica, proj.data_ordem_inicio)
       if (parcelas.length > 0) {
         await supabase.from('parcelas_pagamento').insert(parcelas.map((p) => ({ ...p, rubrica_id: rubrica.id, projeto_id: rubrica.projeto_id })))
       }
@@ -268,10 +353,19 @@ export const mroscService = {
       const d = String(limite.getDate()).padStart(2, '0')
       q = q.lte('data_vencimento', `${ano}-${m}-${d}`) as typeof q
     }
-    const { data, error } = await q.order('data_vencimento')
+    const [ordensMap, { data, error }] = await Promise.all([
+      this.getOrdensInicioMap(),
+      q.order('data_vencimento'),
+    ])
     if (error) err(error.message)
-    // Recalcular status e persistir mudancas
-    const parcelas = (data ?? []) as unknown as ParcelaComRelacoes[]
+    const todas = (data ?? []) as unknown as ParcelaComRelacoes[]
+    todas.forEach((p) => {
+      if (p.projetos) {
+        p.projetos.data_ordem_inicio = ordensMap[p.projetos.id] || null
+      }
+    })
+    // Regra: enquanto um projeto não tiver Ordem de Início, suas parcelas não são listadas
+    const parcelas = todas.filter((p) => !p.projeto_id || Boolean(ordensMap[p.projeto_id]))
     const atualizadas = parcelas.filter((p) => {
       if (p.status === 'PAGO' || p.status === 'CANCELADO') return false
       const dias = diffDias(p.data_vencimento)
