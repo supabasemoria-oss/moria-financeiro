@@ -253,6 +253,8 @@ function ExecucaoContent() {
   // Ações em Lote (Batch) de Parcelas
   const [selectedParcelas, setSelectedParcelas] = useState<Set<string>>(new Set())
   const [openQuitarLote, setOpenQuitarLote] = useState(false)
+  const [openAlterarVencimentoLote, setOpenAlterarVencimentoLote] = useState(false)
+  const [dataVencimentoLote, setDataVencimentoLote] = useState(getTodaySaoPaulo())
   const [arquivoNfQuitarLote, setArquivoNfQuitarLote] = useState<File | null>(null)
   const [quitarLoteForm, setQuitarLoteForm] = useState({
     fornecedor_id: "",
@@ -813,6 +815,49 @@ function ExecucaoContent() {
       refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erro ao remover parcelas em lote"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Atalho para adicionar meses ao vencimento em lote (ideal para pausas e retomadas)
+  function aplicarAtalhoMesesLote(meses: number) {
+    const hoje = new Date()
+    hoje.setMonth(hoje.getMonth() + meses)
+    const yyyy = hoje.getFullYear()
+    const mm = String(hoje.getMonth() + 1).padStart(2, "0")
+    const dd = String(hoje.getDate()).padStart(2, "0")
+    setDataVencimentoLote(`${yyyy}-${mm}-${dd}`)
+  }
+
+  // Confirmar Alteração de Vencimento em Lote
+  async function handleConfirmarAlterarVencimentoLote() {
+    const pendentes = selectedParcelasObjs.filter((p) => p.status !== "PAGO")
+    if (pendentes.length === 0) {
+      toast.error("Nenhuma parcela pendente selecionada para alterar vencimento.")
+      return
+    }
+    if (!dataVencimentoLote) {
+      toast.error("Informe a nova data de vencimento.")
+      return
+    }
+
+    try {
+      setSaving(true)
+      for (const parcela of pendentes) {
+        await mroscService.updateParcela(parcela.id, {
+          data_vencimento: dataVencimentoLote,
+        })
+      }
+      toast.success(
+        `${pendentes.length} parcela(s) tiveram o vencimento atualizado para ${formatDate(dataVencimentoLote)}!`
+      )
+      setOpenAlterarVencimentoLote(false)
+      setSelectedParcelas(new Set())
+      refreshMovimentacoes(filterProjeto, filterFornecedor, filterStatus, filterRubrica)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao alterar vencimento em lote"
       toast.error(msg)
     } finally {
       setSaving(false)
@@ -1563,6 +1608,21 @@ function ExecucaoContent() {
                             >
                               <CheckCircle2Icon className="size-3.5" />
                               Quitar Selecionadas ({selectedParcelasObjs.filter((p) => p.status !== "PAGO").length})
+                            </Button>
+                          )}
+
+                          {pode("despesas_lancar") && hasPendentesSelected && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setDataVencimentoLote(getTodaySaoPaulo())
+                                setOpenAlterarVencimentoLote(true)
+                              }}
+                              className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10 gap-1.5 font-medium"
+                            >
+                              <CalendarDaysIcon className="size-3.5" />
+                              Alterar Vencimento ({selectedParcelasObjs.filter((p) => p.status !== "PAGO").length})
                             </Button>
                           )}
 
@@ -2438,6 +2498,133 @@ function ExecucaoContent() {
               className="bg-emerald-600 hover:bg-emerald-500 text-white"
             >
               {saving ? "Processando Lote..." : "Confirmar Quitação em Lote"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================================================== */}
+      {/* DIALOG: ALTERAR VENCIMENTO EM LOTE (RETOMADA/PAUSA) */}
+      {/* ==================================================== */}
+      <Dialog open={openAlterarVencimentoLote} onOpenChange={setOpenAlterarVencimentoLote}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDaysIcon className="size-5 text-primary" />
+              Alterar Vencimento em Lote
+            </DialogTitle>
+            <DialogDescription>
+              Defina uma nova data de vencimento para as parcelas pendentes selecionadas. Ideal para reprogramar cronogramas após paralisações ou termos aditivos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 text-xs space-y-1.5 my-2">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Parcelas Selecionadas:</span>
+              <span className="font-semibold text-foreground font-mono">
+                {selectedParcelasObjs.filter((p) => p.status !== "PAGO").length} pendente(s)
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Total Previsto das Parcelas:</span>
+              <span className="font-bold text-primary font-mono text-sm">
+                {formatCurrency(
+                  selectedParcelasObjs
+                    .filter((p) => p.status !== "PAGO")
+                    .reduce((acc, curr) => acc + (curr.valor_previsto || 0), 0)
+                )}
+              </span>
+            </div>
+            <div className="max-h-24 overflow-y-auto pt-1 space-y-1 border-t border-primary/20 text-[11px] text-muted-foreground">
+              {selectedParcelasObjs
+                .filter((p) => p.status !== "PAGO")
+                .map((p) => (
+                  <div key={p.id} className="flex justify-between">
+                    <span className="truncate max-w-[280px]">
+                      {p.numero_parcela}/{p.total_parcelas} - {p.descricao}
+                    </span>
+                    <span className="font-mono text-foreground">
+                      Atual: {formatDate(p.data_vencimento)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="nova_data_vencimento_lote">Nova Data de Vencimento *</Label>
+              <Input
+                id="nova_data_vencimento_lote"
+                type="date"
+                value={dataVencimentoLote}
+                onChange={(e) => setDataVencimentoLote(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-muted-foreground font-medium">Atalhos rápidos de reagendamento:</span>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDataVencimentoLote(getTodaySaoPaulo())}
+                  className="h-7 text-[11px] px-2"
+                >
+                  Hoje
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => aplicarAtalhoMesesLote(1)}
+                  className="h-7 text-[11px] px-2"
+                >
+                  +1 Mês
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => aplicarAtalhoMesesLote(2)}
+                  className="h-7 text-[11px] px-2"
+                >
+                  +2 Meses
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => aplicarAtalhoMesesLote(3)}
+                  className="h-7 text-[11px] px-2"
+                >
+                  +3 Meses
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => aplicarAtalhoMesesLote(5)}
+                  className="h-7 text-[11px] px-2 font-medium text-primary border-primary/40 bg-primary/5"
+                >
+                  +5 Meses (Retomada)
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenAlterarVencimentoLote(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarAlterarVencimentoLote}
+              disabled={saving}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {saving ? "Atualizando Parcelas..." : "Salvar Vencimento em Lote"}
             </Button>
           </DialogFooter>
         </DialogContent>
