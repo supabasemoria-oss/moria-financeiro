@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, Suspense } from "react"
+import { useEffect, useState, useMemo, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import {
   FileCheckIcon,
@@ -8,6 +8,9 @@ import {
   FileTextIcon,
   ExternalLinkIcon,
   FilterIcon,
+  SearchIcon,
+  XIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,6 +36,8 @@ function ComprovantesContent() {
   const [despesas, setDespesas] = useState<any[]>([])
   const [projetos, setProjetos] = useState<Projeto[]>([])
   const [filtroProjeto, setFiltroProjeto] = useState<string>("ALL")
+  const [filtroTipo, setFiltroTipo] = useState<string>("ALL")
+  const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -103,6 +108,46 @@ function ComprovantesContent() {
     CONTRATO: "Contrato de Prestação",
     COTACAO: "Cotação de Preços (3 orçamentos)",
     OUTRO: "Outro Documento",
+  }
+
+  const comprovantesFiltrados = useMemo(() => {
+    return comprovantes.filter((comp) => {
+      // 1. Filtro Projeto
+      if (filtroProjeto !== "ALL" && comp.despesas?.projeto_id !== filtroProjeto) {
+        return false
+      }
+      // 2. Filtro Tipo
+      if (filtroTipo !== "ALL" && comp.tipo_documento !== filtroTipo) {
+        return false
+      }
+      // 3. Busca Textual
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim()
+        const nomeArq = (comp.file_name || comp.arquivo_nome || "").toLowerCase()
+        const descDesp = (comp.despesas?.descricao || "").toLowerCase()
+        const numDoc = (comp.despesas?.numero_documento_fiscal || "").toLowerCase()
+        const forn = (comp.despesas?.fornecedores?.razao_social_nome || "").toLowerCase()
+        const proj = (comp.despesas?.projetos?.nome || "").toLowerCase()
+        if (
+          !nomeArq.includes(term) &&
+          !descDesp.includes(term) &&
+          !numDoc.includes(term) &&
+          !forn.includes(term) &&
+          !proj.includes(term)
+        ) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [comprovantes, filtroProjeto, filtroTipo, searchTerm])
+
+  const hasFiltrosAtivos = filtroProjeto !== "ALL" || filtroTipo !== "ALL" || searchTerm.trim() !== ""
+
+  function limparFiltros() {
+    setFiltroProjeto("ALL")
+    setFiltroTipo("ALL")
+    setSearchTerm("")
   }
 
   return (
@@ -230,27 +275,64 @@ function ComprovantesContent() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <CardTitle className="text-base font-semibold">Repositório Digital de Comprovantes</CardTitle>
-            <CardDescription className="text-xs">
-              Documentos organizados e preparados para prestação de contas no Transferegov.
-            </CardDescription>
+        <CardHeader className="pb-3 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold">Repositório Digital de Comprovantes</CardTitle>
+              <CardDescription className="text-xs">
+                {comprovantesFiltrados.length === comprovantes.length
+                  ? `Total de ${comprovantes.length} documento(s) arquivado(s).`
+                  : `Exibindo ${comprovantesFiltrados.length} de ${comprovantes.length} comprovante(s).`}
+              </CardDescription>
+            </div>
+
+            {hasFiltrosAtivos && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={limparFiltros}
+                className="h-7 text-xs text-muted-foreground hover:text-destructive px-2 self-start sm:self-auto gap-1"
+              >
+                <XIcon className="size-3.5" />
+                Limpar todos os filtros
+              </Button>
+            )}
           </div>
 
-          {/* Filtro por Projeto */}
-          <div className="flex items-center gap-2">
-            <FilterIcon className="size-3.5 text-muted-foreground shrink-0" />
-            <div className="w-56 sm:w-64 max-w-full">
+          {/* BARRA DE FILTROS E BUSCA */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t">
+            {/* 1. Busca Textual */}
+            <div className="relative sm:col-span-2 lg:col-span-2">
+              <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome do arquivo, NFe, despesa ou fornecedor..."
+                className="pl-8 pr-8 h-9 text-xs"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <XIcon className="size-4" />
+                </button>
+              )}
+            </div>
+
+            {/* 2. Filtro por Projeto */}
+            <div>
               <Select value={filtroProjeto} onValueChange={(val) => setFiltroProjeto(val ?? "ALL")}>
-                <SelectTrigger className="h-8 text-xs w-full max-w-full overflow-hidden">
-                  <SelectValue placeholder="Filtrar por projeto">
+                <SelectTrigger className="h-9 text-xs w-full max-w-full overflow-hidden">
+                  <FilterIcon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Projeto">
                     {(val) => {
                       if (!val || val === "ALL") return "Todos os Projetos"
                       const p = projetos.find((item) => item.id === val)
                       const nome = p?.nome ?? val
                       return (
-                        <span className="truncate block max-w-[190px]" title={nome}>
+                        <span className="truncate block max-w-[170px]" title={nome}>
                           {nome}
                         </span>
                       )
@@ -267,44 +349,54 @@ function ComprovantesContent() {
                 </SelectContent>
               </Select>
             </div>
-            {filtroProjeto !== "ALL" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFiltroProjeto("ALL")}
-                className="h-8 text-xs text-muted-foreground hover:text-destructive px-2"
-                title="Limpar filtro de projeto"
-              >
-                Limpar
-              </Button>
-            )}
+
+            {/* 3. Filtro por Tipificação */}
+            <div>
+              <Select value={filtroTipo} onValueChange={(val) => setFiltroTipo(val ?? "ALL")}>
+                <SelectTrigger className="h-9 text-xs w-full max-w-full overflow-hidden">
+                  <SlidersHorizontalIcon className="size-3.5 mr-1.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Tipificação">
+                    {(val) => {
+                      if (!val || val === "ALL") return "Todas as Tipificações"
+                      return tipoLabelMap[val] || val
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas as Tipificações</SelectItem>
+                  <SelectItem value="NOTA_FISCAL">Nota Fiscal (DANFE)</SelectItem>
+                  <SelectItem value="RECIBO">Recibo de Pagamento (RPA)</SelectItem>
+                  <SelectItem value="COMPROVANTE_PIX">Comprovante Pix / TED</SelectItem>
+                  <SelectItem value="FOLHA_PAGAMENTO">Folha de Pagamento / Holerite</SelectItem>
+                  <SelectItem value="GUIA_IMPOSTO">Guia de Imposto (GPS / DARF / FGTS)</SelectItem>
+                  <SelectItem value="CONTRATO">Contrato / Termo</SelectItem>
+                  <SelectItem value="COTACAO">Cotação de Preços</SelectItem>
+                  <SelectItem value="OUTRO">Outro Comprovante</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Carregando repositório...</div>
-          ) : (() => {
-            const comprovantesFiltrados = comprovantes.filter((comp) => {
-              if (filtroProjeto === "ALL") return true
-              return comp.despesas?.projeto_id === filtroProjeto
-            })
-
-            if (comprovantesFiltrados.length === 0) {
-              return (
-                <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <FileCheckIcon className="size-10 text-muted-foreground/40 mb-3" />
-                  <p className="text-sm font-medium">Nenhum comprovante encontrado</p>
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">
-                    {filtroProjeto !== "ALL"
-                      ? "Não há comprovantes anexados para o projeto selecionado."
-                      : "Faça o upload dos arquivos digitais para manter a auditoria fiscal 100% regular."}
-                  </p>
-                </div>
-              )
-            }
-
-            return (
-              <Table>
+          ) : comprovantesFiltrados.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <FileCheckIcon className="size-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm font-medium">Nenhum comprovante encontrado</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-4">
+                {hasFiltrosAtivos
+                  ? "Tente ajustar ou limpar os filtros para localizar os documentos."
+                  : "Faça o upload dos arquivos digitais para manter a auditoria fiscal 100% regular."}
+              </p>
+              {hasFiltrosAtivos && (
+                <Button variant="outline" size="sm" onClick={limparFiltros} className="text-xs h-8">
+                  Limpar todos os filtros
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Arquivo</TableHead>
@@ -360,8 +452,7 @@ function ComprovantesContent() {
                   ))}
                 </TableBody>
               </Table>
-            )
-          })()}
+            )}
         </CardContent>
       </Card>
     </div>
