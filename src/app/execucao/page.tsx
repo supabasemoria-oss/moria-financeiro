@@ -1694,7 +1694,6 @@ function ExecucaoContent() {
                           <TableHead>Descrição da Obrigação</TableHead>
                           <TableHead>Rubrica Orçamentária</TableHead>
                           <TableHead className="text-right">Valor Previsto</TableHead>
-                          <TableHead className="text-center">Status</TableHead>
                           <TableHead className="text-right">Ação de Liquidação</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1731,14 +1730,25 @@ function ExecucaoContent() {
                               <div className="font-medium">
                                 {formatDate(parcela.data_vencimento)}
                               </div>
-                              {atrasado && (
-                                <Badge variant="destructive" className="text-[10px] mt-0.5 h-4 px-1.5">
+                              {parcela.status === "PAGO" ? (
+                                <Badge className="text-[10px] mt-0.5 h-4 px-1.5 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 flex items-center gap-1 w-fit">
+                                  <CheckCircle2Icon className="size-2.5" />
+                                  Pago
+                                </Badge>
+                              ) : atrasado ? (
+                                <Badge variant="destructive" className="text-[10px] mt-0.5 h-4 px-1.5 flex items-center gap-1 w-fit">
+                                  <AlertTriangleIcon className="size-2.5" />
                                   Atrasado ({Math.abs(dias)}d)
                                 </Badge>
-                              )}
-                              {venceHoje && (
-                                <Badge className="text-[10px] mt-0.5 h-4 px-1.5 bg-amber-500 text-white">
+                              ) : venceHoje ? (
+                                <Badge className="text-[10px] mt-0.5 h-4 px-1.5 bg-amber-500 text-white flex items-center gap-1 w-fit">
+                                  <ClockIcon className="size-2.5" />
                                   Vence Hoje
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] mt-0.5 h-4 px-1.5 text-amber-600 border-amber-500/30 bg-amber-500/10 flex items-center gap-1 w-fit">
+                                  <ClockIcon className="size-2.5" />
+                                  Pendente
                                 </Badge>
                               )}
                             </TableCell>
@@ -1775,25 +1785,6 @@ function ExecucaoContent() {
 
                             <TableCell className="text-right font-bold text-foreground font-mono">
                               {formatCurrency(parcela.valor_previsto)}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {parcela.status === "PAGO" ? (
-                                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs">
-                                  <CheckCircle2Icon className="size-3 mr-1" />
-                                  Pago
-                                </Badge>
-                              ) : atrasado ? (
-                                <Badge variant="destructive" className="text-xs">
-                                  <AlertTriangleIcon className="size-3 mr-1" />
-                                  Atrasado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/30 bg-amber-500/10">
-                                  <ClockIcon className="size-3 mr-1" />
-                                  Pendente
-                                </Badge>
-                              )}
                             </TableCell>
 
                             <TableCell className="text-right whitespace-nowrap">
