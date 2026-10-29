@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { UsersIcon, PlusIcon, Trash2Icon, CreditCardIcon, LandmarkIcon, PencilIcon } from "lucide-react"
+import { useEffect, useState, useMemo } from "react"
+import { UsersIcon, PlusIcon, Trash2Icon, CreditCardIcon, LandmarkIcon, PencilIcon, SearchIcon, XIcon } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +23,7 @@ export default function FornecedoresPage() {
   const { pode } = usePermissoes()
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
   const [open, setOpen] = useState(false)
   const [openEditar, setOpenEditar] = useState(false)
   const [fornecedorEditando, setFornecedorEditando] = useState<Fornecedor | null>(null)
@@ -109,6 +110,26 @@ export default function FornecedoresPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  const fornecedoresFiltrados = useMemo(() => {
+    if (!searchTerm.trim()) return fornecedores
+    const term = searchTerm.toLowerCase().trim()
+    const termDigits = term.replace(/\D/g, "")
+    return fornecedores.filter((f) => {
+      const nome = (f.razao_social_nome || "").toLowerCase()
+      const doc = (f.cpf_cnpj || "").toLowerCase()
+      const docDigits = doc.replace(/\D/g, "")
+      const chave = (f.chave_pix || "").toLowerCase()
+      const banco = (f.banco || "").toLowerCase()
+      return (
+        nome.includes(term) ||
+        doc.includes(term) ||
+        (termDigits.length > 0 && docDigits.includes(termDigits)) ||
+        chave.includes(term) ||
+        banco.includes(term)
+      )
+    })
+  }, [fornecedores, searchTerm])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -301,10 +322,35 @@ export default function FornecedoresPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Fornecedores Homologados</CardTitle>
-          <CardDescription className="text-xs">
-            Lista de credores aptos a receberem pagamentos das rubricas dos projetos.
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-semibold">Fornecedores Homologados</CardTitle>
+              <CardDescription className="text-xs">
+                {fornecedoresFiltrados.length === fornecedores.length
+                  ? `Total de ${fornecedores.length} credor(es) cadastrado(s).`
+                  : `Exibindo ${fornecedoresFiltrados.length} de ${fornecedores.length} fornecedor(es).`}
+              </CardDescription>
+            </div>
+
+            <div className="relative w-full sm:w-72">
+              <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, CPF/CNPJ, Pix ou banco..."
+                className="pl-8 pr-8 h-9 text-xs"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <XIcon className="size-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -316,6 +362,22 @@ export default function FornecedoresPage() {
               <p className="text-xs text-muted-foreground mt-1 mb-4">
                 Cadastre os fornecedores para vincular notas fiscais e comprovantes de pagamento.
               </p>
+            </div>
+          ) : fornecedoresFiltrados.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <SearchIcon className="size-8 text-muted-foreground/40 mb-2" />
+              <p className="text-sm font-medium">Nenhum fornecedor encontrado</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Não encontramos fornecedores para o termo &quot;{searchTerm}&quot;.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setSearchTerm("")}
+              >
+                Limpar busca
+              </Button>
             </div>
           ) : (
             <Table>
@@ -329,7 +391,7 @@ export default function FornecedoresPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {fornecedores.map((forn) => (
+                {fornecedoresFiltrados.map((forn) => (
                   <TableRow key={forn.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
