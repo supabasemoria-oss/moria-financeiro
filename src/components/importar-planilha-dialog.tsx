@@ -466,7 +466,10 @@ export function ImportarPlanilhaDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       {trigger && <DialogTrigger render={trigger as React.ReactElement} />}
-      <DialogContent className="w-[96vw] max-w-7xl 2xl:max-w-[1550px] h-[92vh] max-h-[94vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent
+        className="w-[95vw] sm:max-w-[95vw] lg:max-w-7xl 2xl:max-w-[1500px] h-[92vh] max-h-[94vh] flex flex-col p-0 gap-0 overflow-hidden"
+        style={{ width: "95vw", maxWidth: "1500px", height: "92vh", maxHeight: "94vh" }}
+      >
         {/* Header fixo no topo com cantos protegidos */}
         <div className="p-6 pb-4 border-b shrink-0 pr-12">
           <DialogHeader>
