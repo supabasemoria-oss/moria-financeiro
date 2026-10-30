@@ -224,7 +224,13 @@ export const mroscService = {
   async createRubrica(payload: RubricaInsert): Promise<Rubrica> {
     const qtd = payload.quantidade ?? 1
     const vlUnit = payload.valor_unitario ?? 0
-    const insert = { ...payload, quantidade: qtd, valor_unitario: vlUnit, valor_total: qtd * vlUnit }
+    const vlTotal =
+      payload.valor_total !== undefined && payload.valor_total !== null && Number(payload.valor_total) > 0
+        ? Number(payload.valor_total)
+        : (payload.tipo_pagamento === 'RECORRENTE' && payload.num_parcelas && payload.num_parcelas > 1
+            ? qtd * vlUnit * payload.num_parcelas
+            : qtd * vlUnit)
+    const insert = { ...payload, quantidade: qtd, valor_unitario: vlUnit, valor_total: vlTotal }
     const { data, error } = await supabase.from('rubricas_orcamentarias').insert(insert).select().single()
     if (error) err(error.message)
     const rubrica = data as Rubrica

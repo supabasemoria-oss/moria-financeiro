@@ -284,6 +284,11 @@ export function ImportarPlanilhaDialog({
             vigenciaMesesProjeto,
           })
 
+          const vlTotalCalculado =
+            rub.valor_total && rub.valor_total > 0
+              ? rub.valor_total
+              : rub.quantidade * rub.valor_unitario * (tipoPagamento === "RECORRENTE" && meses > 1 ? meses : 1)
+
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
             descricao: rub.descricao,
@@ -292,6 +297,7 @@ export function ImportarPlanilhaDialog({
             quantidade: rub.quantidade,
             unidade: rub.unidade || "UN",
             valor_unitario: rub.valor_unitario,
+            valor_total: vlTotalCalculado,
             tipo_pagamento: tipoPagamento,
             num_parcelas: meses,
             frequencia_meses: 1,
@@ -334,15 +340,23 @@ export function ImportarPlanilhaDialog({
             vigenciaMesesProjeto,
           })
 
+          const qtdNum = isNaN(quantidade) ? 1 : quantidade
+          const vlUnitNum = isNaN(valor_unitario) ? 0 : valor_unitario
+          const vlTotalCalculado =
+            tipoPagamento === "RECORRENTE" && numParcelas > 1
+              ? qtdNum * vlUnitNum * numParcelas
+              : qtdNum * vlUnitNum
+
           await mroscService.createRubrica({
             projeto_id: targetProjetoId,
             descricao,
             codigo_natureza_despesa:
               obj.codigo_natureza_despesa?.trim() || "33903900",
             tipo: (obj.tipo?.toUpperCase() as any) || "SERVICO",
-            quantidade: isNaN(quantidade) ? 1 : quantidade,
+            quantidade: qtdNum,
             unidade: obj.unidade?.trim() || "UN",
-            valor_unitario: isNaN(valor_unitario) ? 0 : valor_unitario,
+            valor_unitario: vlUnitNum,
+            valor_total: vlTotalCalculado,
             tipo_pagamento: tipoPagamento,
             num_parcelas: numParcelas,
             frequencia_meses: 1,

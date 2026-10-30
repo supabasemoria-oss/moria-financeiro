@@ -634,7 +634,7 @@ function ExecucaoContent() {
       {
         id: Math.random().toString(36).substring(2, 9),
         fornecedor_id: currentForns[0]?.id || "",
-        valor: maskCurrency(String(Math.round(parcela.valor_previsto * 100))),
+        valor: maskCurrency(parcela.valor_previsto || 0),
         numero_documento_fiscal: "",
         observacoes: "",
         arquivo: null,

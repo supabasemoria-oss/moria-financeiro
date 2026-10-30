@@ -36,18 +36,16 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
     if (!form.nome || !form.instituicao_id || !form.data_inicio || !form.data_fim || !form.valor_total_aprovado) {
       toast.error("Preencha todos os campos obrigatorios."); return
     }
+    if (form.data_ordem_inicio && form.data_ordem_inicio < form.data_inicio) {
+      toast.error("A Data da Ordem de Início (execução financeira) não pode ser anterior ao Início da Vigência.")
+      return
+    }
     setSaving(true)
     try {
-      let dataInicioFinal = form.data_inicio
-      if (form.data_ordem_inicio && form.data_ordem_inicio < dataInicioFinal) {
-        dataInicioFinal = form.data_ordem_inicio
-        toast.info("Início de vigência ajustado para coincidir com a Ordem de Início (Regra MROSC).")
-      }
-
       const novo = await mroscService.createProjeto({
         nome: form.nome, instituicao_id: form.instituicao_id,
         numero_termo: form.numero_termo || null,
-        data_inicio: dataInicioFinal, data_fim: form.data_fim,
+        data_inicio: form.data_inicio, data_fim: form.data_fim,
         data_ordem_inicio: form.data_ordem_inicio || null,
         valor_total_aprovado: parseCurrency(form.valor_total_aprovado),
         status: form.status,
@@ -116,20 +114,13 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
                   Marco zero das contas a pagar e contratações. Enquanto não preenchida, o projeto fica aguardando e suas parcelas não aparecem listadas.
                 </span>
                 {form.data_ordem_inicio && form.data_inicio && form.data_ordem_inicio < form.data_inicio && (
-                  <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs mt-1">
-                    <AlertTriangleIcon className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="flex items-start gap-2 p-2 rounded border border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200 text-xs mt-1">
+                    <AlertTriangleIcon className="size-4 shrink-0 text-rose-600 mt-0.5" />
                     <div className="flex-1 space-y-1">
                       <p className="font-semibold text-[11px]">Inconsistência MROSC: Início da Vigência posterior à Ordem de Início</p>
                       <p className="text-[11px] leading-tight text-muted-foreground">
-                        A Ordem de Início ({formatDate(form.data_ordem_inicio)}) não pode ocorrer antes do Início de Vigência ({formatDate(form.data_inicio)}). Pela Lei 13.019/2014, nenhuma despesa pode ser executada fora da vigência.
+                        A Ordem de Início ({formatDate(form.data_ordem_inicio)}) não pode ocorrer antes do Início de Vigência ({formatDate(form.data_inicio)}). Conforme a Lei 13.019/2014, o início da execução financeira só pode ocorrer a partir da vigência do termo.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({ ...prev, data_inicio: prev.data_ordem_inicio }))}
-                        className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 underline hover:no-underline cursor-pointer"
-                      >
-                        Ajustar Início de Vigência para {formatDate(form.data_ordem_inicio)}
-                      </button>
                     </div>
                   </div>
                 )}
