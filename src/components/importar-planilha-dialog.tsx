@@ -158,14 +158,10 @@ export function ImportarPlanilhaDialog({
         setAbaVisualizacao("colunas")
       }
 
-      // Se temos projetoId passado via prop, focar nele; caso contrário, se a planilha tiver dados de proposta/OSC, focar em auto_criar
+      // O padrão da importação é sempre auto-criar e autovincular um novo projeto
+      setModoDestino("auto_criar")
       if (projetoId) {
-        setModoDestino("existente")
         setProjetoSelecionadoId(projetoId)
-      } else if (res.metadados?.proposta_numero || res.metadados?.osc_nome) {
-        setModoDestino("auto_criar")
-      } else {
-        setModoDestino("existente")
       }
 
       setEtapa("validando")
@@ -215,8 +211,11 @@ export function ImportarPlanilhaDialog({
 
       // 1. Vincular ou Auto-criar Instituição e Projeto se solicitado
       if (modoDestino === "auto_criar" || !targetProjetoId) {
-        if (!resultado.metadados?.osc_nome && !resultado.metadados?.proposta_numero && !targetProjetoId) {
-          throw new Error("Selecione um projeto existente ou forneça uma planilha com dados da OSC/Proposta.")
+        const nomeArquivoBase = arquivo?.name ? arquivo.name.replace(/\.[^/.]+$/, "") : "Planilha Importada"
+        const metadadosParaCriar = {
+          ...(resultado.metadados || {}),
+          osc_nome: resultado.metadados?.osc_nome || "OSC Proponente",
+          proposta_numero: resultado.metadados?.proposta_numero || nomeArquivoBase,
         }
 
         const valorTotal = resultado.rubricas_detectadas
@@ -224,7 +223,7 @@ export function ImportarPlanilhaDialog({
           : resultado.metadados?.valor_total_estimado || 0
 
         const resVinculo = await vincularOuCriarInstituicaoEProjeto(
-          resultado.metadados || {},
+          metadadosParaCriar,
           valorTotal
         )
         targetProjetoId = resVinculo.projetoId
@@ -467,7 +466,7 @@ export function ImportarPlanilhaDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       {trigger && <DialogTrigger render={trigger as React.ReactElement} />}
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[96vw] max-w-7xl 2xl:max-w-[1550px] h-[92vh] max-h-[94vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header fixo no topo com cantos protegidos */}
         <div className="p-6 pb-4 border-b shrink-0 pr-12">
           <DialogHeader>
@@ -490,7 +489,7 @@ export function ImportarPlanilhaDialog({
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
               onClick={() => inputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 py-12 cursor-pointer hover:bg-muted/50 transition-colors"
+              className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 py-20 md:py-28 cursor-pointer hover:bg-muted/50 transition-colors"
             >
               <UploadIcon className="size-8 text-muted-foreground/50" />
               <div className="text-center">
@@ -587,34 +586,36 @@ export function ImportarPlanilhaDialog({
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {(resultado.metadados?.proposta_numero || resultado.metadados?.osc_nome) && (
-                  <label
-                    onClick={() => setModoDestino("auto_criar")}
-                    className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                      modoDestino === "auto_criar"
-                        ? "border-emerald-500 bg-emerald-500/10 font-medium text-foreground"
-                        : "border-border hover:bg-muted/40 text-muted-foreground"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="destino"
-                      checked={modoDestino === "auto_criar"}
-                      onChange={() => setModoDestino("auto_criar")}
-                      className="mt-0.5 accent-emerald-600"
-                    />
-                    <div>
-                      <span className="block text-foreground font-semibold">
-                        Auto-vincular / Criar Projeto
-                      </span>
-                      <span className="text-[11px] block mt-0.5">
-                        {resultado.metadados.proposta_numero
-                          ? `Proposta ${resultado.metadados.proposta_numero} • ${resultado.metadados.osc_nome || "OSC"}`
-                          : `Projeto ${resultado.metadados.osc_nome}`}
-                      </span>
-                    </div>
-                  </label>
-                )}
+                <label
+                  onClick={() => setModoDestino("auto_criar")}
+                  className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    modoDestino === "auto_criar"
+                      ? "border-emerald-500 bg-emerald-500/10 font-medium text-foreground"
+                      : "border-border hover:bg-muted/40 text-muted-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="destino"
+                    checked={modoDestino === "auto_criar"}
+                    onChange={() => setModoDestino("auto_criar")}
+                    className="mt-0.5 accent-emerald-600"
+                  />
+                  <div>
+                    <span className="block text-foreground font-semibold">
+                      Auto-vincular / Criar Novo Projeto
+                    </span>
+                    <span className="text-[11px] block mt-0.5 text-muted-foreground">
+                      {resultado?.metadados?.proposta_numero
+                        ? `Proposta ${resultado.metadados.proposta_numero} • ${resultado.metadados.osc_nome || "OSC"}`
+                        : resultado?.metadados?.osc_nome
+                        ? `Projeto ${resultado.metadados.osc_nome}`
+                        : arquivo?.name
+                        ? `Criar a partir de ${arquivo.name}`
+                        : "Criar novo projeto a partir da planilha"}
+                    </span>
+                  </div>
+                </label>
 
                 <label
                   onClick={() => setModoDestino("existente")}
@@ -770,7 +771,7 @@ export function ImportarPlanilhaDialog({
 
                   {/* Tabela detalhada do ciclo */}
                   {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
-                    <div className="max-h-72 overflow-y-auto rounded-lg border">
+                    <div className="flex-1 min-h-[380px] max-h-[55vh] overflow-y-auto rounded-lg border">
                       <Table className="min-w-[640px]">
                         <TableHeader>
                           <TableRow>
@@ -874,7 +875,7 @@ export function ImportarPlanilhaDialog({
               {/* ABA 2: MAPEAMENTO DE COLUNAS */}
               {abaVisualizacao === "colunas" && (
                 <div className="space-y-3">
-                  <div className="max-h-64 overflow-y-auto rounded-lg border">
+                  <div className="flex-1 min-h-[350px] max-h-[52vh] overflow-y-auto rounded-lg border">
                     <Table>
                       <TableHeader>
                         <TableRow>

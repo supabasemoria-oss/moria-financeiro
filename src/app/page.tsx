@@ -31,9 +31,8 @@ function DashboardContent() {
             : "Nenhum projeto encontrado"}
         </p>
         <ImportarPlanilhaDialog
-          projetoId={projetos[0]?.id}
           trigger={
-            <Button variant="outline" size="sm" className="gap-2 h-8 cursor-pointer">
+            <Button size="sm" className="gap-2 h-8 cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm">
               <UploadIcon className="size-3.5" />
               Importar Planilha
             </Button>

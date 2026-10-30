@@ -16,9 +16,11 @@ import {
   SearchIcon,
   DollarSignIcon,
   ClockIcon,
+  UploadIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { ImportarPlanilhaDialog } from "@/components/importar-planilha-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -350,15 +352,25 @@ export default function ProjetosPage() {
         </div>
 
         {pode("projetos_gerenciar") && (
-          <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-            <DialogTrigger
-              render={
-                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
-                  <PlusIcon className="size-4" />
-                  Novo Projeto / Termo
+          <div className="flex items-center gap-2 flex-wrap">
+            <ImportarPlanilhaDialog
+              onImportado={() => loadData()}
+              trigger={
+                <Button className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-sm">
+                  <UploadIcon className="size-4" />
+                  Importar Planilha
                 </Button>
               }
             />
+            <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+              <DialogTrigger
+                render={
+                  <Button variant="outline" className="gap-2 border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30 cursor-pointer">
+                    <PlusIcon className="size-4" />
+                    Novo Projeto / Termo
+                  </Button>
+                }
+              />
           <DialogContent className="sm:max-w-[550px]">
             <form onSubmit={handleCreate}>
               <DialogHeader>
@@ -595,6 +607,7 @@ export default function ProjetosPage() {
             </form>
           </DialogContent>
         </Dialog>
+          </div>
         )}
       </div>
 
