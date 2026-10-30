@@ -842,7 +842,7 @@ export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoM
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+      generationConfig: { temperature: 0, maxOutputTokens: 65536 },
     }),
   })
 
@@ -1116,7 +1116,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         ],
         generationConfig: {
           temperature: 0.1,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
         },
       }),
