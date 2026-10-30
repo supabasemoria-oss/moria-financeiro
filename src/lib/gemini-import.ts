@@ -722,12 +722,12 @@ async function xlsRowsToBase64Image(rows: string[][]): Promise<string | null> {
   try {
     const html2canvas = (await import("html2canvas")).default
 
-    // Construir HTML da tabela com as primeiras 80 linhas (limite visual razoável)
-    const maxLinhas = Math.min(rows.length, 80)
+    // Construir HTML da tabela com limite visual razoável preservando texto completo das células
+    const maxLinhas = Math.min(rows.length, 180)
     const tabelaHtml = rows
       .slice(0, maxLinhas)
       .map((row) => {
-        const cells = row.map((c) => `<td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis">${String(c ?? "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")
+        const cells = row.map((c) => `<td style="border:1px solid #cbd5e1;padding:4px 6px;font-size:11px;white-space:pre-wrap;max-width:320px">${String(c ?? "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`).join("")
         return `<tr>${cells}</tr>`
       })
       .join("")
@@ -980,74 +980,81 @@ async function interpretarImagemComGemini(
   apiKey: string,
   model: string
 ): Promise<ResultadoMapeamento> {
-  const prompt = `Você é um Auditor Orçamentário especialista em planilhas do terceiro setor brasileiro (MROSC / Lei 13.019/2014 / Transferegov.br).
+  const prompt = `Você é um Auditor Orçamentário e Especialista em Finanças do Terceiro Setor Brasileiro (MROSC / Lei 13.019/2014 / Transferegov.br).
 
-Analise esta planilha orçamentária e extraia TODAS as rubricas com interpretação semântica completa da memória de cálculo.
+Sua missão é realizar a AUDITORIA E EXTRAÇÃO COGNITIVA COMPLETA desta planilha orçamentária, independentemente de como as colunas estejam organizadas (cotação tripla lado a lado, tabela simples, blocos por etapas, notas, etc.).
 
-## REGRAS CRÍTICAS DE INTERPRETAÇÃO
+## 1. IDENTIFICAÇÃO DO PROJETO E OSC:
+- "proposta_numero": Identifique o número da Proposta, Convênio ou Termo (ex: "990318", "023809/2026"). Se não constar, null.
+- "osc_nome": Nome oficial ou razão social da OSC proponente/parceira.
+- "cnpj_osc": CNPJ formatado da OSC (XX.XXX.XXX/XXXX-XX).
+- "valor_total_estimado": O valor global aprovado/totalizado da planilha (ex: 2940000.00).
 
-### Para rubricas de RECURSOS HUMANOS (tipo: "RH"):
-A planilha frequentemente tem colunas separadas como: QUANTIDADE (nº de pessoas/postos) × PERÍODO (nº de meses) = TOTAL (homem-mês).
-Exemplo: "Monitor: 16 pessoas × 12 meses = 192 (total homem-mês), salário base R$ 1.700,00"
-- "quantidade": DEVE SER 16 (número de postos/pessoas), NÃO 192
-- "periodo_meses": DEVE SER 12 (número de meses)
-- "valor_unitario": DEVE SER 1700.00 (salário mensal de 1 pessoa)
-- "valor_total": 16 × 12 × 1700 = 326.400,00
+## 2. DETECÇÃO DE FORNECEDORES & COTAÇÕES DE MERCADO:
+- Mapeie TODAS as empresas e profissionais que aparecem na planilha apresentando cotações, orçamentos ou como prestadores.
+- Para cada uma, extraia a "razao_social_nome" e o "cpf_cnpj" (higienizado e formatado).
+- Inclua todas as empresas concorrentes no array "fornecedores_detectados".
 
-### Para MATERIAIS e BENS (tipo: "MATERIAL"):
-- "quantidade": número de unidades compradas
-- "periodo_meses": null (é compra pontual, não recorrente)
-- "valor_unitario": preço unitário do item
-- "valor_total": quantidade × valor_unitario
+## 3. EXTRAÇÃO SEMÂNTICA DE RUBRICAS & ELEGIBILIDADE DE VENCEDORES:
+Para CADA item ou despesa orçada:
+- "descricao": Nome específico do cargo, serviço, material ou tributo.
+- "especificacao": Justificativa, memória de cálculo ou detalhamento presente.
+- "tipo":
+    * "RH": Profissionais, coordenadores, assistentes, instrutores, monitores, educadores.
+    * "SERVICO": Serviços continuados ou pontuais PJ (assessoria contábil, jurídica, sonorização, coffee break, locações).
+    * "MATERIAL": Bens e produtos físicos (uniformes, bolas, redes, apitos, banners, folders, kits).
+    * "LOCACAO": Locação de auditório, veículos, tendas.
+    * "OUTROS": Encargos sociais, previdenciários e trabalhistas (ex: encargos CLT 68,16%).
+- "quantidade": A quantidade simultânea real.
+    * ATENÇÃO CRÍTICA PARA RH: Se a planilha indica "16 monitores atuando por 12 meses", a quantidade é 16 (número de profissionais), e o "periodo_meses" é 12. NUNCA coloque o total homem-mês (192) na quantidade!
+- "periodo_meses": Duração em meses da contratação (ex: 12, 14). Se for compra de material físico pontual, deixe null.
+- "unidade": Unidade textual ("Mês", "UN", "Diária", "Serviço", "HR").
+- "valor_unitario": Custo unitário mensal por pessoa (salário) ou preço de 1 item.
+- "valor_total": Valor total aprovado para o item no projeto (Quantidade × Meses × Valor Unitário).
+- "codigo_natureza_despesa": 
+    * 33903600 (Serviço PF / RH Terceirizado Autônomo)
+    * 33903900 (Serviço de Terceiros Pessoa Jurídica)
+    * 33903000 (Material de Consumo)
+    * 33904700 (Obrigações Tributárias e Contributivas / Encargos CLT)
 
-### Para SERVIÇOS CONTÍNUOS (tipo: "SERVICO"):
-- "quantidade": número de serviços/contratos simultâneos
-- "periodo_meses": número de meses do contrato (ex: 12, 14)
-- "valor_unitario": valor mensal do serviço
-- "valor_total": quantidade × periodo_meses × valor_unitario
+- "fornecedor_selecionado": O FORNECEDOR VENCEDOR / CONTRATADO DESTE ITEM:
+    * COMO DETERMINAR O FORNECEDOR VENCEDOR (Raciocínio Lógico):
+      Examine a linha da cotação. A planilha apresenta o valor aprovado / mínimo cotado e as cotações das empresas concorrentes.
+      Identifique QUAL EMPRESA ofertou o valor correspondente ao menor preço / valor aprovado para este item. Essa empresa é a VENCEDORA!
+      Retorne o objeto: {"razao_social_nome": "<Nome>", "cpf_cnpj": "<CNPJ>", "telefone": null}.
+    * Se o item não tiver cotação empresarial (ex: materiais com "N/A" ou pesquisa genérica de mercado), defina como null.
 
-### Para ENCARGOS/TRIBUTOS sobre RH:
-- tipo: "OUTROS"
-- Incluir apenas se o valor estiver explicitamente separado na planilha
-- "especificacao": mencionar o percentual (ex: "Encargos CLT 68,16%")
-
-## CAMPOS DO SISTEMA:
-- descricao: Nome do cargo, serviço ou material
-- tipo: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS"
-- quantidade: Nº de postos/vagas/unidades (NÃO o total homem-mês)
-- unidade: "Mês", "UN", "Serviço", "HR" etc.
-- valor_unitario: Custo unitário mensal (salário de 1 profissional ou preço unitário)
-- valor_total: Valor total aprovado para a rubrica
-- periodo_meses: Duração em meses (null para compras pontuais)
-- codigo_natureza_despesa: GND3 = 33903900 (padrão); RH CLT = 33903600; Material = 33903000; Tributo = 33904700
-
-## JSON RETORNADO:
-Retorne APENAS JSON válido com esta estrutura exata:
+## ESTRUTURA JSON OBRIGATÓRIA:
+Retorne EXCLUSIVAMENTE um objeto JSON válido:
 {
-  "linha_cabecalho": 0,
-  "linhas_secao": [],
-  "linhas_ignorar": [],
-  "mapeamento": [],
   "metadados": {
-    "proposta_numero": "<numero da proposta ou null>",
-    "osc_nome": "<nome da OSC proponente ou null>",
-    "cnpj_osc": "<CNPJ formatado XX.XXX.XXX/XXXX-XX ou null>",
-    "valor_total_estimado": <numero ou null>
+    "proposta_numero": "string ou null",
+    "osc_nome": "string ou null",
+    "cnpj_osc": "string ou null",
+    "valor_total_estimado": 0.00
   },
-  "fornecedores": [
-    {"razao_social_nome": "<nome>", "cpf_cnpj": "<cnpj>", "telefone": null}
+  "fornecedores_detectados": [
+    {
+      "razao_social_nome": "Nome da Empresa",
+      "cpf_cnpj": "00.000.000/0000-00",
+      "telefone": null
+    }
   ],
   "rubricas_detectadas": [
     {
-      "descricao": "<nome do cargo/serviço/material>",
-      "especificacao": "<memória de cálculo ou justificativa resumida, se houver>",
-      "tipo": "<RH|SERVICO|MATERIAL|LOCACAO|OUTROS>",
-      "quantidade": <numero de postos/vagas/unidades — NUNCA o total homem-mês>,
-      "unidade": "<Mês|UN|Serviço|etc>",
-      "valor_unitario": <salário mensal de 1 profissional ou preço unitário — numero>,
-      "valor_total": <valor total da rubrica — numero>,
-      "periodo_meses": <numero de meses ou null se compra pontual>,
-      "codigo_natureza_despesa": "<codigo>"
+      "descricao": "Nome do item",
+      "especificacao": "Memória de cálculo",
+      "tipo": "RH",
+      "quantidade": 16,
+      "periodo_meses": 12,
+      "unidade": "Mês",
+      "valor_unitario": 1700.00,
+      "valor_total": 326400.00,
+      "codigo_natureza_despesa": "33903900",
+      "fornecedor_selecionado": {
+        "razao_social_nome": "Lopes & Lopes Assessoria Empresarial Ltda.",
+        "cpf_cnpj": "17.728.273/0001-50"
+      }
     }
   ]
 }`
@@ -1066,7 +1073,11 @@ Retorne APENAS JSON válido com esta estrutura exata:
             ],
           },
         ],
-        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json",
+        },
       }),
     }
   )
@@ -1094,31 +1105,77 @@ Retorne APENAS JSON válido com esta estrutura exata:
   if (!resultado.linhas_secao) resultado.linhas_secao = []
   if (!resultado.linhas_ignorar) resultado.linhas_ignorar = []
   if (!resultado.linha_cabecalho) resultado.linha_cabecalho = 0
-  if (!resultado.fornecedores_detectados) resultado.fornecedores_detectados = []
 
-  // Normalizar rubricas detectadas: garantir que periodo_meses e quantidade_postos estejam corretos
+  // 1. Fornecedores detectados
+  const fornecedoresBrutos =
+    resultado.fornecedores_detectados && resultado.fornecedores_detectados.length > 0
+      ? resultado.fornecedores_detectados
+      : (resultado as any).fornecedores || []
+
+  const fornecedoresMap = new Map<string, FornecedorIdentificado>()
+  for (const f of fornecedoresBrutos) {
+    if (f && f.razao_social_nome) {
+      const cnpjNorm = sanitizarCnpj(f.cpf_cnpj)
+      const doc = cnpjNorm.length === 14 ? formatarCnpj(cnpjNorm) : (f.cpf_cnpj || "").trim()
+      const key = cnpjNorm || f.razao_social_nome.toLowerCase().trim()
+      if (!fornecedoresMap.has(key)) {
+        fornecedoresMap.set(key, {
+          razao_social_nome: f.razao_social_nome.trim(),
+          cpf_cnpj: doc,
+          telefone: f.telefone || null,
+        })
+      }
+    }
+  }
+
+  // 2. Normalizar rubricas detectadas e assegurar fornecedor vencedor
   if (resultado.rubricas_detectadas) {
     resultado.rubricas_detectadas = resultado.rubricas_detectadas.map((r: any) => {
+      let fornecedorSel: FornecedorIdentificado | null = null
+      if (r.fornecedor_selecionado && r.fornecedor_selecionado.razao_social_nome) {
+        const rz = String(r.fornecedor_selecionado.razao_social_nome).trim()
+        if (rz && !rz.toUpperCase().includes("N/A")) {
+          const cnpjNorm = sanitizarCnpj(r.fornecedor_selecionado.cpf_cnpj)
+          const doc = cnpjNorm.length === 14 ? formatarCnpj(cnpjNorm) : (r.fornecedor_selecionado.cpf_cnpj || "").trim()
+          fornecedorSel = {
+            razao_social_nome: rz,
+            cpf_cnpj: doc,
+            telefone: r.fornecedor_selecionado.telefone || null,
+          }
+          const key = cnpjNorm || rz.toLowerCase()
+          if (!fornecedoresMap.has(key)) {
+            fornecedoresMap.set(key, fornecedorSel)
+          }
+        }
+      }
+
+      const qtd = Number(r.quantidade) || 1
+      const vlUnit = Number(r.valor_unitario) || 0
+      const meses = r.periodo_meses ? Number(r.periodo_meses) : undefined
+      let vlTotal = Number(r.valor_total) || 0
+
+      // Sanidade matemática de valor_total
+      if (vlTotal === 0 && vlUnit > 0) {
+        vlTotal = qtd * (meses && meses > 1 ? meses : 1) * vlUnit
+      }
+
       const rub: RubricaSkillExtraida = {
         descricao: r.descricao || "",
         especificacao: r.especificacao || undefined,
         tipo: r.tipo || "SERVICO",
-        quantidade: Number(r.quantidade) || 1,
+        quantidade: qtd,
         unidade: r.unidade || "UN",
-        valor_unitario: Number(r.valor_unitario) || 0,
-        valor_total: Number(r.valor_total) || 0,
+        valor_unitario: vlUnit,
+        valor_total: vlTotal,
         codigo_natureza_despesa: r.codigo_natureza_despesa || "33903900",
-        periodo_meses: r.periodo_meses ? Number(r.periodo_meses) : undefined,
-        fornecedor_selecionado: null,
-      }
-      // Sanidade: se valor_total é 0 mas temos os outros dados, recalcular
-      if (rub.valor_total === 0 && rub.valor_unitario > 0) {
-        const meses = rub.periodo_meses || 1
-        rub.valor_total = rub.quantidade * meses * rub.valor_unitario
+        periodo_meses: meses,
+        fornecedor_selecionado: fornecedorSel,
       }
       return rub
     })
   }
+
+  resultado.fornecedores_detectados = Array.from(fornecedoresMap.values())
 
   // Gerar preview a partir das rubricas detectadas se estiver vazio
   if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 && resultado.preview.length === 0) {
