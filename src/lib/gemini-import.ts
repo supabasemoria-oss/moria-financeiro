@@ -752,6 +752,49 @@ async function xlsRowsToBase64Image(rows: string[][]): Promise<string | null> {
   }
 }
 
+/**
+ * Decodifica JSON retornado pela IA de forma resiliente:
+ * 1. Limpa blocos de código markdown (```json ... ```)
+ * 2. Tenta JSON.parse direto
+ * 3. Se falhar por truncamento de tokens (MAX_TOKENS), recupera todos os objetos
+ *    completos fechando a estrutura até o último item válido.
+ */
+function parseJsonResiliente<T = any>(rawText: string): T {
+  const limpo = rawText.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim()
+  try {
+    return JSON.parse(limpo)
+  } catch {}
+
+  const match = limpo.match(/\{[\s\S]*\}/)
+  if (match) {
+    try {
+      return JSON.parse(match[0])
+    } catch {}
+  }
+
+  // Tentar reparar truncamento por limite de tokens (interrompido no meio de um array/objeto)
+  const lastBrace = limpo.lastIndexOf("}")
+  if (lastBrace !== -1) {
+    const prefix = limpo.substring(0, lastBrace + 1)
+    const tentativas = [
+      prefix + "\n  ]\n}",
+      prefix + "\n}",
+      prefix + "}",
+      prefix,
+    ]
+    for (const t of tentativas) {
+      const m = t.match(/\{[\s\S]*\}/)
+      if (m) {
+        try {
+          return JSON.parse(m[0])
+        } catch {}
+      }
+    }
+  }
+
+  throw new Error("JSON inválido retornado pelo Gemini.")
+}
+
 export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoMapeamento> {
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
 
@@ -810,13 +853,11 @@ export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoM
 
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
+  if (!text) throw new Error("Gemini retornou resposta vazia.")
 
   let resultado: ResultadoMapeamento
   try {
-    resultado = JSON.parse(jsonMatch[0])
+    resultado = parseJsonResiliente<ResultadoMapeamento>(text)
     if (resultado.mapeamento) {
       resultado.mapeamento = resultado.mapeamento.map((m) => ({
         ...m,
@@ -998,7 +1039,7 @@ Sua missão é realizar a AUDITORIA E EXTRAÇÃO COGNITIVA COMPLETA desta planil
 ## 3. EXTRAÇÃO SEMÂNTICA DE RUBRICAS & ELEGIBILIDADE DE VENCEDORES:
 Para CADA item ou despesa orçada:
 - "descricao": Nome específico do cargo, serviço, material ou tributo.
-- "especificacao": Justificativa, memória de cálculo ou detalhamento presente.
+- "especificacao": Resumo conciso da memória de cálculo (máx 50 caracteres, ex: "16 postos x 12 meses", "Cotação tripla"). Seja direto e conciso nos textos para evitar estouro de tokens.
 - "tipo":
     * "RH": Profissionais, coordenadores, assistentes, instrutores, monitores, educadores.
     * "SERVICO": Serviços continuados ou pontuais PJ (assessoria contábil, jurídica, sonorização, coffee break, locações).
@@ -1089,12 +1130,11 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
 
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error("Gemini não retornou JSON válido.")
+  if (!text) throw new Error("Gemini retornou resposta vazia.")
 
   let resultado: ResultadoMapeamento
   try {
-    resultado = JSON.parse(jsonMatch[0])
+    resultado = parseJsonResiliente<ResultadoMapeamento>(text)
   } catch {
     throw new Error("JSON inválido retornado pelo Gemini.")
   }
