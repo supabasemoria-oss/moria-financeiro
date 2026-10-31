@@ -544,6 +544,7 @@ export type Database = {
         Row: {
           codigo_natureza_despesa: string
           created_at: string
+          data_inicio: string | null
           descricao: string
           dia_vencimento: number | null
           frequencia_meses: number | null
@@ -551,6 +552,7 @@ export type Database = {
           num_parcelas: number | null
           projeto_id: string
           quantidade: number
+          sob_demanda: boolean | null
           tipo: Database["public"]["Enums"]["tipo_rubrica"]
           tipo_pagamento: Database["public"]["Enums"]["tipo_pagamento"]
           unidade: string
@@ -561,6 +563,7 @@ export type Database = {
         Insert: {
           codigo_natureza_despesa: string
           created_at?: string
+          data_inicio?: string | null
           descricao: string
           dia_vencimento?: number | null
           frequencia_meses?: number | null
@@ -568,6 +571,7 @@ export type Database = {
           num_parcelas?: number | null
           projeto_id: string
           quantidade?: number
+          sob_demanda?: boolean | null
           tipo: Database["public"]["Enums"]["tipo_rubrica"]
           tipo_pagamento?: Database["public"]["Enums"]["tipo_pagamento"]
           unidade?: string
@@ -578,6 +582,7 @@ export type Database = {
         Update: {
           codigo_natureza_despesa?: string
           created_at?: string
+          data_inicio?: string | null
           descricao?: string
           dia_vencimento?: number | null
           frequencia_meses?: number | null
@@ -585,6 +590,7 @@ export type Database = {
           num_parcelas?: number | null
           projeto_id?: string
           quantidade?: number
+          sob_demanda?: boolean | null
           tipo?: Database["public"]["Enums"]["tipo_rubrica"]
           tipo_pagamento?: Database["public"]["Enums"]["tipo_pagamento"]
           unidade?: string

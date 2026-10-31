@@ -100,6 +100,81 @@ export const mroscService = {
     }
   },
 
+  // ── Gestão de Metadados de Rubricas (Temporalidade e Sob Demanda) ──
+  async getRubricasMetadadosMap(): Promise<Record<string, { data_inicio?: string | null; sob_demanda?: boolean | null }>> {
+    const fallback: Record<string, { data_inicio?: string | null; sob_demanda?: boolean | null }> = {}
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('moria_rubricas_metadados')
+        if (local) {
+          const parsed = JSON.parse(local)
+          if (parsed && typeof parsed === 'object') return { ...fallback, ...parsed }
+        }
+      } catch {}
+    }
+    try {
+      const { data, error } = await supabase.storage.from('logos').download('rubricas_metadados.json')
+      if (!error && data) {
+        const text = await data.text()
+        const parsed = JSON.parse(text)
+        if (parsed && typeof parsed === 'object') {
+          const merged = { ...fallback, ...parsed }
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('moria_rubricas_metadados', JSON.stringify(merged))
+          }
+          return merged
+        }
+      }
+    } catch {}
+    return fallback
+  },
+
+  async setRubricaMetadados(
+    rubricaId: string,
+    meta: { data_inicio?: string | null; sob_demanda?: boolean | null }
+  ): Promise<void> {
+    const map = await this.getRubricasMetadadosMap()
+    map[rubricaId] = {
+      ...(map[rubricaId] || {}),
+      ...meta,
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('moria_rubricas_metadados', JSON.stringify(map))
+      } catch {}
+    }
+    try {
+      const blob = new Blob([JSON.stringify(map, null, 2)], { type: 'application/json' })
+      await supabase.storage.from('logos').upload('rubricas_metadados.json', blob, {
+        upsert: true,
+        cacheControl: '60',
+      })
+    } catch (e) {
+      console.warn('Aviso ao salvar metadados de rubricas no Storage:', e)
+    }
+  },
+
+  async setRubricasMetadadosBatch(
+    metas: Record<string, { data_inicio?: string | null; sob_demanda?: boolean | null }>
+  ): Promise<void> {
+    const map = await this.getRubricasMetadadosMap()
+    Object.assign(map, metas)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('moria_rubricas_metadados', JSON.stringify(map))
+      } catch {}
+    }
+    try {
+      const blob = new Blob([JSON.stringify(map, null, 2)], { type: 'application/json' })
+      await supabase.storage.from('logos').upload('rubricas_metadados.json', blob, {
+        upsert: true,
+        cacheControl: '60',
+      })
+    } catch (e) {
+      console.warn('Aviso ao salvar metadados de rubricas no Storage em lote:', e)
+    }
+  },
+
   // ── Projetos ─────────────────────────────────────
   async getProjetos(): Promise<ProjetoComInstituicao[]> {
     const [ordensMap, { data, error }] = await Promise.all([
@@ -158,9 +233,16 @@ export const mroscService = {
         if (rubricas && rubricas.length > 0) {
           const { data: parcelasExistentes } = await supabase.from('parcelas_pagamento').select('rubrica_id').eq('projeto_id', id)
           const rubricasComParcelas = new Set((parcelasExistentes || []).map((p) => p.rubrica_id))
+          const metadadosMap = await this.getRubricasMetadadosMap()
           for (const rub of rubricas) {
             if (!rubricasComParcelas.has(rub.id)) {
-              const parcelas = gerarParcelas(rub as Rubrica, data_ordem_inicio)
+              const meta = metadadosMap[rub.id]
+              const rubricaCompleta: Rubrica = {
+                ...rub,
+                data_inicio: (rub as any).data_inicio ?? meta?.data_inicio ?? null,
+                sob_demanda: (rub as any).sob_demanda ?? meta?.sob_demanda ?? false,
+              }
+              const parcelas = gerarParcelas(rubricaCompleta, data_ordem_inicio)
               if (parcelas.length > 0) {
                 await supabase.from('parcelas_pagamento').insert(parcelas.map((p) => ({ ...p, rubrica_id: rub.id, projeto_id: id })))
               }
@@ -207,7 +289,7 @@ export const mroscService = {
     if (error) err(error.message)
   },
 
-  // ?? Rubricas ?????????????????????????????????????
+  // ── Rubricas ─────────────────────────────────────
   async getRubricas(projetoId?: string): Promise<RubricaComDespesas[]> {
     let q = supabase
       .from('rubricas_orcamentarias')
@@ -216,24 +298,47 @@ export const mroscService = {
     if (projetoId && projetoId !== 'ALL') {
       q = q.eq('projeto_id', projetoId) as typeof q
     }
-    const { data, error } = await q
+    const [metadadosMap, { data, error }] = await Promise.all([
+      this.getRubricasMetadadosMap(),
+      q,
+    ])
     if (error) err(error.message)
-    return data as unknown as RubricaComDespesas[]
+    const list = (data || []).map((r: any) => {
+      const meta = metadadosMap[r.id]
+      return {
+        ...r,
+        data_inicio: r.data_inicio ?? meta?.data_inicio ?? null,
+        sob_demanda: r.sob_demanda ?? meta?.sob_demanda ?? false,
+      }
+    })
+    return list as unknown as RubricaComDespesas[]
   },
 
   async createRubrica(payload: RubricaInsert): Promise<Rubrica> {
-    const qtd = payload.quantidade ?? 1
-    const vlUnit = payload.valor_unitario ?? 0
+    const { data_inicio, sob_demanda, ...dbPayload } = payload
+    const qtd = dbPayload.quantidade ?? 1
+    const vlUnit = dbPayload.valor_unitario ?? 0
     const vlTotal =
-      payload.valor_total !== undefined && payload.valor_total !== null && Number(payload.valor_total) > 0
-        ? Number(payload.valor_total)
-        : (payload.tipo_pagamento === 'RECORRENTE' && payload.num_parcelas && payload.num_parcelas > 1
-            ? qtd * vlUnit * payload.num_parcelas
+      dbPayload.valor_total !== undefined && dbPayload.valor_total !== null && Number(dbPayload.valor_total) > 0
+        ? Number(dbPayload.valor_total)
+        : (dbPayload.tipo_pagamento === 'RECORRENTE' && dbPayload.num_parcelas && dbPayload.num_parcelas > 1
+            ? qtd * vlUnit * dbPayload.num_parcelas
             : qtd * vlUnit)
-    const insert = { ...payload, quantidade: qtd, valor_unitario: vlUnit, valor_total: vlTotal }
+    const insert = { ...dbPayload, quantidade: qtd, valor_unitario: vlUnit, valor_total: vlTotal }
     const { data, error } = await supabase.from('rubricas_orcamentarias').insert(insert).select().single()
     if (error) err(error.message)
     const rubrica = data as Rubrica
+
+    // Salvar metadados de temporalidade e execução sob demanda
+    if (data_inicio !== undefined || sob_demanda !== undefined) {
+      await this.setRubricaMetadados(rubrica.id, {
+        data_inicio: data_inicio ?? null,
+        sob_demanda: sob_demanda ?? false,
+      })
+      rubrica.data_inicio = data_inicio ?? null
+      rubrica.sob_demanda = sob_demanda ?? false
+    }
+
     // Buscar projeto para verificar Ordem de Início (marco zero financeiro)
     const proj = await this.getProjeto(rubrica.projeto_id)
     if (proj && proj.data_ordem_inicio) {
@@ -245,9 +350,80 @@ export const mroscService = {
     return rubrica
   },
 
+  async updateRubrica(id: string, payload: Partial<RubricaInsert>): Promise<Rubrica> {
+    const { data_inicio, sob_demanda, ...dbPayload } = payload
+    let rubrica: Rubrica | null = null
+    if (Object.keys(dbPayload).length > 0) {
+      const { data, error } = await supabase.from('rubricas_orcamentarias').update(dbPayload).eq('id', id).select().single()
+      if (error) err(error.message)
+      rubrica = data as Rubrica
+    } else {
+      const { data, error } = await supabase.from('rubricas_orcamentarias').select('*').eq('id', id).single()
+      if (error) err(error.message)
+      rubrica = data as Rubrica
+    }
+    if (data_inicio !== undefined || sob_demanda !== undefined) {
+      await this.setRubricaMetadados(id, {
+        ...(data_inicio !== undefined ? { data_inicio } : {}),
+        ...(sob_demanda !== undefined ? { sob_demanda } : {}),
+      })
+      if (rubrica) {
+        if (data_inicio !== undefined) rubrica.data_inicio = data_inicio
+        if (sob_demanda !== undefined) rubrica.sob_demanda = sob_demanda
+      }
+    }
+    return rubrica
+  },
+
   async deleteRubrica(id: string): Promise<void> {
     const { error } = await supabase.from('rubricas_orcamentarias').delete().eq('id', id)
     if (error) err(error.message)
+  },
+
+  // ── Lançamento Direto de Despesa Sob Demanda (Materiais / Aquisições Pontuais) ──
+  async lancarDespesaSobDemanda(dados: {
+    rubrica_id: string
+    projeto_id: string
+    fornecedor_id?: string | null
+    valor: number
+    data_pagamento: string
+    descricao: string
+    numero_documento_fiscal?: string | null
+    observacoes?: string | null
+    arquivo_nota_fiscal?: File | null
+  }): Promise<Despesa> {
+    const payload: any = {
+      projeto_id: dados.projeto_id,
+      rubrica_id: dados.rubrica_id,
+      valor: dados.valor,
+      descricao: dados.descricao,
+      data_despesa: dados.data_pagamento,
+      data_pagamento: dados.data_pagamento,
+      status: 'PAGO',
+      numero_documento_fiscal: dados.numero_documento_fiscal || null,
+      observacoes: dados.observacoes || null,
+    }
+    if (dados.fornecedor_id) {
+      payload.fornecedor_id = dados.fornecedor_id
+    }
+    const { data: despesa, error } = await supabase
+      .from('despesas')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) err(error.message)
+    const desp = despesa as Despesa
+
+    if (dados.arquivo_nota_fiscal && desp) {
+      try {
+        await this.uploadComprovante(dados.arquivo_nota_fiscal, desp.id, 'NOTA_FISCAL')
+      } catch (uploadError) {
+        console.error('Erro ao fazer upload da nota fiscal sob demanda:', uploadError)
+      }
+    }
+
+    return desp
   },
 
   // ?? Despesas ?????????????????????????????????????

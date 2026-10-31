@@ -17,7 +17,20 @@ interface Props {
   onCriado?: (r: Rubrica) => void
 }
 
-const VAZIO = { tipo: "SERVICO" as const, descricao: "", codigo_natureza_despesa: "33903501", unidade: "UN", quantidade: "1", valor_unitario: "0,00", tipo_pagamento: "UNICO" as "UNICO"|"RECORRENTE"|"PARCELADO", frequencia_meses: "1", num_parcelas: "1", dia_vencimento: "" }
+const VAZIO = {
+  tipo: "SERVICO" as const,
+  descricao: "",
+  codigo_natureza_despesa: "33903501",
+  unidade: "UN",
+  quantidade: "1",
+  valor_unitario: "0,00",
+  tipo_pagamento: "UNICO" as "UNICO" | "RECORRENTE" | "PARCELADO",
+  frequencia_meses: "1",
+  num_parcelas: "1",
+  dia_vencimento: "",
+  data_inicio: "",
+  sob_demanda: false,
+}
 
 export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: Props) {
   const [saving, setSaving] = React.useState(false)
@@ -37,9 +50,11 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
         projeto_id: projetoId, tipo: form.tipo, descricao: form.descricao,
         codigo_natureza_despesa: form.codigo_natureza_despesa, unidade: form.unidade || "UN",
         quantidade: qtd, valor_unitario: vlUnit, tipo_pagamento: form.tipo_pagamento,
-        frequencia_meses: form.tipo_pagamento === "RECORRENTE" ? parseInt(form.frequencia_meses) || 1 : null,
-        num_parcelas: form.tipo_pagamento !== "UNICO" ? parseInt(form.num_parcelas) || 1 : null,
-        dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+        frequencia_meses: !form.sob_demanda && form.tipo_pagamento === "RECORRENTE" ? parseInt(form.frequencia_meses) || 1 : null,
+        num_parcelas: !form.sob_demanda && form.tipo_pagamento !== "UNICO" ? parseInt(form.num_parcelas) || 1 : null,
+        dia_vencimento: !form.sob_demanda && form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+        data_inicio: form.data_inicio || null,
+        sob_demanda: form.sob_demanda,
       })
       toast.success("Rubrica cadastrada!")
       setForm(VAZIO)
@@ -56,13 +71,22 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Adicionar Item ao Plano de Trabalho</DialogTitle>
-            <DialogDescription>Cadastre a rubrica com natureza de despesa e valor unitario.</DialogDescription>
+            <DialogDescription>Cadastre a rubrica com natureza de despesa, temporalidade e valor unitário.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label>Tipo de Despesa *</Label>
-                <Select value={form.tipo} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo: v }))}>
+                <Select
+                  value={form.tipo}
+                  onValueChange={(v: any) =>
+                    v && setForm((p) => ({
+                      ...p,
+                      tipo: v,
+                      sob_demanda: v === "MATERIAL" ? true : p.sob_demanda,
+                    }))
+                  }
+                >
                   <SelectTrigger>
                   <SelectValue>
                     {(val) => {
@@ -101,34 +125,68 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
               <div className="grid gap-2"><Label>Valor Unitario (R$) *</Label><Input type="text" inputMode="numeric" placeholder="0,00" required value={form.valor_unitario} onChange={e => setForm(p => ({ ...p, valor_unitario: maskCurrency(e.target.value) }))} /></div>
             </div>
             {total > 0 && <p className="text-xs text-muted-foreground">Total previsto: <strong>R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong></p>}
-            <div className="grid gap-2">
-              <Label>Tipo de Pagamento</Label>
-              <Select value={form.tipo_pagamento} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo_pagamento: v }))}>
-                <SelectTrigger>
-                  <SelectValue>
-                    {(val) => {
-                      const labels: Record<string, string> = {
-                        UNICO: "Pagamento Único",
-                        RECORRENTE: "Recorrente (ex: mensal)",
-                        PARCELADO: "Parcelado (ex: 3x)",
-                      }
-                      return (val && labels[val]) ? labels[val] : val
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UNICO">Pagamento Unico</SelectItem>
-                  <SelectItem value="RECORRENTE">Recorrente (ex: mensal)</SelectItem>
-                  <SelectItem value="PARCELADO">Parcelado (ex: 3x)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {form.tipo_pagamento !== "UNICO" && (
-              <div className="grid grid-cols-3 gap-3">
-                {form.tipo_pagamento === "RECORRENTE" && <div className="grid gap-2"><Label>Frequencia (meses)</Label><Input type="number" min="1" value={form.frequencia_meses} onChange={e => setForm(p => ({ ...p, frequencia_meses: e.target.value }))} /></div>}
-                <div className="grid gap-2"><Label>No Parcelas</Label><Input type="number" min="1" value={form.num_parcelas} onChange={e => setForm(p => ({ ...p, num_parcelas: e.target.value }))} /></div>
-                <div className="grid gap-2"><Label>Dia Vencimento</Label><Input type="number" min="1" max="31" placeholder="5" value={form.dia_vencimento} onChange={e => setForm(p => ({ ...p, dia_vencimento: e.target.value }))} /></div>
+
+            {/* Checkbox Sob Demanda */}
+            <label className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div>
+                <span className="text-xs font-semibold text-foreground block">Execução Sob Demanda (Materiais / Compras Eventuais)</span>
+                <span className="text-[11px] text-muted-foreground block">
+                  Não gera parcelas antecipadas no calendário. Saldo é consumido conforme os pagamentos forem lançados.
+                </span>
               </div>
+              <input
+                type="checkbox"
+                checked={form.sob_demanda}
+                onChange={(e) => setForm((p) => ({ ...p, sob_demanda: e.target.checked }))}
+                className="size-4 accent-emerald-600 rounded cursor-pointer ml-3"
+              />
+            </label>
+
+            {/* Campo Data de Início da Atividade */}
+            <div className="grid gap-2">
+              <Label>Data de Início da Atividade (Opcional)</Label>
+              <Input
+                type="date"
+                value={form.data_inicio}
+                onChange={(e) => setForm((p) => ({ ...p, data_inicio: e.target.value }))}
+              />
+              <span className="text-[11px] text-muted-foreground">
+                Informe se esta contratação começar em data posterior ao início do projeto (ex: Mês 3).
+              </span>
+            </div>
+
+            {!form.sob_demanda && (
+              <>
+                <div className="grid gap-2">
+                  <Label>Tipo de Pagamento</Label>
+                  <Select value={form.tipo_pagamento} onValueChange={(v: any) => v && setForm(p => ({ ...p, tipo_pagamento: v }))}>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(val) => {
+                          const labels: Record<string, string> = {
+                            UNICO: "Pagamento Único",
+                            RECORRENTE: "Recorrente (ex: mensal)",
+                            PARCELADO: "Parcelado (ex: 3x)",
+                          }
+                          return (val && labels[val]) ? labels[val] : val
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UNICO">Pagamento Unico</SelectItem>
+                      <SelectItem value="RECORRENTE">Recorrente (ex: mensal)</SelectItem>
+                      <SelectItem value="PARCELADO">Parcelado (ex: 3x)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.tipo_pagamento !== "UNICO" && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {form.tipo_pagamento === "RECORRENTE" && <div className="grid gap-2"><Label>Frequencia (meses)</Label><Input type="number" min="1" value={form.frequencia_meses} onChange={e => setForm(p => ({ ...p, frequencia_meses: e.target.value }))} /></div>}
+                    <div className="grid gap-2"><Label>No Parcelas</Label><Input type="number" min="1" value={form.num_parcelas} onChange={e => setForm(p => ({ ...p, num_parcelas: e.target.value }))} /></div>
+                    <div className="grid gap-2"><Label>Dia Vencimento</Label><Input type="number" min="1" max="31" placeholder="5" value={form.dia_vencimento} onChange={e => setForm(p => ({ ...p, dia_vencimento: e.target.value }))} /></div>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter>

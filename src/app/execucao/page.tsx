@@ -22,6 +22,7 @@ import {
   Building2Icon,
   ExternalLinkIcon,
   FileTextIcon,
+  PackageIcon,
 } from "lucide-react"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -282,6 +283,20 @@ function ExecucaoContent() {
     observacoes: "",
   })
 
+  // Dialog Sob Demanda (Materiais e Compras Pontuais)
+  const [openSobDemandaModal, setOpenSobDemandaModal] = useState(false)
+  const [rubricaSelecionadaSobDemanda, setRubricaSelecionadaSobDemanda] = useState<Rubrica | null>(null)
+  const [sobDemandaForm, setSobDemandaForm] = useState({
+    fornecedor_id: "",
+    descricao: "",
+    valor: "0,00",
+    data_pagamento: getTodaySaoPaulo(),
+    numero_documento_fiscal: "",
+    observacoes: "",
+    arquivo_nota_fiscal: null as File | null,
+  })
+  const [savingSobDemanda, setSavingSobDemanda] = useState(false)
+
   // Carregar dados iniciais
   async function loadData() {
     try {
@@ -483,6 +498,82 @@ function ExecucaoContent() {
     () => parcelas.filter((p) => p.status === "PENDENTE" || p.status === "ATRASADO").length,
     [parcelas]
   )
+
+  // Rubricas Sob Demanda e Compras Pontuais
+  const rubricasSobDemanda = useMemo(() => {
+    return rubricas.filter((r) => r.sob_demanda)
+  }, [rubricas])
+
+  const rubricasSobDemandaCalculadas = useMemo(() => {
+    return rubricasSobDemanda.map((r) => {
+      const despesasRubrica = despesas.filter((d) => d.rubrica_id === r.id && d.status === "PAGO")
+      const totalGasto = despesasRubrica.reduce((acc, d) => acc + Number(d.valor || 0), 0)
+      const teto = Number(r.valor_total || 0)
+      const saldo = Math.max(0, teto - totalGasto)
+      const percConsumido = teto > 0 ? Math.min(100, (totalGasto / teto) * 100) : 0
+
+      return {
+        ...r,
+        totalGasto,
+        saldo,
+        percConsumido,
+        despesasCount: despesasRubrica.length,
+      }
+    })
+  }, [rubricasSobDemanda, despesas])
+
+  async function handleLancarSobDemanda(e: React.FormEvent) {
+    e.preventDefault()
+    if (!rubricaSelecionadaSobDemanda) {
+      toast.error("Selecione uma rubrica sob demanda.")
+      return
+    }
+    const valorNum = parseCurrency(sobDemandaForm.valor)
+    if (valorNum <= 0) {
+      toast.error("Informe um valor válido.")
+      return
+    }
+
+    setSavingSobDemanda(true)
+    try {
+      await mroscService.lancarDespesaSobDemanda({
+        rubrica_id: rubricaSelecionadaSobDemanda.id,
+        projeto_id: rubricaSelecionadaSobDemanda.projeto_id,
+        fornecedor_id: sobDemandaForm.fornecedor_id || null,
+        valor: valorNum,
+        descricao: sobDemandaForm.descricao || rubricaSelecionadaSobDemanda.descricao,
+        data_pagamento: sobDemandaForm.data_pagamento,
+        numero_documento_fiscal: sobDemandaForm.numero_documento_fiscal || null,
+        observacoes: sobDemandaForm.observacoes || null,
+        arquivo_nota_fiscal: sobDemandaForm.arquivo_nota_fiscal,
+      })
+
+      // Calcular saldo restante pós compra
+      const teto = Number(rubricaSelecionadaSobDemanda.valor_total || 0)
+      const despesasRub = despesas.filter((d) => d.rubrica_id === rubricaSelecionadaSobDemanda.id && d.status === "PAGO")
+      const jaGastoAntes = despesasRub.reduce((acc, d) => acc + Number(d.valor || 0), 0)
+      const saldoRestante = Math.max(0, teto - (jaGastoAntes + valorNum))
+
+      toast.success(
+        `Compra sob demanda registrada com sucesso! Saldo restante da rubrica: ${formatCurrency(saldoRestante)}`
+      )
+      setOpenSobDemandaModal(false)
+      setSobDemandaForm({
+        fornecedor_id: "",
+        descricao: "",
+        valor: "0,00",
+        data_pagamento: getTodaySaoPaulo(),
+        numero_documento_fiscal: "",
+        observacoes: "",
+        arquivo_nota_fiscal: null,
+      })
+      await loadData()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao lançar compra sob demanda")
+    } finally {
+      setSavingSobDemanda(false)
+    }
+  }
 
   // Auxiliares de Seleção em Lote
   const isAllSelected = useMemo(
@@ -1522,6 +1613,19 @@ function ExecucaoContent() {
                 {despesasFiltradas.length}
               </Badge>
             </TabsTrigger>
+
+            <TabsTrigger value="sob_demanda" className="gap-2 text-xs">
+              <PackageIcon className="size-3.5" />
+              Rubricas Sob Demanda & Compras Pontuais
+              {rubricasSobDemanda.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] h-4 px-1.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
+                >
+                  {rubricasSobDemanda.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           {/* ==================================================== */}
@@ -2071,8 +2175,319 @@ function ExecucaoContent() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ==================================================== */}
+          {/* ABA 3: RUBRICAS SOB DEMANDA & COMPRAS PONTUAIS       */}
+          {/* ==================================================== */}
+          <TabsContent value="sob_demanda" className="space-y-4">
+            <Card className="shadow-2xs">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <PackageIcon className="size-4 text-blue-600" />
+                      Execução Orçamentária Sob Demanda
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Materiais de consumo, bens físicos e contratações pontuais sem cronograma mensal pré-fixado. Os pagamentos debitam diretamente do saldo aprovado no Plano de Trabalho.
+                    </CardDescription>
+                  </div>
+                  {pode("despesas_lancar") && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (rubricasSobDemanda.length > 0) {
+                          setRubricaSelecionadaSobDemanda(rubricasSobDemanda[0])
+                        } else {
+                          setRubricaSelecionadaSobDemanda(null)
+                        }
+                        setSobDemandaForm({
+                          fornecedor_id: "",
+                          descricao: "",
+                          valor: "0,00",
+                          data_pagamento: getTodaySaoPaulo(),
+                          numero_documento_fiscal: "",
+                          observacoes: "",
+                          arquivo_nota_fiscal: null,
+                        })
+                        setOpenSobDemandaModal(true)
+                      }}
+                      className="gap-1.5 h-8 text-xs bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shrink-0"
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Lançar Compra / Pagamento
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                {rubricasSobDemandaCalculadas.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground space-y-2">
+                    <PackageIcon className="size-10 mx-auto text-muted-foreground/40" />
+                    <p className="text-sm font-medium">Nenhuma rubrica sob demanda neste projeto.</p>
+                    <p className="text-xs max-w-md mx-auto text-muted-foreground/80">
+                      Itens como materiais de consumo, kits e uniformes são classificados como sob demanda para evitar alertas artificiais de parcelas vencidas no calendário.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[35%]">Rubrica / Item</TableHead>
+                          <TableHead className="w-[12%] text-right">Teto Aprovado</TableHead>
+                          <TableHead className="w-[12%] text-right">Liquidado</TableHead>
+                          <TableHead className="w-[12%] text-right">Saldo Restante</TableHead>
+                          <TableHead className="w-[17%] text-center">Consumo</TableHead>
+                          <TableHead className="w-[12%] text-center">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rubricasSobDemandaCalculadas.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="py-3">
+                              <div className="font-semibold text-xs text-foreground">
+                                {r.descricao}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5 text-muted-foreground text-[11px] font-mono">
+                                <span>{r.codigo_natureza_despesa}</span>
+                                <span>•</span>
+                                <span>{r.quantidade} {r.unidade}</span>
+                                {r.despesasCount > 0 && (
+                                  <span className="text-muted-foreground font-sans text-[10px]">
+                                    ({r.despesasCount} {r.despesasCount === 1 ? 'compra registrada' : 'compras registradas'})
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs">
+                              {formatCurrency(r.valor_total)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs text-amber-600 dark:text-amber-400 font-medium">
+                              {formatCurrency(r.totalGasto)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                              {formatCurrency(r.saldo)}
+                            </TableCell>
+                            <TableCell className="text-center py-3">
+                              <div className="flex flex-col gap-1 items-center max-w-[130px] mx-auto">
+                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden border">
+                                  <div
+                                    className={`h-full transition-all rounded-full ${
+                                      r.percConsumido >= 100
+                                        ? "bg-red-500"
+                                        : r.percConsumido > 80
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                    }`}
+                                    style={{ width: `${Math.min(100, r.percConsumido)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {r.percConsumido.toFixed(1)}% do teto
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center py-3">
+                              {pode("despesas_lancar") && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setRubricaSelecionadaSobDemanda(r)
+                                    setSobDemandaForm({
+                                      fornecedor_id: "",
+                                      descricao: `Aquisição parcial - ${r.descricao}`,
+                                      valor: "0,00",
+                                      data_pagamento: getTodaySaoPaulo(),
+                                      numero_documento_fiscal: "",
+                                      observacoes: "",
+                                      arquivo_nota_fiscal: null,
+                                    })
+                                    setOpenSobDemandaModal(true)
+                                  }}
+                                  disabled={r.saldo <= 0}
+                                  className="h-7 text-xs gap-1 border-blue-500/30 text-blue-600 hover:bg-blue-500/10 cursor-pointer"
+                                >
+                                  <PlusIcon className="size-3" />
+                                  Registrar Compra
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* ==================================================== */}
+      {/* DIALOG: LANÇAR COMPRA / PAGAMENTO SOB DEMANDA        */}
+      {/* ==================================================== */}
+      <Dialog open={openSobDemandaModal} onOpenChange={setOpenSobDemandaModal}>
+        <DialogContent className="w-[95vw] sm:max-w-[560px]">
+          <form onSubmit={handleLancarSobDemanda}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <PackageIcon className="size-4 text-blue-600" />
+                Registrar Compra / Pagamento Sob Demanda
+              </DialogTitle>
+              <DialogDescription>
+                Liquide a aquisição de materiais ou serviços pontuais. O valor será debitado do saldo orçamentário da rubrica e lançado no Livro Caixa.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-3 py-3">
+              {/* Rubrica */}
+              <div className="grid gap-1.5">
+                <Label>Rubrica Orçamentária *</Label>
+                <Select
+                  value={rubricaSelecionadaSobDemanda?.id || ""}
+                  onValueChange={(val) => {
+                    const r = rubricasSobDemanda.find((item) => item.id === val) || null
+                    setRubricaSelecionadaSobDemanda(r)
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Selecione a rubrica sob demanda..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rubricasSobDemanda.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.codigo_natureza_despesa} - {r.descricao} ({formatCurrency(r.valor_total)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Quadro informativo de Saldo da Rubrica */}
+              {rubricaSelecionadaSobDemanda && (() => {
+                const despesasRub = despesas.filter(d => d.rubrica_id === rubricaSelecionadaSobDemanda.id && d.status === "PAGO")
+                const jaGasto = despesasRub.reduce((acc, d) => acc + Number(d.valor || 0), 0)
+                const teto = Number(rubricaSelecionadaSobDemanda.valor_total || 0)
+                const saldo = Math.max(0, teto - jaGasto)
+                return (
+                  <div className="bg-muted/40 p-2.5 rounded-lg border text-xs grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Teto Orçado</span>
+                      <span className="font-mono font-semibold text-foreground">{formatCurrency(teto)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Total Liquidado</span>
+                      <span className="font-mono font-semibold text-amber-600">{formatCurrency(jaGasto)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block">Saldo Disponível</span>
+                      <span className="font-mono font-bold text-emerald-600">{formatCurrency(saldo)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Fornecedor */}
+              <div className="grid gap-1.5">
+                <Label>Fornecedor / Credor</Label>
+                <Select
+                  value={sobDemandaForm.fornecedor_id}
+                  onValueChange={(val) => setSobDemandaForm(f => ({ ...f, fornecedor_id: val || "" }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Selecione o fornecedor (opcional)..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fornecedores.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.razao_social_nome} ({f.cpf_cnpj})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Descrição e Valor */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label>Descrição da Compra / Lote *</Label>
+                  <Input
+                    required
+                    placeholder="Ex: Aquisição de 30 camisetas (Lote 1)"
+                    value={sobDemandaForm.descricao}
+                    onChange={(e) => setSobDemandaForm(f => ({ ...f, descricao: e.target.value }))}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Valor Pago (R$) *</Label>
+                  <Input
+                    required
+                    placeholder="0,00"
+                    value={sobDemandaForm.valor}
+                    onChange={(e) => setSobDemandaForm(f => ({ ...f, valor: maskCurrency(e.target.value) }))}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Data de Pagamento */}
+              <div className="grid gap-1.5">
+                <Label>Data do Pagamento *</Label>
+                <Input
+                  type="date"
+                  required
+                  value={sobDemandaForm.data_pagamento}
+                  onChange={(e) => setSobDemandaForm(f => ({ ...f, data_pagamento: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              {/* Nota Fiscal e Anexo */}
+              <CampoNotaFiscal
+                numero={sobDemandaForm.numero_documento_fiscal}
+                onNumeroChange={(val: string) => setSobDemandaForm(f => ({ ...f, numero_documento_fiscal: val }))}
+                arquivo={sobDemandaForm.arquivo_nota_fiscal}
+                onArquivoChange={(file: File | null) => setSobDemandaForm(f => ({ ...f, arquivo_nota_fiscal: file }))}
+              />
+
+              {/* Observações */}
+              <div className="grid gap-1.5">
+                <Label>Observações (Opcional)</Label>
+                <Input
+                  placeholder="Ex: Pagamento referente ao 1º lote de entrega para o início das aulas"
+                  value={sobDemandaForm.observacoes}
+                  onChange={(e) => setSobDemandaForm(f => ({ ...f, observacoes: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setOpenSobDemandaModal(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={savingSobDemanda}
+                className="bg-blue-600 hover:bg-blue-500 text-white"
+              >
+                {savingSobDemanda ? "Salvando..." : "Confirmar Compra"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ==================================================== */}
       {/* DIALOG 0: EDITAR PARCELA DO CRONOGRAMA              */}

@@ -130,6 +130,8 @@ function OrcamentoContent() {
     frequencia_meses: "1",
     num_parcelas: "1",
     dia_vencimento: "",
+    data_inicio: "",
+    sob_demanda: false,
   })
 
   // Carregar Projetos e Rubricas
@@ -376,9 +378,11 @@ function OrcamentoContent() {
         quantidade: formQtd,
         valor_unitario: formVlUnit,
         tipo_pagamento: formData.tipo_pagamento,
-        frequencia_meses: formData.tipo_pagamento === "RECORRENTE" ? parseInt(formData.frequencia_meses) || 1 : null,
-        num_parcelas: formData.tipo_pagamento !== "UNICO" ? parseInt(formData.num_parcelas) || 1 : null,
-        dia_vencimento: formData.dia_vencimento ? parseInt(formData.dia_vencimento) : null,
+        frequencia_meses: !formData.sob_demanda && formData.tipo_pagamento === "RECORRENTE" ? parseInt(formData.frequencia_meses) || 1 : null,
+        num_parcelas: !formData.sob_demanda && formData.tipo_pagamento !== "UNICO" ? parseInt(formData.num_parcelas) || 1 : null,
+        dia_vencimento: !formData.sob_demanda && formData.dia_vencimento ? parseInt(formData.dia_vencimento) : null,
+        data_inicio: formData.data_inicio || null,
+        sob_demanda: formData.sob_demanda,
       })
       toast.success("Rubrica orçamentária cadastrada com sucesso!")
       setFormData({
@@ -392,6 +396,8 @@ function OrcamentoContent() {
         frequencia_meses: "1",
         num_parcelas: "1",
         dia_vencimento: "",
+        data_inicio: "",
+        sob_demanda: false,
       })
       setOpen(false)
       loadRubricas(selectedProjetoId)
@@ -544,7 +550,11 @@ function OrcamentoContent() {
                         <Select
                           value={formData.tipo}
                           onValueChange={(val: any) => {
-                            if (val) setFormData((prev) => ({ ...prev, tipo: val }))
+                            if (val) setFormData((prev) => ({
+                              ...prev,
+                              tipo: val,
+                              sob_demanda: val === "MATERIAL" ? true : prev.sob_demanda,
+                            }))
                           }}
                         >
                           <SelectTrigger id="tipo">
@@ -629,75 +639,109 @@ function OrcamentoContent() {
                       </div>
                     </div>
 
-                    {/* Tipo de Pagamento */}
+                    {/* Checkbox Sob Demanda */}
+                    <label className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div>
+                        <span className="text-xs font-semibold text-foreground block">Execução Sob Demanda (Materiais / Compras Eventuais)</span>
+                        <span className="text-[11px] text-muted-foreground block">
+                          Não gera parcelas antecipadas no calendário. Saldo é consumido conforme os pagamentos forem lançados.
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formData.sob_demanda}
+                        onChange={(e) => setFormData((p) => ({ ...p, sob_demanda: e.target.checked }))}
+                        className="size-4 accent-emerald-600 rounded cursor-pointer ml-3"
+                      />
+                    </label>
+
+                    {/* Data de Início da Atividade */}
                     <div className="grid gap-2">
-                      <Label>Tipo de Pagamento</Label>
-                      <Select
-                        value={formData.tipo_pagamento}
-                        onValueChange={(v: string | null) =>
-                          setFormData((f) => ({
-                            ...f,
-                            tipo_pagamento: (v ?? "UNICO") as "UNICO" | "RECORRENTE" | "PARCELADO",
-                          }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {(val) => {
-                              const labels: Record<string, string> = {
-                                UNICO: "Pagamento Único",
-                                RECORRENTE: "Recorrente (ex: mensal)",
-                                PARCELADO: "Parcelado (ex: 3x)",
-                              }
-                              return val && labels[val] ? labels[val] : val
-                            }}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="UNICO">Pagamento Único</SelectItem>
-                          <SelectItem value="RECORRENTE">Recorrente (ex: mensal)</SelectItem>
-                          <SelectItem value="PARCELADO">Parcelado (ex: 3x)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="data_inicio">Data de Início da Atividade (Opcional)</Label>
+                      <Input
+                        id="data_inicio"
+                        type="date"
+                        value={formData.data_inicio}
+                        onChange={(e) => setFormData((p) => ({ ...p, data_inicio: e.target.value }))}
+                      />
+                      <span className="text-[11px] text-muted-foreground">
+                        Informe se esta contratação começar em data posterior ao início do projeto (ex: Mês 3).
+                      </span>
                     </div>
 
-                    {formData.tipo_pagamento !== "UNICO" && (
-                      <div className="grid grid-cols-3 gap-3">
-                        {formData.tipo_pagamento === "RECORRENTE" && (
-                          <div className="grid gap-2">
-                            <Label htmlFor="frequencia_meses">Frequência (meses)</Label>
-                            <Input
-                              id="frequencia_meses"
-                              type="number"
-                              min="1"
-                              value={formData.frequencia_meses}
-                              onChange={(e) => setFormData({ ...formData, frequencia_meses: e.target.value })}
-                            />
+                    {!formData.sob_demanda && (
+                      <>
+                        {/* Tipo de Pagamento */}
+                        <div className="grid gap-2">
+                          <Label>Tipo de Pagamento</Label>
+                          <Select
+                            value={formData.tipo_pagamento}
+                            onValueChange={(v: string | null) =>
+                              setFormData((f) => ({
+                                ...f,
+                                tipo_pagamento: (v ?? "UNICO") as "UNICO" | "RECORRENTE" | "PARCELADO",
+                              }))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue>
+                                {(val) => {
+                                  const labels: Record<string, string> = {
+                                    UNICO: "Pagamento Único",
+                                    RECORRENTE: "Recorrente (ex: mensal)",
+                                    PARCELADO: "Parcelado (ex: 3x)",
+                                  }
+                                  return val && labels[val] ? labels[val] : val
+                                }}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="UNICO">Pagamento Único</SelectItem>
+                              <SelectItem value="RECORRENTE">Recorrente (ex: mensal)</SelectItem>
+                              <SelectItem value="PARCELADO">Parcelado (ex: 3x)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {formData.tipo_pagamento !== "UNICO" && (
+                          <div className="grid grid-cols-3 gap-3">
+                            {formData.tipo_pagamento === "RECORRENTE" && (
+                              <div className="grid gap-2">
+                                <Label htmlFor="frequencia_meses">Frequência (meses)</Label>
+                                <Input
+                                  id="frequencia_meses"
+                                  type="number"
+                                  min="1"
+                                  value={formData.frequencia_meses}
+                                  onChange={(e) => setFormData({ ...formData, frequencia_meses: e.target.value })}
+                                />
+                              </div>
+                            )}
+                            <div className="grid gap-2">
+                              <Label htmlFor="num_parcelas">Nº de Parcelas</Label>
+                              <Input
+                                id="num_parcelas"
+                                type="number"
+                                min="1"
+                                value={formData.num_parcelas}
+                                onChange={(e) => setFormData({ ...formData, num_parcelas: e.target.value })}
+                              />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="dia_vencimento">Dia Vencimento</Label>
+                              <Input
+                                id="dia_vencimento"
+                                type="number"
+                                min="1"
+                                max="31"
+                                placeholder="Ex: 5"
+                                value={formData.dia_vencimento}
+                                onChange={(e) => setFormData({ ...formData, dia_vencimento: e.target.value })}
+                              />
+                            </div>
                           </div>
                         )}
-                        <div className="grid gap-2">
-                          <Label htmlFor="num_parcelas">Nº de Parcelas</Label>
-                          <Input
-                            id="num_parcelas"
-                            type="number"
-                            min="1"
-                            value={formData.num_parcelas}
-                            onChange={(e) => setFormData({ ...formData, num_parcelas: e.target.value })}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="dia_vencimento">Dia Vencimento</Label>
-                          <Input
-                            id="dia_vencimento"
-                            type="number"
-                            min="1"
-                            max="31"
-                            placeholder="Ex: 5"
-                            value={formData.dia_vencimento}
-                            onChange={(e) => setFormData({ ...formData, dia_vencimento: e.target.value })}
-                          />
-                        </div>
-                      </div>
+                      </>
                     )}
 
                     {/* Cálculo Automático Visual */}
@@ -1359,6 +1403,16 @@ function OrcamentoContent() {
                                   </Badge>
                                 )
                               })()}
+                              {rubrica.sob_demanda && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 font-medium bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30">
+                                  ⚡ Sob Demanda
+                                </Badge>
+                              )}
+                              {rubrica.data_inicio && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono text-muted-foreground">
+                                  Início: {formatYearMonth(rubrica.data_inicio.slice(0, 7))}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -1377,6 +1431,33 @@ function OrcamentoContent() {
 
                         {/* Células de cada Mês */}
                         {mesesDisponiveis.map((ym) => {
+                          if (rubrica.sob_demanda) {
+                            const despesasMes = (rubrica.despesas || []).filter((d) => {
+                              const dt = d.data_pagamento || d.data_despesa || ""
+                              return dt.startsWith(ym) && d.status === "PAGO"
+                            })
+                            if (despesasMes.length === 0) {
+                              return (
+                                <TableCell key={ym} className="text-center text-muted-foreground/30">
+                                  -
+                                </TableCell>
+                              )
+                            }
+                            const valorMes = despesasMes.reduce((acc, d) => acc + Number(d.valor || 0), 0)
+                            return (
+                              <TableCell key={ym} className="text-center">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                                    {formatCurrency(valorMes)}
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground">
+                                    {despesasMes.length > 1 ? `${despesasMes.length} pagtos.` : "Pago"}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            )
+                          }
+
                           const parcelasMes = (rubrica.parcelas_pagamento || []).filter(
                             (p) => p.data_vencimento && p.data_vencimento.startsWith(ym)
                           )

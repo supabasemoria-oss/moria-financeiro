@@ -24,18 +24,26 @@ function calcularDataVencimento(dataInicioStr: string, idx: number, freqMeses: n
 }
 
 export function gerarParcelas(rubrica: Rubrica, dataInicioProjeto: string): Omit<ParcelaPagamento, 'id' | 'created_at' | 'updated_at'>[] {
+  // Rubricas sob demanda (materiais, bens, compras eventuais) não geram parcelas antecipadas no calendário
+  if (rubrica.sob_demanda) {
+    return []
+  }
+
+  // A data base é a data de início da rubrica (quando definida) ou a data de início do projeto
+  const dataBase = rubrica.data_inicio || dataInicioProjeto
   const tipoPag = rubrica.tipo_pagamento ?? 'UNICO'
+
   if (tipoPag === 'UNICO') {
-    const d = diaParaData(dataInicioProjeto, rubrica.dia_vencimento)
+    const d = diaParaData(dataBase, rubrica.dia_vencimento)
     return [{ rubrica_id: rubrica.id, projeto_id: rubrica.projeto_id, numero_parcela: 1, total_parcelas: 1,
-      descricao: rubrica.descricao + ' - Pagamento unico', valor_previsto: rubrica.valor_total,
+      descricao: rubrica.descricao + ' - Pagamento único', valor_previsto: rubrica.valor_total,
       data_vencimento: d, data_pagamento_real: null, status: statusInicial(d), despesa_id: null }]
   }
   const num = rubrica.num_parcelas ?? 1
   const freq = rubrica.frequencia_meses ?? 1
   const vlUnit = Math.round(rubrica.valor_total / num * 100) / 100
   return Array.from({ length: num }, (_, i) => {
-    const d = calcularDataVencimento(dataInicioProjeto, i, freq, rubrica.dia_vencimento)
+    const d = calcularDataVencimento(dataBase, i, freq, rubrica.dia_vencimento)
     const label = tipoPag === 'PARCELADO'
       ? rubrica.descricao + ' - Parcela ' + (i + 1) + '/' + num
       : rubrica.descricao + ' - ' + labelMes(d)

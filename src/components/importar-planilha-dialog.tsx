@@ -55,6 +55,7 @@ import {
   CAMPOS_SISTEMA,
   type MapeamentoColuna,
   type ResultadoMapeamento,
+  type RubricaSkillExtraida,
 } from "@/lib/gemini-import"
 import { useRouter } from "next/navigation"
 
@@ -191,6 +192,13 @@ export function ImportarPlanilhaDialog({
     )
   }
 
+  function atualizarRubricaDetectada(idx: number, patch: Partial<RubricaSkillExtraida>) {
+    if (!resultado?.rubricas_detectadas) return
+    const novas = [...resultado.rubricas_detectadas]
+    novas[idx] = { ...novas[idx], ...patch }
+    setResultado({ ...resultado, rubricas_detectadas: novas })
+  }
+
   function aplicarTodasSugestoesIA() {
     setMapeamento((prev) =>
       prev.map((m) => ({
@@ -273,15 +281,37 @@ export function ImportarPlanilhaDialog({
       // 2. Criar rubricas com ciclo inteligente MROSC (RH e Serviços Contínuos divididos nos meses reais)
       if (resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0) {
         for (const rub of resultado.rubricas_detectadas) {
-          const { tipoPagamento, numParcelas: meses } = inferirMesesERecorrenciaRubrica({
+          const inferencia = inferirMesesERecorrenciaRubrica({
             descricao: rub.descricao,
             especificacao: rub.especificacao,
             tipo: rub.tipo,
             unidade: rub.unidade,
             quantidade: rub.quantidade,
             periodo_meses: rub.periodo_meses,
+            mes_inicio: rub.mes_inicio,
+            data_inicio: rub.data_inicio,
+            sob_demanda: rub.sob_demanda,
             vigenciaMesesProjeto,
           })
+
+          const tipoPagamento = inferencia.tipoPagamento
+          const meses = inferencia.numParcelas
+          const isSobDemanda = rub.sob_demanda !== undefined ? rub.sob_demanda : inferencia.sob_demanda
+
+          // Calcular data de início da rubrica se houver desfasamento de mês
+          let dataInicioRubrica: string | null = rub.data_inicio || null
+          if (!dataInicioRubrica && rub.mes_inicio && rub.mes_inicio > 1) {
+            const baseData = projEncontrado?.data_ordem_inicio || projEncontrado?.data_inicio
+            if (baseData) {
+              const [bAno, bMes, bDia] = baseData.split("T")[0].split("-").map(Number)
+              const baseDate = new Date(bAno, bMes - 1, bDia)
+              baseDate.setMonth(baseDate.getMonth() + (rub.mes_inicio - 1))
+              const ano = baseDate.getFullYear()
+              const m = String(baseDate.getMonth() + 1).padStart(2, "0")
+              const d = String(baseDate.getDate()).padStart(2, "0")
+              dataInicioRubrica = `${ano}-${m}-${d}`
+            }
+          }
 
           const vlTotalCalculado =
             rub.valor_total && rub.valor_total > 0
@@ -301,9 +331,13 @@ export function ImportarPlanilhaDialog({
             num_parcelas: meses,
             frequencia_meses: 1,
             dia_vencimento: 10,
+            data_inicio: dataInicioRubrica,
+            sob_demanda: isSobDemanda,
           })
           criadas++
-          totalParcelasGeradas += meses
+          if (!isSobDemanda) {
+            totalParcelasGeradas += meses
+          }
         }
       } else {
         // Fallback para linhas mapeadas manualmente com inteligência MROSC
@@ -331,7 +365,7 @@ export function ImportarPlanilhaDialog({
             (obj.valor_unitario ?? "0").replace(/\./g, "").replace(",", ".")
           )
 
-          const { tipoPagamento, numParcelas } = inferirMesesERecorrenciaRubrica({
+          const inferencia = inferirMesesERecorrenciaRubrica({
             descricao,
             tipo: obj.tipo,
             unidade: obj.unidade,
@@ -342,8 +376,8 @@ export function ImportarPlanilhaDialog({
           const qtdNum = isNaN(quantidade) ? 1 : quantidade
           const vlUnitNum = isNaN(valor_unitario) ? 0 : valor_unitario
           const vlTotalCalculado =
-            tipoPagamento === "RECORRENTE" && numParcelas > 1
-              ? qtdNum * vlUnitNum * numParcelas
+            inferencia.tipoPagamento === "RECORRENTE" && inferencia.numParcelas > 1
+              ? qtdNum * vlUnitNum * inferencia.numParcelas
               : qtdNum * vlUnitNum
 
           await mroscService.createRubrica({
@@ -356,13 +390,16 @@ export function ImportarPlanilhaDialog({
             unidade: obj.unidade?.trim() || "UN",
             valor_unitario: vlUnitNum,
             valor_total: vlTotalCalculado,
-            tipo_pagamento: tipoPagamento,
-            num_parcelas: numParcelas,
+            tipo_pagamento: inferencia.tipoPagamento,
+            num_parcelas: inferencia.numParcelas,
             frequencia_meses: 1,
             dia_vencimento: 10,
+            sob_demanda: inferencia.sob_demanda,
           })
           criadas++
-          totalParcelasGeradas += numParcelas
+          if (!inferencia.sob_demanda) {
+            totalParcelasGeradas += inferencia.numParcelas
+          }
         }
       }
 
@@ -446,6 +483,7 @@ export function ImportarPlanilhaDialog({
 
   const totalParcelasEstimadas = resultado?.rubricas_detectadas
     ? resultado.rubricas_detectadas.reduce((acc, r) => {
+        if (r.sob_demanda) return acc
         const meses =
           r.periodo_meses && r.periodo_meses > 1
             ? r.periodo_meses
@@ -775,18 +813,20 @@ export function ImportarPlanilhaDialog({
                   {/* Tabela detalhada do ciclo */}
                   {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
                     <div className="flex-1 min-h-[380px] max-h-[55vh] overflow-y-auto rounded-lg border">
-                      <Table className="min-w-[640px]">
+                      <Table className="min-w-[760px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[35%]">O que pagar (Item / Despesa)</TableHead>
-                            <TableHead className="w-[30%]">Quem recebe (Fornecedor Cotado)</TableHead>
-                            <TableHead className="w-[15%] text-center">Parcelamento</TableHead>
-                            <TableHead className="w-[10%] text-right">Mensal</TableHead>
+                            <TableHead className="w-[30%]">O que pagar (Item / Despesa)</TableHead>
+                            <TableHead className="w-[24%]">Quem recebe (Fornecedor Cotado)</TableHead>
+                            <TableHead className="w-[12%] text-center">Início</TableHead>
+                            <TableHead className="w-[14%] text-center">Modalidade</TableHead>
+                            <TableHead className="w-[10%] text-right">Unitário</TableHead>
                             <TableHead className="w-[10%] text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {resultado.rubricas_detectadas.map((rub, idx) => {
+                            const isSobDemanda = rub.sob_demanda ?? false
                             const meses =
                               rub.periodo_meses && rub.periodo_meses > 1
                                 ? rub.periodo_meses
@@ -794,6 +834,7 @@ export function ImportarPlanilhaDialog({
                                   rub.unidade?.toLowerCase().includes("mes")
                                 ? Math.round(rub.quantidade)
                                 : 1
+                            const mesInicio = rub.mes_inicio || 1
                             return (
                               <TableRow key={idx}>
                                 <TableCell className="py-2.5">
@@ -821,7 +862,7 @@ export function ImportarPlanilhaDialog({
                                 <TableCell className="py-2.5">
                                   {rub.fornecedor_selecionado ? (
                                     <div>
-                                      <span className="font-medium text-xs block text-foreground">
+                                      <span className="font-medium text-xs block text-foreground truncate max-w-[180px]">
                                         {rub.fornecedor_selecionado.razao_social_nome}
                                       </span>
                                       <span className="text-[11px] font-mono text-muted-foreground block">
@@ -836,18 +877,58 @@ export function ImportarPlanilhaDialog({
                                     </span>
                                   )}
                                 </TableCell>
+
+                                {/* Coluna Início */}
                                 <TableCell className="py-2.5 text-center">
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[11px] font-normal ${
-                                      meses > 1
-                                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-                                        : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {meses > 1 ? `${meses} parcelas mensais` : "Pagamento único"}
-                                  </Badge>
+                                  {isSobDemanda ? (
+                                    <span className="text-[11px] text-muted-foreground">Sob Demanda</span>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <span className="text-[11px] font-medium text-foreground">Mês</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="48"
+                                        value={mesInicio}
+                                        onChange={(e) => {
+                                          const val = parseInt(e.target.value, 10) || 1
+                                          atualizarRubricaDetectada(idx, { mes_inicio: val })
+                                        }}
+                                        className="w-12 h-6 text-center text-xs border rounded bg-background"
+                                        title="Mês relativo de início no projeto (ex: Mês 1, Mês 3)"
+                                      />
+                                    </div>
+                                  )}
                                 </TableCell>
+
+                                {/* Coluna Modalidade */}
+                                <TableCell className="py-2.5 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      atualizarRubricaDetectada(idx, { sob_demanda: !isSobDemanda })
+                                    }}
+                                    className="cursor-pointer"
+                                    title="Clique para alternar entre Sob Demanda e Cronograma Mensal Fixo"
+                                  >
+                                    {isSobDemanda ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                                      >
+                                        ⚡ Sob Demanda
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                                      >
+                                        🗓️ {meses > 1 ? `${meses} parcelas` : "Única"}
+                                      </Badge>
+                                    )}
+                                  </button>
+                                </TableCell>
+
                                 <TableCell className="py-2.5 text-right font-mono text-xs text-foreground">
                                   {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
                                     rub.valor_unitario

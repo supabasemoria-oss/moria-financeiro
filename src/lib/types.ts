@@ -4,7 +4,7 @@ import type { Database, Tables, TablesInsert, TablesUpdate, Enums } from '@/type
 export type Instituicao = Tables<'instituicoes'>
 export type Projeto = Tables<'projetos'> & { data_ordem_inicio?: string | null }
 export type Fornecedor = Tables<'fornecedores'>
-export type Rubrica = Tables<'rubricas_orcamentarias'>
+export type Rubrica = Tables<'rubricas_orcamentarias'> & { data_inicio?: string | null; sob_demanda?: boolean | null }
 export type Despesa = Tables<'despesas'>
 export type Comprovante = Tables<'comprovantes'>
 export type ParcelaPagamento = Tables<'parcelas_pagamento'>
@@ -14,14 +14,14 @@ export type TermoAditivo = Tables<'termos_aditivos'>
 export type InstituicaoInsert = TablesInsert<'instituicoes'>
 export type ProjetoInsert = TablesInsert<'projetos'> & { data_ordem_inicio?: string | null }
 export type FornecedorInsert = TablesInsert<'fornecedores'>
-export type RubricaInsert = TablesInsert<'rubricas_orcamentarias'>
+export type RubricaInsert = TablesInsert<'rubricas_orcamentarias'> & { data_inicio?: string | null; sob_demanda?: boolean | null }
 export type DespesaInsert = TablesInsert<'despesas'>
 export type ComprovanteInsert = TablesInsert<'comprovantes'>
 export type ParcelaPagamentoInsert = TablesInsert<'parcelas_pagamento'>
 export type TermoAditivoInsert = TablesInsert<'termos_aditivos'>
 
 // ?? Update types ?????????????????????????????????????????????????????
-export type RubricaUpdate = TablesUpdate<'rubricas_orcamentarias'>
+export type RubricaUpdate = TablesUpdate<'rubricas_orcamentarias'> & { data_inicio?: string | null; sob_demanda?: boolean | null }
 export type DespesaUpdate = TablesUpdate<'despesas'>
 export type ParcelaPagamentoUpdate = TablesUpdate<'parcelas_pagamento'>
 export type ProjetoUpdate = TablesUpdate<'projetos'> & { data_ordem_inicio?: string | null }

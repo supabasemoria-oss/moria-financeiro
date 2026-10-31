@@ -38,6 +38,12 @@ export interface RubricaSkillExtraida {
   codigo_natureza_despesa: string
   /** Nº de meses de duração da rubrica (ex: 12) — extraído da memória de cálculo */
   periodo_meses?: number
+  /** Mês relativo de início no projeto (ex: 1 para Mês 1, 3 para Mês 3) */
+  mes_inicio?: number | null
+  /** Data de início formatada (AAAA-MM-DD), calculada se a data de início do projeto for conhecida */
+  data_inicio?: string | null
+  /** Se true, a rubrica é executada sob demanda (materiais, insumos físicos, contratações pontuais) e não gera parcelas com vencimento antecipado */
+  sob_demanda?: boolean
   fornecedor_selecionado?: FornecedorIdentificado | null
 }
 
@@ -73,15 +79,25 @@ export function inferirMesesERecorrenciaRubrica(params: {
   unidade?: string
   quantidade?: number
   periodo_meses?: number
+  mes_inicio?: number | null
+  data_inicio?: string | null
+  sob_demanda?: boolean | null
   vigenciaMesesProjeto?: number
-}): { tipoPagamento: "RECORRENTE" | "UNICO"; numParcelas: number } {
+}): { tipoPagamento: "RECORRENTE" | "UNICO"; numParcelas: number; sob_demanda: boolean; data_inicio?: string | null } {
   const descLower = (params.descricao || "").toLowerCase()
   const especLower = (params.especificacao || "").toLowerCase()
   const tipoUpper = (params.tipo || "").toUpperCase()
   const unidadeLower = (params.unidade || "").toLowerCase()
   const qtd = params.quantidade || 1
 
-  // 1. Materiais de consumo e bens físicos pontuais (NUNCA são recorrentes)
+  // Se o chamador já definiu explicitamente sob_demanda
+  if (params.sob_demanda !== undefined && params.sob_demanda !== null) {
+    if (params.sob_demanda) {
+      return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
+    }
+  }
+
+  // 1. Materiais de consumo e bens físicos pontuais (executados sob demanda no MROSC)
   const isMaterialFisico =
     tipoUpper === "MATERIAL" ||
     /\b(apito|bola|bambole|bambolê|kimono|colchonete|cone|rede|colete|folder|banner|barreira|trofeu|troféu|medalha|uniforme|camisa|camiseta|kit|didatico|didático|placa|tenda|instrumento musical|pandeiro|agogô|agogo|berimbau)\b/i.test(
@@ -89,7 +105,7 @@ export function inferirMesesERecorrenciaRubrica(params: {
     )
 
   if (isMaterialFisico) {
-    return { tipoPagamento: "UNICO", numParcelas: 1 }
+    return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
   }
 
   // 2. Cargos de RH e Serviços Continuados (OBRIGATORIAMENTE RECORRENTES no MROSC)
@@ -106,7 +122,7 @@ export function inferirMesesERecorrenciaRubrica(params: {
     )
 
   if (!isRH && !isServicoContinuado && !unidadeLower.includes("mes") && !unidadeLower.includes("mês")) {
-    return { tipoPagamento: "UNICO", numParcelas: 1 }
+    return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
   }
 
   // 3. Determinar o número de meses da recorrência
@@ -159,6 +175,8 @@ export function inferirMesesERecorrenciaRubrica(params: {
   return {
     tipoPagamento: "RECORRENTE",
     numParcelas: meses,
+    sob_demanda: false,
+    data_inicio: params.data_inicio || null,
   }
 }
 
@@ -1048,7 +1066,9 @@ Para CADA item ou despesa orçada:
     * "OUTROS": Encargos sociais, previdenciários e trabalhistas (ex: encargos CLT 68,16%).
 - "quantidade": A quantidade simultânea real.
     * ATENÇÃO CRÍTICA PARA RH: Se a planilha indica "16 monitores atuando por 12 meses", a quantidade é 16 (número de profissionais), e o "periodo_meses" é 12. NUNCA coloque o total homem-mês (192) na quantidade!
-- "periodo_meses": Duração em meses da contratação (ex: 12, 14). Se for compra de material físico pontual, deixe null.
+- "periodo_meses": Duração em meses da contratação (ex: 12, 14). Se for compra de material físico pontual ou sob demanda, deixe null.
+- "mes_inicio": Mês relativo em que a contratação/atividade se inicia (ex: 1 para o primeiro mês, 3 se começar no 3º mês após período de preparação). Se não especificado, 1.
+- "sob_demanda": Booleano. Se o item for MATERIAL DE CONSUMO, uniformes, bolas, kits, troféus, banners ou compra/serviço pontual a ser adquirido conforme a necessidade (sem cronograma mensal fixo), defina true. Para RH e serviços contínuos com calendário mensal fixo, defina false.
 - "unidade": Unidade textual ("Mês", "UN", "Diária", "Serviço", "HR").
 - "valor_unitario": Custo unitário mensal por pessoa (salário) ou preço de 1 item.
 - "valor_total": Valor total aprovado para o item no projeto (Quantidade × Meses × Valor Unitário).
@@ -1199,6 +1219,17 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         vlTotal = qtd * (meses && meses > 1 ? meses : 1) * vlUnit
       }
 
+      // Inferir sob_demanda e temporalidade caso não explicitado
+      const inferencia = inferirMesesERecorrenciaRubrica({
+        descricao: r.descricao || "",
+        especificacao: r.especificacao || undefined,
+        tipo: r.tipo,
+        unidade: r.unidade,
+        quantidade: qtd,
+        periodo_meses: meses,
+        sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : undefined,
+      })
+
       const rub: RubricaSkillExtraida = {
         descricao: r.descricao || "",
         especificacao: r.especificacao || undefined,
@@ -1209,6 +1240,9 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         valor_total: vlTotal,
         codigo_natureza_despesa: r.codigo_natureza_despesa || "33903900",
         periodo_meses: meses,
+        mes_inicio: r.mes_inicio ? Number(r.mes_inicio) : 1,
+        data_inicio: r.data_inicio || null,
+        sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : inferencia.sob_demanda,
         fornecedor_selecionado: fornecedorSel,
       }
       return rub
