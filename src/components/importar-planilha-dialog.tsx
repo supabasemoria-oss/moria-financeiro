@@ -336,7 +336,8 @@ export function ImportarPlanilhaDialog({
           })
           criadas++
           if (!isSobDemanda) {
-            totalParcelasGeradas += meses
+            const qtdVagas = Math.max(1, Math.round(rub.quantidade || 1))
+            totalParcelasGeradas += qtdVagas > 1 ? qtdVagas * meses : meses
           }
         }
       } else {
@@ -398,7 +399,8 @@ export function ImportarPlanilhaDialog({
           })
           criadas++
           if (!inferencia.sob_demanda) {
-            totalParcelasGeradas += inferencia.numParcelas
+            const qtdVagas = Math.max(1, Math.round(qtdNum || 1))
+            totalParcelasGeradas += qtdVagas > 1 ? qtdVagas * inferencia.numParcelas : inferencia.numParcelas
           }
         }
       }
@@ -491,7 +493,8 @@ export function ImportarPlanilhaDialog({
               r.unidade?.toLowerCase().includes("mes")
             ? Math.round(r.quantidade)
             : 1
-        return acc + meses
+        const qtdVagas = Math.max(1, Math.round(r.quantidade || 1))
+        return acc + (qtdVagas > 1 ? qtdVagas * meses : meses)
       }, 0)
     : 0
 
@@ -923,7 +926,7 @@ export function ImportarPlanilhaDialog({
                                         variant="outline"
                                         className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
                                       >
-                                        🗓️ {meses > 1 ? `${meses} parcelas` : "Única"}
+                                        🗓️ {meses > 1 ? (Math.round(rub.quantidade) > 1 ? `${Math.round(rub.quantidade) * meses} parcelas (${Math.round(rub.quantidade)} vagas × ${meses} m)` : `${meses} parcelas`) : "Única"}
                                       </Badge>
                                     )}
                                   </button>

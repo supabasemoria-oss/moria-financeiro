@@ -39,17 +39,82 @@ export function gerarParcelas(rubrica: Rubrica, dataInicioProjeto: string): Omit
       descricao: rubrica.descricao + ' - Pagamento único', valor_previsto: rubrica.valor_total,
       data_vencimento: d, data_pagamento_real: null, status: statusInicial(d), despesa_id: null }]
   }
-  const num = rubrica.num_parcelas ?? 1
+  const numMeses = rubrica.num_parcelas ?? 1
   const freq = rubrica.frequencia_meses ?? 1
-  const vlUnit = Math.round(rubrica.valor_total / num * 100) / 100
-  return Array.from({ length: num }, (_, i) => {
+  const qtd = Math.max(1, Math.round(rubrica.quantidade || 1))
+
+  // Caso com múltiplos postos/vagas (ex: 4 assistentes, 16 auxiliares operacionais)
+  // Gera parcelas individuais por vaga/profissional a cada mês (Opção 1)
+  if (qtd > 1) {
+    const totalParcelas = qtd * numMeses
+    const vlUnit = rubrica.valor_unitario > 0
+      ? rubrica.valor_unitario
+      : Math.round((rubrica.valor_total / totalParcelas) * 100) / 100
+
+    let somaAcumulada = 0
+    const parcelas: Omit<ParcelaPagamento, 'id' | 'created_at' | 'updated_at'>[] = []
+
+    for (let m = 0; m < numMeses; m++) {
+      const d = calcularDataVencimento(dataBase, m, freq, rubrica.dia_vencimento)
+      const mesFormatado = labelMes(d)
+
+      for (let v = 1; v <= qtd; v++) {
+        const numSeq = m * qtd + v
+        const isUltima = numSeq === totalParcelas
+        const valorPrevisto = isUltima
+          ? Math.round((rubrica.valor_total - somaAcumulada) * 100) / 100
+          : vlUnit
+        somaAcumulada += valorPrevisto
+
+        const label = tipoPag === 'PARCELADO'
+          ? `${rubrica.descricao} (Vaga ${v}/${qtd}) - Parcela ${m + 1}/${numMeses}`
+          : `${rubrica.descricao} (Vaga ${v}/${qtd}) - ${mesFormatado}`
+
+        parcelas.push({
+          rubrica_id: rubrica.id,
+          projeto_id: rubrica.projeto_id,
+          numero_parcela: numSeq,
+          total_parcelas: totalParcelas,
+          descricao: label,
+          valor_previsto: valorPrevisto,
+          data_vencimento: d,
+          data_pagamento_real: null,
+          status: statusInicial(d),
+          despesa_id: null,
+        })
+      }
+    }
+    return parcelas
+  }
+
+  // Caso rubrica de posto único (qtd === 1, ex: Coordenador Geral, Assessoria Contábil)
+  const vlUnit = Math.round((rubrica.valor_total / numMeses) * 100) / 100
+  let somaAcumulada = 0
+
+  return Array.from({ length: numMeses }, (_, i) => {
     const d = calcularDataVencimento(dataBase, i, freq, rubrica.dia_vencimento)
+    const isUltima = i === numMeses - 1
+    const valorPrevisto = isUltima
+      ? Math.round((rubrica.valor_total - somaAcumulada) * 100) / 100
+      : vlUnit
+    somaAcumulada += valorPrevisto
+
     const label = tipoPag === 'PARCELADO'
-      ? rubrica.descricao + ' - Parcela ' + (i + 1) + '/' + num
-      : rubrica.descricao + ' - ' + labelMes(d)
-    return { rubrica_id: rubrica.id, projeto_id: rubrica.projeto_id, numero_parcela: i + 1, total_parcelas: num,
-      descricao: label, valor_previsto: vlUnit, data_vencimento: d,
-      data_pagamento_real: null, status: statusInicial(d), despesa_id: null }
+      ? `${rubrica.descricao} - Parcela ${i + 1}/${numMeses}`
+      : `${rubrica.descricao} - ${labelMes(d)}`
+
+    return {
+      rubrica_id: rubrica.id,
+      projeto_id: rubrica.projeto_id,
+      numero_parcela: i + 1,
+      total_parcelas: numMeses,
+      descricao: label,
+      valor_previsto: valorPrevisto,
+      data_vencimento: d,
+      data_pagamento_real: null,
+      status: statusInicial(d),
+      despesa_id: null,
+    }
   })
 }
 

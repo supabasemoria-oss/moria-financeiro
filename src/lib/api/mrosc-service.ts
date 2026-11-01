@@ -244,7 +244,12 @@ export const mroscService = {
               }
               const parcelas = gerarParcelas(rubricaCompleta, data_ordem_inicio)
               if (parcelas.length > 0) {
-                await supabase.from('parcelas_pagamento').insert(parcelas.map((p) => ({ ...p, rubrica_id: rub.id, projeto_id: id })))
+                const BATCH_SIZE = 100
+                for (let b = 0; b < parcelas.length; b += BATCH_SIZE) {
+                  await supabase.from('parcelas_pagamento').insert(
+                    parcelas.slice(b, b + BATCH_SIZE).map((p) => ({ ...p, rubrica_id: rub.id, projeto_id: id }))
+                  )
+                }
               }
             }
           }
@@ -344,7 +349,12 @@ export const mroscService = {
     if (proj && proj.data_ordem_inicio) {
       const parcelas = gerarParcelas(rubrica, proj.data_ordem_inicio)
       if (parcelas.length > 0) {
-        await supabase.from('parcelas_pagamento').insert(parcelas.map((p) => ({ ...p, rubrica_id: rubrica.id, projeto_id: rubrica.projeto_id })))
+        const BATCH_SIZE = 100
+        for (let b = 0; b < parcelas.length; b += BATCH_SIZE) {
+          await supabase.from('parcelas_pagamento').insert(
+            parcelas.slice(b, b + BATCH_SIZE).map((p) => ({ ...p, rubrica_id: rubrica.id, projeto_id: rubrica.projeto_id }))
+          )
+        }
       }
     }
     return rubrica
@@ -557,12 +567,30 @@ export const mroscService = {
       const d = String(limite.getDate()).padStart(2, '0')
       q = q.lte('data_vencimento', `${ano}-${m}-${d}`) as typeof q
     }
-    const [ordensMap, { data, error }] = await Promise.all([
-      this.getOrdensInicioMap(),
-      q.order('data_vencimento'),
-    ])
-    if (error) err(error.message)
-    const todas = (data ?? []) as unknown as ParcelaComRelacoes[]
+    const ordensMap = await this.getOrdensInicioMap()
+    let allData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+      const from = page * pageSize
+      const to = from + pageSize - 1
+      const { data, error } = await q.range(from, to).order('data_vencimento')
+      if (error) err(error.message)
+      if (data && data.length > 0) {
+        allData = allData.concat(data)
+        if (data.length < pageSize) {
+          hasMore = false
+        } else {
+          page++
+        }
+      } else {
+        hasMore = false
+      }
+    }
+
+    const todas = allData as unknown as ParcelaComRelacoes[]
     todas.forEach((p) => {
       if (p.projetos) {
         p.projetos.data_ordem_inicio = ordensMap[p.projetos.id] || null
