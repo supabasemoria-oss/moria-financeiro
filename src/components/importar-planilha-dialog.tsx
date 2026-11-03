@@ -971,12 +971,12 @@ export function ImportarPlanilhaDialog({
                       <Table className="min-w-[760px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[30%]">O que pagar (Item / Despesa)</TableHead>
-                            <TableHead className="w-[24%]">Quem recebe (Fornecedor Cotado)</TableHead>
-                            <TableHead className="w-[12%] text-center">Início</TableHead>
-                            <TableHead className="w-[14%] text-center">Modalidade</TableHead>
-                            <TableHead className="w-[10%] text-right">Unitário</TableHead>
-                            <TableHead className="w-[10%] text-right">Total</TableHead>
+                            <TableHead className="w-[26%]">Item / Rubrica</TableHead>
+                            <TableHead className="w-[22%]">Fornecedor Cotado</TableHead>
+                            <TableHead className="w-[10%] text-center">Início</TableHead>
+                            <TableHead className="w-[18%] text-center">Modalidade</TableHead>
+                            <TableHead className="w-[12%] text-right">Unitário</TableHead>
+                            <TableHead className="w-[12%] text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1018,22 +1018,18 @@ export function ImportarPlanilhaDialog({
                                       : undefined
                                   }
                                 >
-                                  <TableCell className="py-2.5">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                  <TableCell className="py-2 max-w-[260px]">
+                                    <div className="font-semibold text-xs text-foreground line-clamp-2" title={rub.descricao}>
                                       <span>{rub.descricao}</span>
-                                      {rub.ponto_atencao && (
-                                        <span title={rub.ponto_atencao.motivo} className="cursor-help">
-                                          <AlertTriangleIcon className="size-3.5 text-amber-600 inline" />
-                                        </span>
-                                      )}
                                     </div>
 
                                     {/* Ponto de Atenção Explicativo */}
                                     {rub.ponto_atencao && (
                                       <div
-                                        className="mt-1 flex items-start gap-1 rounded bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 text-[11px] text-amber-900 dark:text-amber-200"
+                                        className="mt-1 flex items-start gap-1 rounded bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 text-[10px] text-amber-900 dark:text-amber-200"
                                         title={rub.ponto_atencao.motivo}
                                       >
+                                        <AlertTriangleIcon className="size-3 text-amber-600 shrink-0 mt-0.5" />
                                         <span className="font-medium shrink-0">{rub.ponto_atencao.titulo}:</span>
                                         <span className="truncate text-muted-foreground">{rub.ponto_atencao.motivo}</span>
                                       </div>
@@ -1057,10 +1053,10 @@ export function ImportarPlanilhaDialog({
                                       </Badge>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-2.5">
+                                  <TableCell className="py-2 max-w-[220px]">
                                     {rub.fornecedor_selecionado ? (
                                       <div>
-                                        <span className="font-medium text-xs block text-foreground truncate max-w-[180px]">
+                                        <span className="font-medium text-xs block text-foreground truncate" title={rub.fornecedor_selecionado.razao_social_nome}>
                                           {rub.fornecedor_selecionado.razao_social_nome}
                                         </span>
                                         <span className="text-[11px] font-mono text-muted-foreground block">
@@ -1077,7 +1073,7 @@ export function ImportarPlanilhaDialog({
                                   </TableCell>
 
                                   {/* Coluna Início */}
-                                  <TableCell className="py-2.5 text-center">
+                                  <TableCell className="py-2 text-center">
                                     {isSobDemanda ? (
                                       <span className="text-[11px] text-muted-foreground">Sob Demanda</span>
                                     ) : (
@@ -1100,7 +1096,7 @@ export function ImportarPlanilhaDialog({
                                   </TableCell>
 
                                   {/* Coluna Modalidade */}
-                                  <TableCell className="py-2.5 text-center">
+                                  <TableCell className="py-2 text-center">
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1127,7 +1123,7 @@ export function ImportarPlanilhaDialog({
                                     </button>
                                   </TableCell>
 
-                                  <TableCell className="py-2.5 text-right font-mono text-xs text-foreground">
+                                  <TableCell className="py-2 text-right font-mono text-xs text-foreground">
                                     {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
                                       rub.valor_unitario
                                     )}
@@ -1135,7 +1131,7 @@ export function ImportarPlanilhaDialog({
                                       /{rub.unidade || "un"}
                                     </span>
                                   </TableCell>
-                                  <TableCell className="py-2.5 text-right font-mono text-xs font-semibold text-foreground">
+                                  <TableCell className="py-2 text-right font-mono text-xs font-semibold text-foreground">
                                     {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
                                       rub.valor_total
                                     )}
