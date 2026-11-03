@@ -94,7 +94,7 @@ export function detectarPontoAtencao(r: {
   valor_total?: number
   periodo_meses?: number
   sob_demanda?: boolean
-}): { ponto: PontoAtencaoImportacao | null; forcarSobDemanda?: boolean; tipoSugerido?: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS" } {
+}): { ponto: PontoAtencaoImportacao | null; tipoSugerido?: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS" } {
   const descLower = (r.descricao || "").toLowerCase()
   const especLower = (r.especificacao || "").toLowerCase()
   const textoCompleto = `${descLower} ${especLower}`
@@ -103,36 +103,9 @@ export function detectarPontoAtencao(r: {
   const isMaterialFisico =
     tipoUpper === "MATERIAL" || REGEX_MATERIAL_FISICO.test(textoCompleto)
 
-  // 1. Material físico com menção a meses/prazo (ex: "1 instrumento para 12 meses", "camisas para 10 meses")
-  const matchMeses = textoCompleto.match(/\b(\d+)\s*mes(?:es)?\b/i) || textoCompleto.match(/\b(mensal|diaria|diária)\b/i)
-  if (isMaterialFisico && matchMeses) {
-    return {
-      forcarSobDemanda: true,
-      tipoSugerido: "MATERIAL",
-      ponto: {
-        tipo: "material_com_prazo",
-        titulo: "Material com menção a prazo",
-        motivo: `A descrição menciona prazo ("${matchMeses[0]}"), mas o item é um bem físico/material de consumo.`,
-        sugestao: "Mantido automaticamente como Sob Demanda para evitar divisão indevida em parcelas mensais.",
-      },
-    }
-  }
+  const tipoSugerido = isMaterialFisico ? ("MATERIAL" as const) : undefined
 
-  // 2. Material físico genérico marcado indevidamente como recorrente
-  if (isMaterialFisico && (r.sob_demanda === false || (r.periodo_meses && r.periodo_meses > 1))) {
-    return {
-      forcarSobDemanda: true,
-      tipoSugerido: "MATERIAL",
-      ponto: {
-        tipo: "material_com_prazo",
-        titulo: "Material físico como recorrente",
-        motivo: "Itens físicos e insumos de consumo devem ser executados sob demanda no MROSC.",
-        sugestao: "Ajustado para Sob Demanda (compras pontuais conforme necessidade).",
-      },
-    }
-  }
-
-  // 3. Cargo de RH com quantidade muito alta (suspeita de homem-mês)
+  // Cargo de RH com quantidade muito alta (suspeita de homem-mês acumulado)
   const isRH =
     tipoUpper === "RH" ||
     /\b(assistente|coordenad|monitor|instrutor|auxiliar|psicolog|articulador|pesquisad|estagiari|educador|professor)\b/i.test(
@@ -140,6 +113,7 @@ export function detectarPontoAtencao(r: {
     )
   if (isRH && r.quantidade && r.quantidade >= 48 && (r.quantidade % 12 === 0 || r.quantidade % 14 === 0)) {
     return {
+      tipoSugerido,
       ponto: {
         tipo: "possivel_homem_mes",
         titulo: "Quantidade alta em RH (possível homem-mês)",
@@ -149,19 +123,20 @@ export function detectarPontoAtencao(r: {
     }
   }
 
-  // 4. Parcela com valor unitário irrisório (< R$ 10) em contratos que não sejam material miúdo
+  // Parcela com valor unitário irrisório (< R$ 5) em contratos de RH
   if (r.valor_unitario && r.valor_unitario > 0 && r.valor_unitario < 5 && isRH) {
     return {
+      tipoSugerido,
       ponto: {
         tipo: "valor_divergente",
         titulo: "Valor unitário muito baixo",
-        motivo: `Valor de R$ ${r.valor_unitario.toFixed(2)} por unidade/posto pode indicar divisão indevida.`,
+        motivo: `Valor de R$ ${r.valor_unitario.toFixed(2)} por posto/salário pode indicar divisão indevida.`,
         sugestao: "Confira o valor unitário da contratação na planilha.",
       },
     }
   }
 
-  return { ponto: null }
+  return { ponto: null, tipoSugerido }
 }
 
 export function inferirMesesERecorrenciaRubrica(params: {
@@ -183,19 +158,33 @@ export function inferirMesesERecorrenciaRubrica(params: {
   const unidadeLower = (params.unidade || "").toLowerCase()
   const qtd = params.quantidade || 1
 
-  // 1. Materiais de consumo e bens físicos pontuais (SEMPRE executados sob demanda no MROSC)
+  // 1. Respeito soberano à escolha explícita (NADA ENGESSADO: se o usuário ou a planilha definiu, respeitar)
+  if (params.sob_demanda !== undefined && params.sob_demanda !== null) {
+    if (params.sob_demanda) {
+      return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
+    } else {
+      const mesesDefinidos =
+        params.periodo_meses && params.periodo_meses > 1
+          ? params.periodo_meses
+          : params.vigenciaMesesProjeto && params.vigenciaMesesProjeto > 1
+          ? params.vigenciaMesesProjeto
+          : 12
+      return {
+        tipoPagamento: "RECORRENTE",
+        numParcelas: mesesDefinidos,
+        sob_demanda: false,
+        data_inicio: params.data_inicio || null,
+      }
+    }
+  }
+
+  // 2. Classificação padrão inicial por natureza do item:
+  // Materiais de consumo e bens físicos pontuais (por padrão executados sob demanda no MROSC)
   const isMaterialFisico =
     tipoUpper === "MATERIAL" || REGEX_MATERIAL_FISICO.test(textoCompleto)
 
   if (isMaterialFisico) {
     return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
-  }
-
-  // Se o chamador já definiu explicitamente sob_demanda
-  if (params.sob_demanda !== undefined && params.sob_demanda !== null) {
-    if (params.sob_demanda) {
-      return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
-    }
   }
 
   // 2. Cargos de RH e Serviços Continuados (OBRIGATORIAMENTE RECORRENTES no MROSC)
@@ -1362,11 +1351,10 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : undefined,
       })
 
-      const sobDemandaFinal = analisePonto.forcarSobDemanda
-        ? true
-        : r.sob_demanda !== undefined
-        ? Boolean(r.sob_demanda)
-        : inferencia.sob_demanda
+      const sobDemandaFinal =
+        r.sob_demanda !== undefined
+          ? Boolean(r.sob_demanda)
+          : inferencia.sob_demanda
 
       const tipoFinal = analisePonto.tipoSugerido || r.tipo || (sobDemandaFinal ? "MATERIAL" : "SERVICO")
 

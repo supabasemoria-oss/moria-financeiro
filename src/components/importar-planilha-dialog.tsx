@@ -1246,11 +1246,15 @@ export function ImportarPlanilhaDialog({
                                   </TableCell>
 
                                   <TableCell className="py-2 text-right font-mono text-xs text-foreground">
-                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                      rub.valor_unitario
-                                    )}
+                                    <div className="font-semibold">
+                                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                        rub.valor_unitario
+                                      )}
+                                    </div>
                                     <span className="block text-[10px] text-muted-foreground font-sans">
-                                      /{rub.unidade || "un"}
+                                      {rub.quantidade > 1
+                                        ? `${rub.quantidade} ${rub.unidade || "un"}`
+                                        : `/${rub.unidade || "un"}`}
                                     </span>
                                   </TableCell>
                                   <TableCell className="py-2 text-right font-mono text-xs font-semibold text-foreground">
