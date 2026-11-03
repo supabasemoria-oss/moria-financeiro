@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { CornerChase } from "@/components/ui/corner-chase"
 import { getTodaySaoPaulo } from "@/lib/utils"
 import { mroscService } from "@/lib/api/mrosc-service"
 import {
@@ -614,7 +615,7 @@ export function ImportarPlanilhaDialog({
         </div>
 
         {/* Corpo rolável apenas na vertical, sem overflow nos cantos */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-4 min-w-0">
+        <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-6 space-y-4 min-w-0">
           {/* ETAPA: UPLOAD */}
           {etapa === "upload" && (
             <div className="flex flex-col gap-4">
@@ -660,13 +661,13 @@ export function ImportarPlanilhaDialog({
 
         {/* ETAPA: MAPEANDO */}
         {etapa === "mapeando" && (
-          <div className="flex flex-col items-center gap-4 py-10">
-            <Loader2Icon className="size-8 animate-spin text-blue-500" />
-            <div className="text-center">
-              <p className="text-sm font-medium">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 py-20 text-center my-auto">
+            <CornerChase size="lg" className="text-blue-600 dark:text-blue-400" />
+            <div>
+              <p className="text-sm font-medium text-foreground">
                 Analisando planilha com Skill MROSC e Gemini...
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
                 {arquivo?.name}
               </p>
             </div>
@@ -1420,17 +1421,17 @@ export function ImportarPlanilhaDialog({
 
         {/* ETAPA: IMPORTANDO */}
         {etapa === "importando" && (
-          <div className="flex flex-col items-center gap-4 py-10">
-            <Loader2Icon className="size-8 animate-spin text-emerald-500" />
-            <p className="text-sm font-medium">Vinculando entidades e gravando rubricas...</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 py-20 text-center my-auto">
+            <CornerChase size="lg" className="text-emerald-600 dark:text-emerald-400" />
+            <p className="text-sm font-medium text-foreground">Vinculando entidades e gravando rubricas...</p>
           </div>
         )}
 
         {/* ETAPA: CONCLUÍDO */}
         {etapa === "concluido" && (
-          <div className="flex flex-col items-center gap-4 py-10">
-            <CheckCircle2Icon className="size-10 text-emerald-500" />
-            <p className="text-sm font-medium">Importação concluída com sucesso!</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20 text-center my-auto">
+            <CheckCircle2Icon className="size-12 text-emerald-500" />
+            <p className="text-base font-semibold text-foreground">Importação concluída com sucesso!</p>
           </div>
         )}
 
