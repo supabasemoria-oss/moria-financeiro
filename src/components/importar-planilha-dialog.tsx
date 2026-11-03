@@ -17,7 +17,10 @@ import {
   UsersIcon,
   CoinsIcon,
   SlidersHorizontalIcon,
+  SearchIcon,
+  AlertTriangleIcon,
 } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -103,6 +106,8 @@ export function ImportarPlanilhaDialog({
   const [projetoSelecionadoId, setProjetoSelecionadoId] = React.useState<string>(projetoId || "")
   const [modoDestino, setModoDestino] = React.useState<"auto_criar" | "existente">("auto_criar")
   const [abaVisualizacao, setAbaVisualizacao] = React.useState<"pagamentos" | "colunas">("pagamentos")
+  const [termoBusca, setTermoBusca] = React.useState("")
+  const [filtroTipo, setFiltroTipo] = React.useState<"TODOS" | "ATENCAO" | "RH" | "MATERIAL" | "SERVICO">("TODOS")
 
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -127,6 +132,8 @@ export function ImportarPlanilhaDialog({
     setCadastrarFornecedores(true)
     setModoDestino("auto_criar")
     setAbaVisualizacao("pagamentos")
+    setTermoBusca("")
+    setFiltroTipo("TODOS")
   }
 
   function handleClose(v: boolean) {
@@ -504,6 +511,40 @@ export function ImportarPlanilhaDialog({
 
   const fornecedoresContagem = resultado?.fornecedores_detectados?.length || 0
 
+  const totalPontosAtencao =
+    resultado?.rubricas_detectadas?.filter((r) => Boolean(r.ponto_atencao)).length || 0
+
+  const rubricasExibidas = React.useMemo(() => {
+    if (!resultado?.rubricas_detectadas) return []
+    return resultado.rubricas_detectadas
+      .map((rub, originalIdx) => ({ rub, originalIdx }))
+      .filter(({ rub }) => {
+        if (filtroTipo === "ATENCAO" && !rub.ponto_atencao) return false
+        if (filtroTipo === "RH" && rub.tipo !== "RH" && rub.codigo_natureza_despesa !== "33904700") return false
+        if (filtroTipo === "MATERIAL" && rub.tipo !== "MATERIAL") return false
+        if (filtroTipo === "SERVICO" && rub.tipo !== "SERVICO" && rub.tipo !== "LOCACAO") return false
+
+        if (termoBusca.trim()) {
+          const termo = termoBusca.toLowerCase().trim()
+          const desc = (rub.descricao || "").toLowerCase()
+          const espec = (rub.especificacao || "").toLowerCase()
+          const fornecedor = (rub.fornecedor_selecionado?.razao_social_nome || "").toLowerCase()
+          const cnpj = (rub.fornecedor_selecionado?.cpf_cnpj || "").toLowerCase()
+          const cod = (rub.codigo_natureza_despesa || "").toLowerCase()
+          const tipo = (rub.tipo || "").toLowerCase()
+          return (
+            desc.includes(termo) ||
+            espec.includes(termo) ||
+            fornecedor.includes(termo) ||
+            cnpj.includes(termo) ||
+            cod.includes(termo) ||
+            tipo.includes(termo)
+          )
+        }
+        return true
+      })
+  }, [resultado?.rubricas_detectadas, filtroTipo, termoBusca])
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       {trigger && <DialogTrigger render={trigger as React.ReactElement} />}
@@ -813,6 +854,117 @@ export function ImportarPlanilhaDialog({
                     </div>
                   </div>
 
+                  {/* Banner de Pontos de Atenção (quando houver itens problemáticos/ambíguos) */}
+                  {totalPontosAtencao > 0 && (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 px-3 text-xs text-amber-900 dark:text-amber-200">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangleIcon className="size-4 text-amber-600 shrink-0" />
+                        <div>
+                          <span className="font-semibold">{totalPontosAtencao} ponto(s) de atenção detectado(s)</span>
+                          <span className="text-muted-foreground ml-1 hidden sm:inline">
+                            — itens com potenciais ambiguidades identificados para sua conferência.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`h-6 text-[11px] px-2.5 border-amber-500/30 ${
+                            filtroTipo === "ATENCAO"
+                              ? "bg-amber-600 text-white hover:bg-amber-700"
+                              : "hover:bg-amber-500/20 text-amber-900 dark:text-amber-100"
+                          }`}
+                          onClick={() => setFiltroTipo(filtroTipo === "ATENCAO" ? "TODOS" : "ATENCAO")}
+                        >
+                          {filtroTipo === "ATENCAO" ? "Ver Todas" : `Filtrar Atenção (${totalPontosAtencao})`}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Barra de Pesquisa e Filtros Rápidos */}
+                  {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                      {/* Campo de Pesquisa */}
+                      <div className="relative flex-1">
+                        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar por nome, cargo, material, fornecedor ou código..."
+                          value={termoBusca}
+                          onChange={(e) => setTermoBusca(e.target.value)}
+                          className="h-8 pl-8 pr-7 text-xs bg-background"
+                        />
+                        {termoBusca && (
+                          <button
+                            type="button"
+                            onClick={() => setTermoBusca("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                            title="Limpar busca"
+                          >
+                            <XIcon className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Pílulas de Filtro Rápido */}
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 shrink-0">
+                        <Button
+                          type="button"
+                          variant={filtroTipo === "TODOS" ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => setFiltroTipo("TODOS")}
+                        >
+                          Todas ({resultado.rubricas_detectadas.length})
+                        </Button>
+                        {totalPontosAtencao > 0 && (
+                          <Button
+                            type="button"
+                            variant={filtroTipo === "ATENCAO" ? "default" : "outline"}
+                            size="sm"
+                            className={`h-7 text-xs px-2 ${
+                              filtroTipo === "ATENCAO"
+                                ? "bg-amber-600 text-white hover:bg-amber-700"
+                                : "border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                            }`}
+                            onClick={() => setFiltroTipo("ATENCAO")}
+                          >
+                            ⚠️ Atenção ({totalPontosAtencao})
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant={filtroTipo === "RH" ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => setFiltroTipo("RH")}
+                        >
+                          RH / Encargos
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={filtroTipo === "MATERIAL" ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => setFiltroTipo("MATERIAL")}
+                        >
+                          Materiais
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={filtroTipo === "SERVICO" ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs px-2"
+                          onClick={() => setFiltroTipo("SERVICO")}
+                        >
+                          Serviços
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Tabela detalhada do ciclo */}
                   {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
                     <div className="flex-1 min-h-[380px] max-h-[55vh] overflow-y-auto rounded-lg border">
@@ -828,126 +980,170 @@ export function ImportarPlanilhaDialog({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {resultado.rubricas_detectadas.map((rub, idx) => {
-                            const isSobDemanda = rub.sob_demanda ?? false
-                            const meses =
-                              rub.periodo_meses && rub.periodo_meses > 1
-                                ? rub.periodo_meses
-                                : rub.unidade?.toLowerCase().includes("mês") ||
-                                  rub.unidade?.toLowerCase().includes("mes")
-                                ? Math.round(rub.quantidade)
-                                : 1
-                            const mesInicio = rub.mes_inicio || 1
-                            return (
-                              <TableRow key={idx}>
-                                <TableCell className="py-2.5">
-                                  <div className="font-semibold text-xs text-foreground">
-                                    {rub.descricao}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 mt-1">
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
-                                      {rub.codigo_natureza_despesa}
-                                    </Badge>
-                                    <Badge
-                                      variant="secondary"
-                                      className={`text-[10px] py-0 px-1 ${
-                                        rub.codigo_natureza_despesa === "33904700"
-                                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
-                                          : rub.tipo === "RH"
-                                          ? "bg-purple-500/10 text-purple-700 dark:text-purple-300"
-                                          : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                      }`}
-                                    >
-                                      {rub.codigo_natureza_despesa === "33904700" ? "ENCARGOS CLT" : rub.tipo}
-                                    </Badge>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-2.5">
-                                  {rub.fornecedor_selecionado ? (
-                                    <div>
-                                      <span className="font-medium text-xs block text-foreground truncate max-w-[180px]">
-                                        {rub.fornecedor_selecionado.razao_social_nome}
-                                      </span>
-                                      <span className="text-[11px] font-mono text-muted-foreground block">
-                                        {rub.fornecedor_selecionado.cpf_cnpj}
-                                      </span>
+                          {rubricasExibidas.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="py-8 text-center text-xs text-muted-foreground">
+                                Nenhuma rubrica encontrada para os filtros aplicados.
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0 ml-1 text-xs"
+                                  onClick={() => {
+                                    setTermoBusca("")
+                                    setFiltroTipo("TODOS")
+                                  }}
+                                >
+                                  Limpar filtros
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            rubricasExibidas.map(({ rub, originalIdx }) => {
+                              const isSobDemanda = rub.sob_demanda ?? false
+                              const meses =
+                                rub.periodo_meses && rub.periodo_meses > 1
+                                  ? rub.periodo_meses
+                                  : rub.unidade?.toLowerCase().includes("mês") ||
+                                    rub.unidade?.toLowerCase().includes("mes")
+                                  ? Math.round(rub.quantidade)
+                                  : 1
+                              const mesInicio = rub.mes_inicio || 1
+                              return (
+                                <TableRow
+                                  key={originalIdx}
+                                  className={
+                                    rub.ponto_atencao
+                                      ? "bg-amber-500/5 hover:bg-amber-500/10 border-l-2 border-l-amber-500"
+                                      : undefined
+                                  }
+                                >
+                                  <TableCell className="py-2.5">
+                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                      <span>{rub.descricao}</span>
+                                      {rub.ponto_atencao && (
+                                        <span title={rub.ponto_atencao.motivo} className="cursor-help">
+                                          <AlertTriangleIcon className="size-3.5 text-amber-600 inline" />
+                                        </span>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground italic">
-                                      {rub.codigo_natureza_despesa === "33904700"
-                                        ? "Guia Previdência / FGTS"
-                                        : "Cotação sob demanda"}
-                                    </span>
-                                  )}
-                                </TableCell>
 
-                                {/* Coluna Início */}
-                                <TableCell className="py-2.5 text-center">
-                                  {isSobDemanda ? (
-                                    <span className="text-[11px] text-muted-foreground">Sob Demanda</span>
-                                  ) : (
-                                    <div className="flex items-center justify-center gap-1">
-                                      <span className="text-[11px] font-medium text-foreground">Mês</span>
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        max="48"
-                                        value={mesInicio}
-                                        onChange={(e) => {
-                                          const val = parseInt(e.target.value, 10) || 1
-                                          atualizarRubricaDetectada(idx, { mes_inicio: val })
-                                        }}
-                                        className="w-12 h-6 text-center text-xs border rounded bg-background"
-                                        title="Mês relativo de início no projeto (ex: Mês 1, Mês 3)"
-                                      />
-                                    </div>
-                                  )}
-                                </TableCell>
-
-                                {/* Coluna Modalidade */}
-                                <TableCell className="py-2.5 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      atualizarRubricaDetectada(idx, { sob_demanda: !isSobDemanda })
-                                    }}
-                                    className="cursor-pointer"
-                                    title="Clique para alternar entre Sob Demanda e Cronograma Mensal Fixo"
-                                  >
-                                    {isSobDemanda ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                                    {/* Ponto de Atenção Explicativo */}
+                                    {rub.ponto_atencao && (
+                                      <div
+                                        className="mt-1 flex items-start gap-1 rounded bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 text-[11px] text-amber-900 dark:text-amber-200"
+                                        title={rub.ponto_atencao.motivo}
                                       >
-                                        ⚡ Sob Demanda
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
-                                      >
-                                        🗓️ {meses > 1 ? (Math.round(rub.quantidade) > 1 ? `${Math.round(rub.quantidade) * meses} parcelas (${Math.round(rub.quantidade)} vagas × ${meses} m)` : `${meses} parcelas`) : "Única"}
-                                      </Badge>
+                                        <span className="font-medium shrink-0">{rub.ponto_atencao.titulo}:</span>
+                                        <span className="truncate text-muted-foreground">{rub.ponto_atencao.motivo}</span>
+                                      </div>
                                     )}
-                                  </button>
-                                </TableCell>
 
-                                <TableCell className="py-2.5 text-right font-mono text-xs text-foreground">
-                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                    rub.valor_unitario
-                                  )}
-                                  <span className="block text-[10px] text-muted-foreground font-sans">
-                                    /{rub.unidade || "un"}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-right font-mono text-xs font-semibold text-foreground">
-                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                                    rub.valor_total
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
+                                        {rub.codigo_natureza_despesa}
+                                      </Badge>
+                                      <Badge
+                                        variant="secondary"
+                                        className={`text-[10px] py-0 px-1 ${
+                                          rub.codigo_natureza_despesa === "33904700"
+                                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                                            : rub.tipo === "RH"
+                                            ? "bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                                            : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                        }`}
+                                      >
+                                        {rub.codigo_natureza_despesa === "33904700" ? "ENCARGOS CLT" : rub.tipo}
+                                      </Badge>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-2.5">
+                                    {rub.fornecedor_selecionado ? (
+                                      <div>
+                                        <span className="font-medium text-xs block text-foreground truncate max-w-[180px]">
+                                          {rub.fornecedor_selecionado.razao_social_nome}
+                                        </span>
+                                        <span className="text-[11px] font-mono text-muted-foreground block">
+                                          {rub.fornecedor_selecionado.cpf_cnpj}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground italic">
+                                        {rub.codigo_natureza_despesa === "33904700"
+                                          ? "Guia Previdência / FGTS"
+                                          : "Cotação sob demanda"}
+                                      </span>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Coluna Início */}
+                                  <TableCell className="py-2.5 text-center">
+                                    {isSobDemanda ? (
+                                      <span className="text-[11px] text-muted-foreground">Sob Demanda</span>
+                                    ) : (
+                                      <div className="flex items-center justify-center gap-1">
+                                        <span className="text-[11px] font-medium text-foreground">Mês</span>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="48"
+                                          value={mesInicio}
+                                          onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10) || 1
+                                            atualizarRubricaDetectada(originalIdx, { mes_inicio: val })
+                                          }}
+                                          className="w-12 h-6 text-center text-xs border rounded bg-background"
+                                          title="Mês relativo de início no projeto (ex: Mês 1, Mês 3)"
+                                        />
+                                      </div>
+                                    )}
+                                  </TableCell>
+
+                                  {/* Coluna Modalidade */}
+                                  <TableCell className="py-2.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        atualizarRubricaDetectada(originalIdx, { sob_demanda: !isSobDemanda })
+                                      }}
+                                      className="cursor-pointer"
+                                      title="Clique para alternar entre Sob Demanda e Cronograma Mensal Fixo"
+                                    >
+                                      {isSobDemanda ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                                        >
+                                          ⚡ Sob Demanda
+                                        </Badge>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                                        >
+                                          🗓️ {meses > 1 ? (Math.round(rub.quantidade) > 1 ? `${Math.round(rub.quantidade) * meses} parcelas (${Math.round(rub.quantidade)} vagas × ${meses} m)` : `${meses} parcelas`) : "Única"}
+                                        </Badge>
+                                      )}
+                                    </button>
+                                  </TableCell>
+
+                                  <TableCell className="py-2.5 text-right font-mono text-xs text-foreground">
+                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                      rub.valor_unitario
+                                    )}
+                                    <span className="block text-[10px] text-muted-foreground font-sans">
+                                      /{rub.unidade || "un"}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="py-2.5 text-right font-mono text-xs font-semibold text-foreground">
+                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                                      rub.valor_total
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          )}
                         </TableBody>
                       </Table>
                     </div>

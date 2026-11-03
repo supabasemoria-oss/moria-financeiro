@@ -25,6 +25,13 @@ export interface FornecedorIdentificado {
   telefone?: string | null
 }
 
+export interface PontoAtencaoImportacao {
+  tipo: "material_com_prazo" | "possivel_homem_mes" | "valor_divergente" | "ambiguidade"
+  titulo: string
+  motivo: string
+  sugestao: string
+}
+
 export interface RubricaSkillExtraida {
   descricao: string
   especificacao?: string
@@ -45,6 +52,7 @@ export interface RubricaSkillExtraida {
   /** Se true, a rubrica é executada sob demanda (materiais, insumos físicos, contratações pontuais) e não gera parcelas com vencimento antecipado */
   sob_demanda?: boolean
   fornecedor_selecionado?: FornecedorIdentificado | null
+  ponto_atencao?: PontoAtencaoImportacao | null
 }
 
 export interface ResultadoMapeamento {
@@ -72,6 +80,89 @@ export const CAMPOS_SISTEMA = [
  * Identifica se uma rubrica é de prestação continuada (RH / Serviços Mensais) ou aquisição pontual de materiais,
  * inferindo com precisão a quantidade de meses e evitando agrupamento indevido de salários em parcela única.
  */
+export const REGEX_MATERIAL_FISICO =
+  /\b(apito|bola|bambole|bambolê|kimono|colchonete|cone|rede|colete|folder|banner|barreira|trofeu|troféu|medalha|uniforme|camisa|camiseta|calça|calca|kit|didatico|didático|placa|tenda|instrumento|pandeiro|agogô|agogo|berimbau|faixa|corda|escada|bomba de ar|saco rede|insumo|jogo|brinquedo|material esportivo|material didatico|material didático)\b/i
+
+export function detectarPontoAtencao(r: {
+  descricao: string
+  especificacao?: string
+  tipo?: string
+  quantidade?: number
+  unidade?: string
+  valor_unitario?: number
+  valor_total?: number
+  periodo_meses?: number
+  sob_demanda?: boolean
+}): { ponto: PontoAtencaoImportacao | null; forcarSobDemanda?: boolean; tipoSugerido?: "RH" | "SERVICO" | "MATERIAL" | "LOCACAO" | "OUTROS" } {
+  const descLower = (r.descricao || "").toLowerCase()
+  const especLower = (r.especificacao || "").toLowerCase()
+  const textoCompleto = `${descLower} ${especLower}`
+  const tipoUpper = (r.tipo || "").toUpperCase()
+
+  const isMaterialFisico =
+    tipoUpper === "MATERIAL" || REGEX_MATERIAL_FISICO.test(textoCompleto)
+
+  // 1. Material físico com menção a meses/prazo (ex: "1 instrumento para 12 meses", "camisas para 10 meses")
+  const matchMeses = textoCompleto.match(/\b(\d+)\s*mes(?:es)?\b/i) || textoCompleto.match(/\b(mensal|diaria|diária)\b/i)
+  if (isMaterialFisico && matchMeses) {
+    return {
+      forcarSobDemanda: true,
+      tipoSugerido: "MATERIAL",
+      ponto: {
+        tipo: "material_com_prazo",
+        titulo: "Material com menção a prazo",
+        motivo: `A descrição menciona prazo ("${matchMeses[0]}"), mas o item é um bem físico/material de consumo.`,
+        sugestao: "Mantido automaticamente como Sob Demanda para evitar divisão indevida em parcelas mensais.",
+      },
+    }
+  }
+
+  // 2. Material físico genérico marcado indevidamente como recorrente
+  if (isMaterialFisico && (r.sob_demanda === false || (r.periodo_meses && r.periodo_meses > 1))) {
+    return {
+      forcarSobDemanda: true,
+      tipoSugerido: "MATERIAL",
+      ponto: {
+        tipo: "material_com_prazo",
+        titulo: "Material físico como recorrente",
+        motivo: "Itens físicos e insumos de consumo devem ser executados sob demanda no MROSC.",
+        sugestao: "Ajustado para Sob Demanda (compras pontuais conforme necessidade).",
+      },
+    }
+  }
+
+  // 3. Cargo de RH com quantidade muito alta (suspeita de homem-mês)
+  const isRH =
+    tipoUpper === "RH" ||
+    /\b(assistente|coordenad|monitor|instrutor|auxiliar|psicolog|articulador|pesquisad|estagiari|educador|professor)\b/i.test(
+      descLower
+    )
+  if (isRH && r.quantidade && r.quantidade >= 48 && (r.quantidade % 12 === 0 || r.quantidade % 14 === 0)) {
+    return {
+      ponto: {
+        tipo: "possivel_homem_mes",
+        titulo: "Quantidade alta em RH (possível homem-mês)",
+        motivo: `Quantidade informada (${r.quantidade}) parece ser a multiplicação de postos × meses.`,
+        sugestao: "Verifique se a quantidade representa o número de postos de trabalho ou o total de pagamentos.",
+      },
+    }
+  }
+
+  // 4. Parcela com valor unitário irrisório (< R$ 10) em contratos que não sejam material miúdo
+  if (r.valor_unitario && r.valor_unitario > 0 && r.valor_unitario < 5 && isRH) {
+    return {
+      ponto: {
+        tipo: "valor_divergente",
+        titulo: "Valor unitário muito baixo",
+        motivo: `Valor de R$ ${r.valor_unitario.toFixed(2)} por unidade/posto pode indicar divisão indevida.`,
+        sugestao: "Confira o valor unitário da contratação na planilha.",
+      },
+    }
+  }
+
+  return { ponto: null }
+}
+
 export function inferirMesesERecorrenciaRubrica(params: {
   descricao: string
   especificacao?: string
@@ -86,26 +177,24 @@ export function inferirMesesERecorrenciaRubrica(params: {
 }): { tipoPagamento: "RECORRENTE" | "UNICO"; numParcelas: number; sob_demanda: boolean; data_inicio?: string | null } {
   const descLower = (params.descricao || "").toLowerCase()
   const especLower = (params.especificacao || "").toLowerCase()
+  const textoCompleto = `${descLower} ${especLower}`
   const tipoUpper = (params.tipo || "").toUpperCase()
   const unidadeLower = (params.unidade || "").toLowerCase()
   const qtd = params.quantidade || 1
+
+  // 1. Materiais de consumo e bens físicos pontuais (SEMPRE executados sob demanda no MROSC)
+  const isMaterialFisico =
+    tipoUpper === "MATERIAL" || REGEX_MATERIAL_FISICO.test(textoCompleto)
+
+  if (isMaterialFisico) {
+    return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
+  }
 
   // Se o chamador já definiu explicitamente sob_demanda
   if (params.sob_demanda !== undefined && params.sob_demanda !== null) {
     if (params.sob_demanda) {
       return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
     }
-  }
-
-  // 1. Materiais de consumo e bens físicos pontuais (executados sob demanda no MROSC)
-  const isMaterialFisico =
-    tipoUpper === "MATERIAL" ||
-    /\b(apito|bola|bambole|bambolê|kimono|colchonete|cone|rede|colete|folder|banner|barreira|trofeu|troféu|medalha|uniforme|camisa|camiseta|kit|didatico|didático|placa|tenda|instrumento musical|pandeiro|agogô|agogo|berimbau)\b/i.test(
-      descLower
-    )
-
-  if (isMaterialFisico) {
-    return { tipoPagamento: "UNICO", numParcelas: 1, sob_demanda: true, data_inicio: params.data_inicio || null }
   }
 
   // 2. Cargos de RH e Serviços Continuados (OBRIGATORIAMENTE RECORRENTES no MROSC)
@@ -1068,7 +1157,7 @@ Para CADA item ou despesa orçada:
     * ATENÇÃO CRÍTICA PARA RH: Se a planilha indica "16 monitores atuando por 12 meses", a quantidade é 16 (número de profissionais), e o "periodo_meses" é 12. NUNCA coloque o total homem-mês (192) na quantidade!
 - "periodo_meses": Duração em meses da contratação (ex: 12, 14). Se for compra de material físico pontual ou sob demanda, deixe null.
 - "mes_inicio": Mês relativo em que a contratação/atividade se inicia (ex: 1 para o primeiro mês, 3 se começar no 3º mês após período de preparação). Se não especificado, 1.
-- "sob_demanda": Booleano. Se o item for MATERIAL DE CONSUMO, uniformes, bolas, kits, troféus, banners ou compra/serviço pontual a ser adquirido conforme a necessidade (sem cronograma mensal fixo), defina true. Para RH e serviços contínuos com calendário mensal fixo, defina false.
+- "sob_demanda": Booleano. OBRIGATÓRIO: Se o item for MATERIAL DE CONSUMO, bens físicos, instrumentos musicais (ex: agogô, berimbau, pandeiro), equipamentos, uniformes, bolas, kits, troféus, banners ou compra/serviço pontual a ser adquirido conforme a necessidade (sem cronograma mensal fixo), defina SEMPRE true (mesmo que a descrição mencione expressões como "para 12 meses" ou "aquisição para o período"). NUNCA divida compras de materiais físicos em parcelas mensais! Para RH e serviços contínuos com calendário mensal fixo (assessoria contábil, sonorização contínua), defina false.
 - "unidade": Unidade textual ("Mês", "UN", "Diária", "Serviço", "HR").
 - "valor_unitario": Custo unitário mensal por pessoa (salário) ou preço de 1 item.
 - "valor_total": Valor total aprovado para o item no projeto (Quantidade × Meses × Valor Unitário).
@@ -1230,20 +1319,42 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : undefined,
       })
 
+      // Detectar pontos de atenção e anomalias na rubrica
+      const analisePonto = detectarPontoAtencao({
+        descricao: r.descricao || "",
+        especificacao: r.especificacao || undefined,
+        tipo: r.tipo,
+        quantidade: qtd,
+        unidade: r.unidade,
+        valor_unitario: vlUnit,
+        valor_total: vlTotal,
+        periodo_meses: meses,
+        sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : undefined,
+      })
+
+      const sobDemandaFinal = analisePonto.forcarSobDemanda
+        ? true
+        : r.sob_demanda !== undefined
+        ? Boolean(r.sob_demanda)
+        : inferencia.sob_demanda
+
+      const tipoFinal = analisePonto.tipoSugerido || r.tipo || (sobDemandaFinal ? "MATERIAL" : "SERVICO")
+
       const rub: RubricaSkillExtraida = {
         descricao: r.descricao || "",
         especificacao: r.especificacao || undefined,
-        tipo: r.tipo || "SERVICO",
+        tipo: tipoFinal,
         quantidade: qtd,
         unidade: r.unidade || "UN",
         valor_unitario: vlUnit,
         valor_total: vlTotal,
-        codigo_natureza_despesa: r.codigo_natureza_despesa || "33903900",
-        periodo_meses: meses,
+        codigo_natureza_despesa: r.codigo_natureza_despesa || (tipoFinal === "MATERIAL" ? "33903000" : "33903900"),
+        periodo_meses: sobDemandaFinal ? undefined : meses,
         mes_inicio: r.mes_inicio ? Number(r.mes_inicio) : 1,
         data_inicio: r.data_inicio || null,
-        sob_demanda: r.sob_demanda !== undefined ? Boolean(r.sob_demanda) : inferencia.sob_demanda,
+        sob_demanda: sobDemandaFinal,
         fornecedor_selecionado: fornecedorSel,
+        ponto_atencao: analisePonto.ponto,
       }
       return rub
     })
