@@ -2,6 +2,7 @@ import * as XLSX from "xlsx"
 import { getSettingsAsync } from "@/lib/settings"
 import { supabase } from "@/lib/supabase"
 import { mroscService } from "@/lib/api/mrosc-service"
+import { getTodaySaoPaulo } from "@/lib/utils"
 
 export interface MapeamentoColuna {
   coluna_original: string
@@ -737,7 +738,11 @@ export function executarSkillMrosc(rows: string[][]): ResultadoMapeamento | null
  */
 export async function vincularOuCriarInstituicaoEProjeto(
   metadados: MetadadosPlanilha,
-  valorTotalAprovado: number
+  valorTotalAprovado: number,
+  opcoes?: {
+    dataOrdemInicio?: string
+    vigenciaMeses?: number
+  }
 ): Promise<{ instituicaoId: string; projetoId: string; instituicaoNome: string; projetoNome: string; criadoNovo: boolean }> {
   let instituicaoId = ""
   let instituicaoNome = metadados.osc_nome?.trim() || "OSC Proponente"
@@ -797,20 +802,45 @@ export async function vincularOuCriarInstituicaoEProjeto(
 
     if (projExistente) {
       projetoId = projExistente.id
+      if (opcoes?.dataOrdemInicio) {
+        const hojeStr = opcoes.dataOrdemInicio
+        const vigencia = opcoes.vigenciaMeses && opcoes.vigenciaMeses > 0 ? opcoes.vigenciaMeses : 12
+        const [ano, mes, dia] = hojeStr.split("-").map(Number)
+        const dataFimObj = new Date(ano, mes - 1, dia)
+        dataFimObj.setMonth(dataFimObj.getMonth() + vigencia)
+        const fimAno = dataFimObj.getFullYear()
+        const fimMes = String(dataFimObj.getMonth() + 1).padStart(2, "0")
+        const fimDia = String(dataFimObj.getDate()).padStart(2, "0")
+        const dataFimStr = `${fimAno}-${fimMes}-${fimDia}`
+
+        await mroscService.updateProjeto(projetoId, {
+          data_inicio: hojeStr,
+          data_fim: dataFimStr,
+          data_ordem_inicio: hojeStr,
+        })
+      }
     }
   }
 
   if (!projetoId) {
-    const hoje = new Date()
-    const anoQueVem = new Date(hoje)
-    anoQueVem.setFullYear(hoje.getFullYear() + 1)
+    const hojeStr = opcoes?.dataOrdemInicio || getTodaySaoPaulo()
+    const vigencia = opcoes?.vigenciaMeses && opcoes.vigenciaMeses > 0 ? opcoes.vigenciaMeses : 12
+
+    const [ano, mes, dia] = hojeStr.split("-").map(Number)
+    const dataFimObj = new Date(ano, mes - 1, dia)
+    dataFimObj.setMonth(dataFimObj.getMonth() + vigencia)
+    const fimAno = dataFimObj.getFullYear()
+    const fimMes = String(dataFimObj.getMonth() + 1).padStart(2, "0")
+    const fimDia = String(dataFimObj.getDate()).padStart(2, "0")
+    const dataFimStr = `${fimAno}-${fimMes}-${fimDia}`
 
     const novoProjeto = await mroscService.createProjeto({
       nome: nomeProjeto,
       instituicao_id: instituicaoId,
       numero_termo: termo,
-      data_inicio: hoje.toISOString().split("T")[0],
-      data_fim: anoQueVem.toISOString().split("T")[0],
+      data_inicio: hojeStr,
+      data_fim: dataFimStr,
+      data_ordem_inicio: hojeStr,
       valor_total_aprovado: valorTotalAprovado > 0 ? valorTotalAprovado : 0,
       status: "EM_ANDAMENTO",
     })
@@ -1349,7 +1379,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         valor_unitario: vlUnit,
         valor_total: vlTotal,
         codigo_natureza_despesa: r.codigo_natureza_despesa || (tipoFinal === "MATERIAL" ? "33903000" : "33903900"),
-        periodo_meses: sobDemandaFinal ? undefined : meses,
+        periodo_meses: sobDemandaFinal ? undefined : (meses || inferencia.numParcelas),
         mes_inicio: r.mes_inicio ? Number(r.mes_inicio) : 1,
         data_inicio: r.data_inicio || null,
         sob_demanda: sobDemandaFinal,

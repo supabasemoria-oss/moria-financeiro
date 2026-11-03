@@ -19,6 +19,7 @@ import {
   SlidersHorizontalIcon,
   SearchIcon,
   AlertTriangleIcon,
+  ClockIcon,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
@@ -48,6 +49,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { getTodaySaoPaulo } from "@/lib/utils"
 import { mroscService } from "@/lib/api/mrosc-service"
 import {
   extrairLinhasXLS,
@@ -105,9 +107,10 @@ export function ImportarPlanilhaDialog({
   const [projetos, setProjetos] = React.useState<any[]>([])
   const [projetoSelecionadoId, setProjetoSelecionadoId] = React.useState<string>(projetoId || "")
   const [modoDestino, setModoDestino] = React.useState<"auto_criar" | "existente">("auto_criar")
+  const [dataOrdemInicio, setDataOrdemInicio] = React.useState<string>(getTodaySaoPaulo())
   const [abaVisualizacao, setAbaVisualizacao] = React.useState<"pagamentos" | "colunas">("pagamentos")
   const [termoBusca, setTermoBusca] = React.useState("")
-  const [filtroTipo, setFiltroTipo] = React.useState<"TODOS" | "ATENCAO" | "RH" | "MATERIAL" | "SERVICO">("TODOS")
+  const [filtroTipo, setFiltroTipo] = React.useState<"TODOS" | "ATENCAO" | "DURACAO_REDUZIDA" | "RH" | "MATERIAL" | "SERVICO">("TODOS")
 
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -131,6 +134,7 @@ export function ImportarPlanilhaDialog({
     setErro(null)
     setCadastrarFornecedores(true)
     setModoDestino("auto_criar")
+    setDataOrdemInicio(getTodaySaoPaulo())
     setAbaVisualizacao("pagamentos")
     setTermoBusca("")
     setFiltroTipo("TODOS")
@@ -239,7 +243,11 @@ export function ImportarPlanilhaDialog({
 
         const resVinculo = await vincularOuCriarInstituicaoEProjeto(
           metadadosParaCriar,
-          valorTotal
+          valorTotal,
+          {
+            dataOrdemInicio: dataOrdemInicio || undefined,
+            vigenciaMeses: vigenciaPadraoMeses || 12,
+          }
         )
         targetProjetoId = resVinculo.projetoId
         nomeProjetoFinal = resVinculo.projetoNome
@@ -250,6 +258,11 @@ export function ImportarPlanilhaDialog({
 
       if (!targetProjetoId) {
         throw new Error("Não foi possível identificar o projeto de destino.")
+      }
+
+      // Sincronizar data da Ordem de Início (Marco Zero Financeiro) no projeto
+      if (dataOrdemInicio) {
+        await mroscService.setOrdemInicioProjeto(targetProjetoId, dataOrdemInicio)
       }
 
       const linhasIgnorar = new Set([
@@ -277,7 +290,7 @@ export function ImportarPlanilhaDialog({
 
       // Calcular vigência estimada do projeto em meses (se datas estiverem presentes)
       const projEncontrado = projetos.find((p) => p.id === targetProjetoId)
-      let vigenciaMesesProjeto = 12
+      let vigenciaMesesProjeto = vigenciaPadraoMeses || 12
       if (projEncontrado?.data_inicio && projEncontrado?.data_fim) {
         const d1 = new Date(projEncontrado.data_inicio + "T00:00:00")
         const d2 = new Date(projEncontrado.data_fim + "T00:00:00")
@@ -308,7 +321,7 @@ export function ImportarPlanilhaDialog({
           // Calcular data de início da rubrica se houver desfasamento de mês
           let dataInicioRubrica: string | null = rub.data_inicio || null
           if (!dataInicioRubrica && rub.mes_inicio && rub.mes_inicio > 1) {
-            const baseData = projEncontrado?.data_ordem_inicio || projEncontrado?.data_inicio
+            const baseData = dataOrdemInicio || projEncontrado?.data_ordem_inicio || projEncontrado?.data_inicio
             if (baseData) {
               const [bAno, bMes, bDia] = baseData.split("T")[0].split("-").map(Number)
               const baseDate = new Date(bAno, bMes - 1, bDia)
@@ -318,6 +331,8 @@ export function ImportarPlanilhaDialog({
               const d = String(baseDate.getDate()).padStart(2, "0")
               dataInicioRubrica = `${ano}-${m}-${d}`
             }
+          } else if (!dataInicioRubrica && dataOrdemInicio) {
+            dataInicioRubrica = dataOrdemInicio
           }
 
           const vlTotalCalculado =
@@ -490,6 +505,34 @@ export function ImportarPlanilhaDialog({
     mapeamento.filter((m) => m.campo_sistema).map((m) => m.campo_sistema)
   )
 
+  function obterMesesRubrica(r: RubricaSkillExtraida): number {
+    if (r.periodo_meses && r.periodo_meses > 0) return r.periodo_meses
+    const u = (r.unidade || "").toLowerCase()
+    if (u.includes("mês") || u.includes("mes")) {
+      return Math.round(r.quantidade) || 1
+    }
+    return 1
+  }
+
+  const vigenciaPadraoMeses = React.useMemo(() => {
+    if (!resultado?.rubricas_detectadas || resultado.rubricas_detectadas.length === 0) return 12
+    const mesesRecorrentes = resultado.rubricas_detectadas
+      .filter((r) => !r.sob_demanda)
+      .map(obterMesesRubrica)
+      .filter((m) => m > 1)
+    if (mesesRecorrentes.length === 0) return 12
+    return Math.max(...mesesRecorrentes)
+  }, [resultado?.rubricas_detectadas])
+
+  const totalDuracaoReduzida = React.useMemo(() => {
+    if (!resultado?.rubricas_detectadas) return 0
+    return resultado.rubricas_detectadas.filter((r) => {
+      if (r.sob_demanda) return false
+      const m = obterMesesRubrica(r)
+      return m > 1 && m < vigenciaPadraoMeses
+    }).length
+  }, [resultado?.rubricas_detectadas, vigenciaPadraoMeses])
+
   const totalParcelasEstimadas = resultado?.rubricas_detectadas
     ? resultado.rubricas_detectadas.reduce((acc, r) => {
         if (r.sob_demanda) return acc
@@ -520,6 +563,11 @@ export function ImportarPlanilhaDialog({
       .map((rub, originalIdx) => ({ rub, originalIdx }))
       .filter(({ rub }) => {
         if (filtroTipo === "ATENCAO" && !rub.ponto_atencao) return false
+        if (filtroTipo === "DURACAO_REDUZIDA") {
+          if (rub.sob_demanda) return false
+          const m = obterMesesRubrica(rub)
+          if (m <= 1 || m >= vigenciaPadraoMeses) return false
+        }
         if (filtroTipo === "RH" && rub.tipo !== "RH" && rub.codigo_natureza_despesa !== "33904700") return false
         if (filtroTipo === "MATERIAL" && rub.tipo !== "MATERIAL") return false
         if (filtroTipo === "SERVICO" && rub.tipo !== "SERVICO" && rub.tipo !== "LOCACAO") return false
@@ -543,7 +591,7 @@ export function ImportarPlanilhaDialog({
         }
         return true
       })
-  }, [resultado?.rubricas_detectadas, filtroTipo, termoBusca])
+  }, [resultado?.rubricas_detectadas, filtroTipo, termoBusca, vigenciaPadraoMeses])
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -751,7 +799,28 @@ export function ImportarPlanilhaDialog({
               </div>
             </div>
 
-            {/* 3. Checkbox para auto-cadastrar fornecedores das cotações */}
+            {/* 3. Marco Zero Financeiro: Data da Ordem de Início */}
+            <div className="rounded-lg border bg-blue-500/5 border-blue-500/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <CalendarDaysIcon className="size-4 text-blue-600" />
+                  Data da Ordem de Início (Marco Zero Financeiro)
+                </span>
+                <span className="text-[11px] text-muted-foreground block">
+                  Define o início da vigência ({vigenciaPadraoMeses} meses) e a base de cálculo para as parcelas financeiras deste projeto.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={dataOrdemInicio}
+                  onChange={(e) => setDataOrdemInicio(e.target.value)}
+                  className="h-8 w-40 text-xs bg-background font-mono"
+                />
+              </div>
+            </div>
+
+            {/* 4. Checkbox para auto-cadastrar fornecedores das cotações */}
             {resultado.fornecedores_detectados && resultado.fornecedores_detectados.length > 0 && (
               <label className="flex items-center justify-between rounded-lg border bg-muted/40 p-2.5 text-xs cursor-pointer hover:bg-muted/60 transition-colors">
                 <div>
@@ -827,11 +896,18 @@ export function ImportarPlanilhaDialog({
               {abaVisualizacao === "pagamentos" && (
                 <div className="space-y-3">
                   {/* Resumo numérico do ciclo de desembolso */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                     <div className="p-2.5 rounded-lg border bg-muted/20">
                       <span className="text-[11px] text-muted-foreground block">Total Reservado</span>
                       <span className="text-sm font-bold text-foreground">
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalValorEstimado)}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg border bg-muted/20">
+                      <span className="text-[11px] text-muted-foreground block">Vigência Padrão</span>
+                      <span className="text-sm font-bold text-indigo-600 flex items-center gap-1">
+                        <ClockIcon className="size-3.5" />
+                        {vigenciaPadraoMeses} meses
                       </span>
                     </div>
                     <div className="p-2.5 rounded-lg border bg-muted/20">
@@ -934,6 +1010,21 @@ export function ImportarPlanilhaDialog({
                             ⚠️ Atenção ({totalPontosAtencao})
                           </Button>
                         )}
+                        {totalDuracaoReduzida > 0 && (
+                          <Button
+                            type="button"
+                            variant={filtroTipo === "DURACAO_REDUZIDA" ? "default" : "outline"}
+                            size="sm"
+                            className={`h-7 text-xs px-2 ${
+                              filtroTipo === "DURACAO_REDUZIDA"
+                                ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                                : "border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
+                            }`}
+                            onClick={() => setFiltroTipo(filtroTipo === "DURACAO_REDUZIDA" ? "TODOS" : "DURACAO_REDUZIDA")}
+                          >
+                            ⏱️ Duração Reduzida ({totalDuracaoReduzida})
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           variant={filtroTipo === "RH" ? "secondary" : "ghost"}
@@ -972,9 +1063,9 @@ export function ImportarPlanilhaDialog({
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-[26%]">Item / Rubrica</TableHead>
-                            <TableHead className="w-[22%]">Fornecedor Cotado</TableHead>
-                            <TableHead className="w-[10%] text-center">Início</TableHead>
-                            <TableHead className="w-[18%] text-center">Modalidade</TableHead>
+                            <TableHead className="w-[20%]">Fornecedor Cotado</TableHead>
+                            <TableHead className="w-[14%] text-center">Início / Duração</TableHead>
+                            <TableHead className="w-[16%] text-center">Modalidade</TableHead>
                             <TableHead className="w-[12%] text-right">Unitário</TableHead>
                             <TableHead className="w-[12%] text-right">Total</TableHead>
                           </TableRow>
@@ -1035,7 +1126,7 @@ export function ImportarPlanilhaDialog({
                                       </div>
                                     )}
 
-                                    <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                       <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
                                         {rub.codigo_natureza_despesa}
                                       </Badge>
@@ -1051,9 +1142,18 @@ export function ImportarPlanilhaDialog({
                                       >
                                         {rub.codigo_natureza_despesa === "33904700" ? "ENCARGOS CLT" : rub.tipo}
                                       </Badge>
+                                      {!isSobDemanda && meses > 1 && meses < vigenciaPadraoMeses && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 font-medium"
+                                          title={`Item com duração de ${meses} meses, inferior à vigência padrão de ${vigenciaPadraoMeses} meses do projeto`}
+                                        >
+                                          ⏱️ {meses} de {vigenciaPadraoMeses} m
+                                        </Badge>
+                                      )}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-2 max-w-[220px]">
+                                  <TableCell className="py-2 max-w-[200px]">
                                     {rub.fornecedor_selecionado ? (
                                       <div>
                                         <span className="font-medium text-xs block text-foreground truncate" title={rub.fornecedor_selecionado.razao_social_nome}>
@@ -1072,25 +1172,46 @@ export function ImportarPlanilhaDialog({
                                     )}
                                   </TableCell>
 
-                                  {/* Coluna Início */}
+                                  {/* Coluna Início / Duração */}
                                   <TableCell className="py-2 text-center">
                                     {isSobDemanda ? (
                                       <span className="text-[11px] text-muted-foreground">Sob Demanda</span>
                                     ) : (
-                                      <div className="flex items-center justify-center gap-1">
-                                        <span className="text-[11px] font-medium text-foreground">Mês</span>
-                                        <input
-                                          type="number"
-                                          min="1"
-                                          max="48"
-                                          value={mesInicio}
-                                          onChange={(e) => {
-                                            const val = parseInt(e.target.value, 10) || 1
-                                            atualizarRubricaDetectada(originalIdx, { mes_inicio: val })
-                                          }}
-                                          className="w-12 h-6 text-center text-xs border rounded bg-background"
-                                          title="Mês relativo de início no projeto (ex: Mês 1, Mês 3)"
-                                        />
+                                      <div className="flex flex-col items-center justify-center gap-1">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[10px] text-muted-foreground">Início:</span>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            max="48"
+                                            value={mesInicio}
+                                            onChange={(e) => {
+                                              const val = parseInt(e.target.value, 10) || 1
+                                              atualizarRubricaDetectada(originalIdx, { mes_inicio: val })
+                                            }}
+                                            className="w-10 h-6 text-center text-xs border rounded bg-background"
+                                            title="Mês relativo de início no projeto (ex: Mês 1, Mês 3)"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[10px] text-muted-foreground">Meses:</span>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            max="60"
+                                            value={meses}
+                                            onChange={(e) => {
+                                              const val = parseInt(e.target.value, 10) || 1
+                                              atualizarRubricaDetectada(originalIdx, { periodo_meses: val })
+                                            }}
+                                            className={`w-10 h-6 text-center text-xs border rounded bg-background ${
+                                              meses < vigenciaPadraoMeses
+                                                ? "border-indigo-500/50 text-indigo-700 dark:text-indigo-300 font-medium"
+                                                : ""
+                                            }`}
+                                            title={`Quantidade de meses deste item (Padrão do projeto: ${vigenciaPadraoMeses} meses)`}
+                                          />
+                                        </div>
                                       </div>
                                     )}
                                   </TableCell>
