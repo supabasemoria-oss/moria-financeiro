@@ -502,7 +502,7 @@ export function UsuariosManager() {
 
       {/* Modal Criar Usuário */}
       <Dialog open={openCriar} onOpenChange={setOpenCriar}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleCriar} className="space-y-4">
             <DialogHeader>
               <DialogTitle>Criar Novo Usuário</DialogTitle>
@@ -741,7 +741,7 @@ export function UsuariosManager() {
 
       {/* Modal Editar Usuário */}
       <Dialog open={openEditar} onOpenChange={setOpenEditar}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleEditar} className="space-y-4">
             <DialogHeader>
               <DialogTitle>Editar Usuário</DialogTitle>

@@ -203,7 +203,7 @@ export default function InstituicoesPage() {
               </Button>
             }
           />
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
             <form onSubmit={handleCreate}>
               <DialogHeader>
                 <DialogTitle>Cadastrar Nova Instituição (OSC)</DialogTitle>
@@ -213,7 +213,7 @@ export default function InstituicoesPage() {
               </DialogHeader>
 
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="create_razao_social">Razão Social / Nome da Entidade *</Label>
                   <Input
                     id="create_razao_social"
@@ -224,7 +224,7 @@ export default function InstituicoesPage() {
                   />
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="create_cnpj">CNPJ *</Label>
                   <Input
                     id="create_cnpj"
@@ -235,8 +235,8 @@ export default function InstituicoesPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="create_email">E-mail Institucional</Label>
                     <Input
                       id="create_email"
@@ -246,7 +246,7 @@ export default function InstituicoesPage() {
                       onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="create_telefone">Telefone</Label>
                     <Input
                       id="create_telefone"
@@ -466,7 +466,7 @@ export default function InstituicoesPage() {
 
       {/* Dialog Editar */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleUpdate}>
             <DialogHeader>
               <DialogTitle>Editar Instituição (OSC)</DialogTitle>
@@ -476,7 +476,7 @@ export default function InstituicoesPage() {
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label htmlFor="edit_razao_social">Razão Social / Nome da Entidade *</Label>
                 <Input
                   id="edit_razao_social"
@@ -487,7 +487,7 @@ export default function InstituicoesPage() {
                 />
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label htmlFor="edit_cnpj">CNPJ *</Label>
                 <Input
                   id="edit_cnpj"
@@ -498,8 +498,8 @@ export default function InstituicoesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_email">E-mail Institucional</Label>
                   <Input
                     id="edit_email"
@@ -509,7 +509,7 @@ export default function InstituicoesPage() {
                     onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_telefone">Telefone</Label>
                   <Input
                     id="edit_telefone"

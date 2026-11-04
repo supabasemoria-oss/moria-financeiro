@@ -580,7 +580,7 @@ export default function ConfiguracoesPage() {
 
           {/* Diálogo Criar Nova Categoria */}
           <Dialog open={openNovaCategoria} onOpenChange={setOpenNovaCategoria}>
-            <DialogContent className="sm:max-w-[440px]">
+            <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
               <form onSubmit={handleCriarCategoria}>
                 <DialogHeader>
                   <DialogTitle>Criar Nova Categoria de Despesa</DialogTitle>

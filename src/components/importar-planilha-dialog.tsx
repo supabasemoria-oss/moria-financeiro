@@ -598,8 +598,8 @@ export function ImportarPlanilhaDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       {trigger && <DialogTrigger render={trigger as React.ReactElement} />}
       <DialogContent
-        className="w-[95vw] sm:max-w-[95vw] lg:max-w-7xl 2xl:max-w-[1500px] h-[92vh] max-h-[94vh] flex flex-col p-0 gap-0 overflow-hidden"
-        style={{ width: "95vw", maxWidth: "1500px", height: "92vh", maxHeight: "94vh" }}
+        className="w-[98vw] sm:max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 gap-0 overflow-hidden"
+        style={{ width: "98vw", maxWidth: "98vw", height: "96vh", maxHeight: "96vh" }}
       >
         {/* Header fixo no topo com cantos protegidos */}
         <div className="p-6 pb-4 border-b shrink-0 pr-12">
@@ -1059,7 +1059,7 @@ export function ImportarPlanilhaDialog({
 
                   {/* Tabela detalhada do ciclo */}
                   {resultado.rubricas_detectadas && resultado.rubricas_detectadas.length > 0 ? (
-                    <div className="flex-1 min-h-[380px] max-h-[55vh] overflow-y-auto rounded-lg border">
+                    <div className="flex-1 min-h-[420px] max-h-[66vh] overflow-y-auto rounded-lg border">
                       <Table className="min-w-[760px]">
                         <TableHeader>
                           <TableRow>

@@ -227,7 +227,7 @@ export function OnboardingModal() {
   return (
     <>
       <Dialog open={open && !importarDialogOpen} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-[620px] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Banner Superior de Boas-Vindas */}
         <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-6 shrink-0">
           <div className="flex items-center justify-between">

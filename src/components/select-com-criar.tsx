@@ -18,9 +18,9 @@ interface Props {
 
 export function SelectComCriar({ value, onValueChange, opcoes, placeholder, labelCriar, onClickCriar, id, disabled }: Props) {
   return (
-    <div className="grid gap-1">
+    <div className="grid gap-1 min-w-0 w-full">
       <Select value={value} onValueChange={v => v && onValueChange(v)} disabled={disabled}>
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger id={id} className="w-full min-w-0">
           <SelectValue placeholder={placeholder ?? "Selecione..."}>
             {(val: string | null) => (val ? opcoes.find(o => o.id === val)?.label : null) || placeholder || "Selecione..."}
           </SelectValue>
@@ -34,10 +34,10 @@ export function SelectComCriar({ value, onValueChange, opcoes, placeholder, labe
       <button
         type="button"
         onClick={onClickCriar}
-        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit"
+        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit max-w-full min-w-0 truncate"
       >
-        <PlusCircleIcon className="size-3" />
-        {opcoes.length === 0 ? `Nenhum cadastrado — ${labelCriar}` : labelCriar}
+        <PlusCircleIcon className="size-3 shrink-0" />
+        <span className="truncate">{opcoes.length === 0 ? `Nenhum cadastrado — ${labelCriar}` : labelCriar}</span>
       </button>
     </div>
   )

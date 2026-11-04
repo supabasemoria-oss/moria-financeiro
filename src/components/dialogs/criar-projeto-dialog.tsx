@@ -62,17 +62,17 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>Cadastrar Novo Projeto MROSC</DialogTitle>
               <DialogDescription>Defina a instituicao proponente, vigencia e teto orcamentario aprovado.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label htmlFor="pj-inst">Instituicao Proponente (OSC) *</Label>
                 <Select value={form.instituicao_id} onValueChange={v => v && setForm(p => ({ ...p, instituicao_id: v }))}>
-                  <SelectTrigger id="pj-inst">
+                  <SelectTrigger id="pj-inst" className="w-full min-w-0">
                     <SelectValue placeholder="Selecione a OSC...">
                       {(val: string | null) => (val ? instituicoes.find(i => i.id === val)?.razao_social : null) || "Selecione a OSC..."}
                     </SelectValue>
@@ -82,21 +82,21 @@ export function CriarProjetoDialog({ open, onOpenChange, onCriado }: Props) {
                   </SelectContent>
                 </Select>
                 <button type="button" onClick={() => setOpenInst(true)} className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 w-fit">
-                  <PlusCircleIcon className="size-3.5" />
-                  {instituicoes.length === 0 ? "Nenhuma proponente — criar agora" : "Cadastrar nova proponente"}
+                  <PlusCircleIcon className="size-3.5 shrink-0" />
+                  <span className="truncate">{instituicoes.length === 0 ? "Nenhuma proponente — criar agora" : "Cadastrar nova proponente"}</span>
                 </button>
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 min-w-0">
                 <Label htmlFor="pj-nome">Nome do Projeto *</Label>
                 <Input id="pj-nome" required placeholder="Ex: Projeto Inclusao Digital 2026" value={form.nome} onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2"><Label>No Termo / Convenio</Label><Input placeholder="TF no 012/2026" value={form.numero_termo} onChange={e => setForm(p => ({ ...p, numero_termo: e.target.value }))} /></div>
-                <div className="grid gap-2"><Label>Valor Total Aprovado (R$) *</Label><Input required type="text" inputMode="numeric" placeholder="0,00" value={form.valor_total_aprovado} onChange={e => setForm(p => ({ ...p, valor_total_aprovado: maskCurrency(e.target.value) }))} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0"><Label>No Termo / Convenio</Label><Input placeholder="TF no 012/2026" value={form.numero_termo} onChange={e => setForm(p => ({ ...p, numero_termo: e.target.value }))} /></div>
+                <div className="grid gap-2 min-w-0"><Label>Valor Total Aprovado (R$) *</Label><Input required type="text" inputMode="numeric" placeholder="0,00" value={form.valor_total_aprovado} onChange={e => setForm(p => ({ ...p, valor_total_aprovado: maskCurrency(e.target.value) }))} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2"><Label>Data Inicio *</Label><Input required type="date" value={form.data_inicio} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>
-                <div className="grid gap-2"><Label>Data Fim *</Label><Input required type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0"><Label>Data Inicio *</Label><Input required type="date" value={form.data_inicio} onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>
+                <div className="grid gap-2 min-w-0"><Label>Data Fim *</Label><Input required type="date" value={form.data_fim} onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))} /></div>
               </div>
               <div className="grid gap-1.5 p-3 rounded-lg border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/20">
                 <Label htmlFor="pj-ordem" className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">

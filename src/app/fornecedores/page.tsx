@@ -200,7 +200,7 @@ export default function FornecedoresPage() {
                 </Button>
               }
             />
-          <DialogContent className="sm:max-w-[520px]">
+          <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>Cadastrar Fornecedor ou Prestador</DialogTitle>
@@ -465,7 +465,7 @@ export default function FornecedoresPage() {
 
       {/* DIALOG DE EDIÇÃO DE FORNECEDOR */}
       <Dialog open={openEditar} onOpenChange={setOpenEditar}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleEditarSubmit}>
             <DialogHeader>
               <DialogTitle>Editar Fornecedor ou Prestador</DialogTitle>

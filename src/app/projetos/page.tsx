@@ -371,7 +371,7 @@ export default function ProjetosPage() {
                   </Button>
                 }
               />
-          <DialogContent className="sm:max-w-[550px]">
+          <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
             <form onSubmit={handleCreate}>
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo Projeto MROSC</DialogTitle>
@@ -497,8 +497,8 @@ export default function ProjetosPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="numero_termo">Número do Termo</Label>
                     <Input
                       id="numero_termo"
@@ -507,7 +507,7 @@ export default function ProjetosPage() {
                       onChange={(e) => setCreateFormData({ ...createFormData, numero_termo: e.target.value })}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="valor_total_aprovado">Teto Orçamentário (R$) *</Label>
                     <Input
                       id="valor_total_aprovado"
@@ -521,8 +521,8 @@ export default function ProjetosPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="data_inicio">Início de Vigência *</Label>
                     <Input
                       id="data_inicio"
@@ -532,7 +532,7 @@ export default function ProjetosPage() {
                       onChange={(e) => setCreateFormData({ ...createFormData, data_inicio: e.target.value })}
                     />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 min-w-0">
                     <Label htmlFor="data_fim">Fim de Vigência *</Label>
                     <Input
                       id="data_fim"
@@ -882,7 +882,7 @@ export default function ProjetosPage() {
 
       {/* Modal Editar Projeto */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleUpdate}>
             <DialogHeader>
               <DialogTitle>Editar Projeto MROSC</DialogTitle>
@@ -929,8 +929,8 @@ export default function ProjetosPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_numero_termo">Número do Termo</Label>
                   <Input
                     id="edit_numero_termo"
@@ -939,7 +939,7 @@ export default function ProjetosPage() {
                     onChange={(e) => setEditFormData({ ...editFormData, numero_termo: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_valor_total_aprovado">Teto Orçamentário (R$) *</Label>
                   <Input
                     id="edit_valor_total_aprovado"
@@ -955,8 +955,8 @@ export default function ProjetosPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_data_inicio">Início de Vigência *</Label>
                   <Input
                     id="edit_data_inicio"
@@ -966,7 +966,7 @@ export default function ProjetosPage() {
                     onChange={(e) => setEditFormData({ ...editFormData, data_inicio: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="edit_data_fim">Fim de Vigência *</Label>
                   <Input
                     id="edit_data_fim"

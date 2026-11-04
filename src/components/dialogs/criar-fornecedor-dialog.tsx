@@ -47,7 +47,7 @@ export function CriarFornecedorDialog({ open, onOpenChange, onCriado }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Cadastrar Fornecedor ou Prestador</DialogTitle>

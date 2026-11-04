@@ -41,24 +41,24 @@ export function CriarInstituicaoDialog({ open, onOpenChange, onCriado }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Cadastrar Instituicao (OSC)</DialogTitle>
             <DialogDescription>Dados cadastrais da organizacao para vincular aos projetos MROSC.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
+            <div className="grid gap-2 min-w-0">
               <Label htmlFor="in-razao">Razao Social *</Label>
               <Input id="in-razao" required placeholder="Ex: Instituto Esperanca Viva" value={form.razao_social} onChange={e => setForm(p => ({ ...p, razao_social: e.target.value }))} />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2 min-w-0">
               <Label htmlFor="in-cnpj">CNPJ *</Label>
               <Input id="in-cnpj" required placeholder="00.000.000/0000-00" value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: maskCnpj(e.target.value) }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2"><Label>E-mail</Label><Input placeholder="contato@osc.org.br" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-              <div className="grid gap-2"><Label>Telefone</Label><Input placeholder="(11) 99999-9999" value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: maskTelefone(e.target.value) }))} /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="grid gap-2 min-w-0"><Label>E-mail</Label><Input placeholder="contato@osc.org.br" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
+              <div className="grid gap-2 min-w-0"><Label>Telefone</Label><Input placeholder="(11) 99999-9999" value={form.telefone} onChange={e => setForm(p => ({ ...p, telefone: maskTelefone(e.target.value) }))} /></div>
             </div>
             <div className="grid gap-2">
               <Label>Endereco</Label>

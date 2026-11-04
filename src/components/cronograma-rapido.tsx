@@ -543,7 +543,7 @@ export function CronogramaRapido() {
       {/* DIALOG: EXECUTAR / QUITAR PARCELA                    */}
       {/* ==================================================== */}
       <Dialog open={openQuitar} onOpenChange={setOpenQuitar}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleConfirmarQuitacao}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -653,7 +653,7 @@ export function CronogramaRapido() {
       {/* DIALOG: QUITAR EM LOTE (CRONOGRAMA RÁPIDO)          */}
       {/* ==================================================== */}
       <Dialog open={openQuitarLote} onOpenChange={setOpenQuitarLote}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleConfirmarQuitacaoLote}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">

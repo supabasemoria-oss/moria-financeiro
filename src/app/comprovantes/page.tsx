@@ -205,7 +205,7 @@ function ComprovantesContent() {
                 </Button>
               }
             />
-          <DialogContent className="sm:max-w-[540px]">
+          <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
             <form onSubmit={handleUpload}>
               <DialogHeader>
                 <DialogTitle>Upload e Tipificação de Comprovante</DialogTitle>

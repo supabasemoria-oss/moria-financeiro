@@ -1075,7 +1075,7 @@ export default function LembretesPage() {
 
         {/* Modal executar em lote */}
         <Dialog open={openExecLote} onOpenChange={setOpenExecLote}>
-          <DialogContent className="sm:max-w-[480px]">
+          <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircleIcon className="size-5 text-emerald-600" />

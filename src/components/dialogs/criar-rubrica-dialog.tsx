@@ -67,15 +67,15 @@ export function CriarRubricaDialog({ open, onOpenChange, projetoId, onCriado }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Adicionar Item ao Plano de Trabalho</DialogTitle>
             <DialogDescription>Cadastre a rubrica com natureza de despesa, temporalidade e valor unitário.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+              <div className="grid gap-2 min-w-0">
                 <Label>Tipo de Despesa *</Label>
                 <Select
                   value={form.tipo}

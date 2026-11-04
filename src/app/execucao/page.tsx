@@ -2331,7 +2331,7 @@ function ExecucaoContent() {
       {/* DIALOG: LANÇAR COMPRA / PAGAMENTO SOB DEMANDA        */}
       {/* ==================================================== */}
       <Dialog open={openSobDemandaModal} onOpenChange={setOpenSobDemandaModal}>
-        <DialogContent className="w-[95vw] sm:max-w-[560px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleLancarSobDemanda}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -2493,7 +2493,7 @@ function ExecucaoContent() {
       {/* DIALOG 0: EDITAR PARCELA DO CRONOGRAMA              */}
       {/* ==================================================== */}
       <Dialog open={openEditarParcela} onOpenChange={setOpenEditarParcela}>
-        <DialogContent className="w-[95vw] sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Parcela do Cronograma</DialogTitle>
             <DialogDescription>
@@ -2607,7 +2607,7 @@ function ExecucaoContent() {
       {/* DIALOG 1: QUITAR PARCELA (COM RATEIO & MULTI-CREDOR)*/}
       {/* ==================================================== */}
       <Dialog open={openQuitar} onOpenChange={setOpenQuitar}>
-        <DialogContent className="w-[95vw] sm:max-w-[620px] max-h-[92vh] overflow-y-auto overflow-x-hidden min-w-0">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto overflow-x-hidden min-w-0">
           <DialogHeader>
             <DialogTitle>Quitar Pagamento da Parcela</DialogTitle>
             <DialogDescription>
@@ -2799,7 +2799,7 @@ function ExecucaoContent() {
       {/* DIALOG 1.5: QUITAR PARCELAS EM LOTE (BATCH)         */}
       {/* ==================================================== */}
       <Dialog open={openQuitarLote} onOpenChange={setOpenQuitarLote}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2Icon className="size-5 text-emerald-600" />
@@ -2913,7 +2913,7 @@ function ExecucaoContent() {
       {/* DIALOG: ALTERAR VENCIMENTO EM LOTE (RETOMADA/PAUSA) */}
       {/* ==================================================== */}
       <Dialog open={openAlterarVencimentoLote} onOpenChange={setOpenAlterarVencimentoLote}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarDaysIcon className="size-5 text-primary" />
@@ -3040,7 +3040,7 @@ function ExecucaoContent() {
       {/* DIALOG: EDITAR DESPESA / EXECUÇÃO                   */}
       {/* ==================================================== */}
       <Dialog open={openEditarDespesa} onOpenChange={setOpenEditarDespesa}>
-        <DialogContent className="sm:max-w-[580px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleSubmitEditarDespesa}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -3278,7 +3278,7 @@ function ExecucaoContent() {
       {/* DIALOG 2: NOVA PARCELA                              */}
       {/* ==================================================== */}
       <Dialog open={openNovaParcela} onOpenChange={setOpenNovaParcela}>
-        <DialogContent className="sm:max-w-[540px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleSubmitParcela}>
             <DialogHeader>
               <DialogTitle>Agendar Nova Parcela de Pagamento</DialogTitle>
@@ -3288,7 +3288,7 @@ function ExecucaoContent() {
             </DialogHeader>
 
             <div className="grid gap-3 py-3">
-              <div className="grid gap-1.5">
+              <div className="grid gap-1.5 min-w-0">
                 <Label htmlFor="parc_projeto">Projeto / Termo *</Label>
                 <SelectComCriar
                   id="parc_projeto"
@@ -3301,7 +3301,7 @@ function ExecucaoContent() {
                 />
               </div>
 
-              <div className="grid gap-1.5">
+              <div className="grid gap-1.5 min-w-0">
                 <Label htmlFor="parc_rubrica">Rubrica Orçamentária *</Label>
                 <SelectComCriar
                   id="parc_rubrica"
@@ -3318,7 +3318,7 @@ function ExecucaoContent() {
                 />
               </div>
 
-              <div className="grid gap-1.5">
+              <div className="grid gap-1.5 min-w-0">
                 <Label htmlFor="parc_desc">Descrição da Obrigação *</Label>
                 <Input
                   id="parc_desc"
@@ -3329,8 +3329,8 @@ function ExecucaoContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 min-w-0">
+                <div className="grid gap-1.5 min-w-0">
                   <Label htmlFor="parc_valor">Valor Previsto (R$) *</Label>
                   <Input
                     id="parc_valor"
@@ -3394,7 +3394,7 @@ function ExecucaoContent() {
       {/* DIALOG 3: LANÇAR DESPESA DIRETA                     */}
       {/* ==================================================== */}
       <Dialog open={openDespesa} onOpenChange={setOpenDespesa}>
-        <DialogContent className="sm:max-w-[580px]">
+        <DialogContent className="w-[95vw] sm:max-w-4xl lg:max-w-5xl max-h-[92vh] overflow-y-auto">
           <form onSubmit={handleSubmitDespesa}>
             <DialogHeader>
               <DialogTitle>Novo Lançamento de Despesa</DialogTitle>
@@ -3404,8 +3404,8 @@ function ExecucaoContent() {
             </DialogHeader>
 
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="desp_projeto">Projeto / Termo *</Label>
                   <SelectComCriar
                     id="desp_projeto"
@@ -3418,7 +3418,7 @@ function ExecucaoContent() {
                   />
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="desp_fornecedor">Fornecedor / Credor *</Label>
                   <SelectComCriar
                     id="desp_fornecedor"
@@ -3480,8 +3480,8 @@ function ExecucaoContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="desp_valor">Valor (R$) *</Label>
                   <Input
                     id="desp_valor"
@@ -3493,7 +3493,7 @@ function ExecucaoContent() {
                     onChange={(e) => setDespesaForm({ ...despesaForm, valor: maskCurrency(e.target.value) })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 min-w-0">
                   <Label htmlFor="desp_data">Data da Despesa *</Label>
                   <Input
                     id="desp_data"
