@@ -921,6 +921,134 @@ function parseJsonResiliente<T = any>(rawText: string): T {
   throw new Error("JSON inválido retornado pelo Gemini.")
 }
 
+/**
+ * Modelos prioritários para fallback em cascata quando o modelo preferido
+ * sofrer instabilidade temporária (HTTP 503 High Demand ou HTTP 429 Rate Limit).
+ */
+export const MODELOS_GEMINI_PRIORITARIOS = [
+  "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+  "gemini-flash-latest",
+  "gemini-3.8-flash",
+]
+
+interface OpcoesChamadaGemini {
+  apiKey: string
+  preferredModel?: string
+  payload: any
+  contexto?: string
+}
+
+async function chamarGeminiComResiliencia(
+  options: OpcoesChamadaGemini
+): Promise<{ data: any; modelUsado: string }> {
+  const { apiKey, preferredModel, payload, contexto = "Gemini MROSC" } = options
+
+  // Ordenar lista de modelos priorizando o preferido do usuário
+  const modelosParaTentar: string[] = []
+  if (preferredModel && preferredModel.trim()) {
+    modelosParaTentar.push(preferredModel.trim())
+  }
+  for (const m of MODELOS_GEMINI_PRIORITARIOS) {
+    if (!modelosParaTentar.includes(m)) {
+      modelosParaTentar.push(m)
+    }
+  }
+
+  let ultimoErro: Error | null = null
+
+  for (let i = 0; i < modelosParaTentar.length; i++) {
+    const currentModel = modelosParaTentar[i]
+    const isPreferred = i === 0
+    // Tenta 2 vezes no modelo preferido em caso de erro transiente (503/429)
+    const maxTentativas = isPreferred ? 2 : 1
+
+    for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+      const abortController = new AbortController()
+      const timeoutId = setTimeout(() => abortController.abort(), 25000)
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: abortController.signal,
+          }
+        )
+        clearTimeout(timeoutId)
+
+        if (!res.ok) {
+          const status = res.status
+          let erroMsg = `Erro HTTP ${status}`
+          try {
+            const errData = await res.json()
+            if (errData?.error?.message) {
+              erroMsg = errData.error.message
+            }
+          } catch {}
+
+          const isSobrecarga =
+            status === 503 ||
+            status === 429 ||
+            erroMsg.includes("high demand") ||
+            erroMsg.includes("UNAVAILABLE") ||
+            erroMsg.includes("quota")
+
+          if (isSobrecarga && tentativa < maxTentativas) {
+            console.warn(
+              `[${contexto}] Modelo ${currentModel} sobrecarregado (HTTP ${status}). Retentando em 2.5s...`
+            )
+            await new Promise((r) => setTimeout(r, 2500))
+            continue
+          }
+
+          console.warn(
+            `[${contexto}] Falha no modelo ${currentModel} (${erroMsg}). Tentando fallback...`
+          )
+          ultimoErro = new Error(erroMsg)
+          break // passa para o próximo modelo
+        }
+
+        const data = await res.json()
+        const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+        if (!text) {
+          throw new Error("Gemini retornou resposta vazia.")
+        }
+
+        return { data, modelUsado: currentModel }
+      } catch (err: any) {
+        clearTimeout(timeoutId)
+        ultimoErro = err instanceof Error ? err : new Error(String(err))
+        if (tentativa < maxTentativas) {
+          await new Promise((r) => setTimeout(r, 2000))
+        }
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+  }
+
+  const msgOriginal = ultimoErro?.message || "Erro desconhecido"
+  if (
+    msgOriginal.includes("high demand") ||
+    msgOriginal.includes("503") ||
+    msgOriginal.includes("UNAVAILABLE")
+  ) {
+    throw new Error(
+      "Os servidores da Google (Gemini) estão temporariamente com alta demanda global. Por favor, aguarde cerca de 1 minuto e tente novamente."
+    )
+  }
+  if (msgOriginal.includes("quota") || msgOriginal.includes("429")) {
+    throw new Error(
+      "Limite de cota de requisições do Gemini atingido temporariamente. Aguarde alguns instantes."
+    )
+  }
+  throw new Error(`Falha no processamento pelo Gemini: ${msgOriginal}`)
+}
+
 export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoMapeamento> {
   const { gemini_api_key, gemini_model } = await getSettingsAsync()
 
@@ -963,21 +1091,18 @@ export async function sugerirMapeamentoXLS(rows: string[][]): Promise<ResultadoM
 
   const prompt = buildPromptMROSC(tabela)
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${gemini_model}:generateContent?key=${gemini_api_key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 65536 },
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err?.error?.message ?? `Erro HTTP ${res.status}`)
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0, maxOutputTokens: 65536 },
   }
 
-  const data = await res.json()
+  const { data } = await chamarGeminiComResiliencia({
+    apiKey: gemini_api_key,
+    preferredModel: gemini_model,
+    payload,
+    contexto: "Texto Serializado XLS MROSC",
+  })
+
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   if (!text) throw new Error("Gemini retornou resposta vazia.")
 
@@ -1228,35 +1353,29 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
   ]
 }`
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64 } },
-            ],
-          },
+  const payload = {
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: mimeType, data: base64 } },
         ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 65536,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  )
-
-  if (!res.ok) {
-    const errData = await res.json()
-    throw new Error(errData?.error?.message ?? `Erro HTTP ${res.status}`)
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 65536,
+      responseMimeType: "application/json",
+    },
   }
 
-  const data = await res.json()
+  const { data } = await chamarGeminiComResiliencia({
+    apiKey,
+    preferredModel: model,
+    payload,
+    contexto: "Multimodal MROSC (PDF/Imagem)",
+  })
+
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
   if (!text) throw new Error("Gemini retornou resposta vazia.")
 

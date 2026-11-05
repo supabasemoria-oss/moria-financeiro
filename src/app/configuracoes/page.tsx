@@ -81,7 +81,7 @@ export default function ConfiguracoesPage() {
 
   // Gemini
   const [apiKey, setApiKey] = useState("")
-  const [model, setModel] = useState("gemini-3.8-flash")
+  const [model, setModel] = useState("gemini-3.1-flash-lite")
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
   const [savingGemini, setSavingGemini] = useState(false)

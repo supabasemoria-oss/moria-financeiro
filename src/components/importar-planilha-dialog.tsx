@@ -179,7 +179,10 @@ export function ImportarPlanilhaDialog({
 
       setEtapa("validando")
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erro desconhecido"
+      let msg = e instanceof Error ? e.message : "Erro desconhecido"
+      if (msg.includes("high demand") || msg.includes("503") || msg.includes("UNAVAILABLE")) {
+        msg = "Os servidores do Gemini estão temporariamente com alta demanda. Por favor, aguarde 1 minuto e tente novamente."
+      }
       setErro(msg)
       setEtapa("upload")
     }

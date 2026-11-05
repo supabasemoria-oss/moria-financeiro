@@ -19,7 +19,7 @@ export interface MoriaSettings {
 
 const DEFAULTS: MoriaSettings = {
   gemini_api_key: "",
-  gemini_model: "gemini-3.8-flash",
+  gemini_model: "gemini-3.1-flash-lite",
   whatsapp_api_url: "https://moria-whatsapp.onrender.com",
   whatsapp_api_key: "",
   whatsapp_phone: "",
@@ -98,16 +98,29 @@ export async function testGeminiConnection(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: "Responda apenas: OK" }] }],
-          generationConfig: { maxOutputTokens: 8 },
+          contents: [{ parts: [{ text: "Teste de conectividade MROSC. Responda apenas: OK" }] }],
+          generationConfig: { maxOutputTokens: 16 },
         }),
       }
     )
     if (!res.ok) {
       const err = await res.json()
-      return { ok: false, message: err?.error?.message ?? `Erro HTTP ${res.status}` }
+      const rawMsg = err?.error?.message ?? `Erro HTTP ${res.status}`
+      if (res.status === 503 || rawMsg.includes("high demand") || rawMsg.includes("UNAVAILABLE")) {
+        return {
+          ok: false,
+          message: `O modelo '${model}' está temporariamente sobrecarregado nos servidores da Google (HTTP 503). Recomendamos selecionar outro modelo (ex: gemini-3.1-flash-lite).`,
+        }
+      }
+      if (res.status === 429 || rawMsg.includes("quota")) {
+        return {
+          ok: false,
+          message: `Limite de cota atingido para '${model}'. Escolha outro modelo ou aguarde a liberação.`,
+        }
+      }
+      return { ok: false, message: rawMsg }
     }
-    return { ok: true, message: "Conexão bem-sucedida." }
+    return { ok: true, message: `Conexão bem-sucedida com o modelo '${model}'.` }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Erro desconhecido"
     return { ok: false, message: msg }
